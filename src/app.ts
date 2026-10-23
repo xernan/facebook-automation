@@ -70,7 +70,8 @@ export function createServer(loadCtx: () => Ctx): { server: McpServer; ctx?: Ctx
       async (args: unknown) => {
         if (!ctx) return text(setupHelp(), true);
         try {
-          return text(JSON.stringify(await callTool(def, args, ctx), null, 2));
+          // Scrub results too: a Graph read can return a token (e.g. fields=access_token).
+          return text(ctx.graph.scrub(JSON.stringify(await callTool(def, args, ctx), null, 2)));
         } catch (err) {
           return text(formatError(err, (s) => ctx.graph.scrub(s)), true);
         }

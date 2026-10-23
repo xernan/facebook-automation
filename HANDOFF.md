@@ -13,27 +13,34 @@
 
 ## Live status (2026-10-24)
 - `npm run login` (new): Facebook Login -> long-lived token saved to .env. Used live, works.
-- Token: app 1086733300456198, 8/10 permissions. Missing leads_retrieval + pages_manage_ads
+- Token: 8/10 permissions. Missing leads_retrieval + pages_manage_ads
   (app has no Lead Ads use case -> "Invalid Scopes"). Used `--no-leads`.
-- Pages: Oink-Oink, PenTest Philippines, Sexy Tiktoker (me/accounts) + CARD MAX 1235234309673692
-  (Business-owned, via FB_EXTRA_PAGE_IDS / direct lookup).
-- Live read OK on CARD MAX: get_page, posts, scheduled, get_post, comments, conversations,
+- Pages: 3 from me/accounts + the business Page (Business-owned, via FB_EXTRA_PAGE_IDS / direct lookup).
+  Names and ids are in local memory only (public repo).
+- Live read OK on the business Page: get_page, posts, scheduled, get_post, comments, conversations,
   page+post insights (new *_total_media_view_unique names), reviews. Writes blocked (OFF).
 
-- New: fb_messenger_leads + fb_comment_leads (leads from Messenger/comments, CSV export). Live on CARD MAX:
+- New: fb_messenger_leads + fb_comment_leads (leads from Messenger/comments, CSV export). Live on the business Page:
   2 Messenger leads, both with phone/email. Owner chose these over Lead Ads.
 
 - Leads tag banks named + carded yes/no (Card Max = free credit card application help; every PM/commenter is a lead).
-- CARD MAX observations (2026-10-24): last 25 posts have 0 comments / 0 reactions; several duplicates;
-  3 public test posts ("Test post - BPI...", "Test Post", "Test validation post...") -> owner to OK deletion.
+- the business Page observations (2026-10-24): last 25 posts have 0 comments / 0 reactions; several duplicates;
+  3 public test posts deleted 2026-10-24 (owner OK). FB_WRITE_ENABLED=true now; live delete verified.
+
+- QA pass 2026-10-24 (76 tests): fixed token in tool output (scrub all results), double post after
+  write timeout (key stays failed), same idempotency key reused for other action (now refused),
+  comment leads only first 100 per post (now pages), cursors >500 chars broke page 2 (live repro).
+  Live negative paths OK: unknown page, other page's post, retired metric.
 
 ## Open (needs owner)
+- Low, not fixed: unknown page_id triggers a full page-list refresh each call; messenger leads
+  page size fixed at 25 (Meta cap with nested messages).
+- GitHub done 2026-10-24: PR #1 merged to main; old cardmaxmarketing-blip repo deleted.
 - Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
-- Merge PR #1 on xernan/facebook-automation; delete old cardmaxmarketing-blip repo.
 - Start a NEW Claude chat so the facebook MCP tools load (this session started before .env existed).
-- Writes: FB_WRITE_ENABLED=true only after owner OKs a first test post text.
 
 ## Next
 1. Owner setup -> doctor -> read-only smoke test -> writes on test Page.
-2. /qa on the live flows.
+2. Merge PR #2 (staging -> main, CI green). Claude Desktop: facebook server added to its config
+   2026-10-24 (backup .bak-2026-10-24 beside it); owner must fully quit + reopen Desktop.
 3. Phase 2 options (owner decides): Instagram, Marketing API (ads), lead alerts.
