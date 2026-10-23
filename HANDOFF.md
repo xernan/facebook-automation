@@ -25,13 +25,13 @@
 
 - Leads tag banks named + carded yes/no (Card Max = free credit card application help; every PM/commenter is a lead).
 - CARD MAX observations (2026-10-24): last 25 posts have 0 comments / 0 reactions; several duplicates;
-  3 public test posts ("Test post - BPI...", "Test Post", "Test validation post...") -> owner to OK deletion.
+  3 public test posts deleted 2026-10-24 (owner OK). FB_WRITE_ENABLED=true now; live delete verified.
 
 ## Open (needs owner)
+- HANDOFF.md edit not committed yet (commit was blocked); commit it next session.
 - GitHub done 2026-10-24: PR #1 merged to main; old cardmaxmarketing-blip repo deleted.
 - Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
 - Start a NEW Claude chat so the facebook MCP tools load (this session started before .env existed).
-- Writes: FB_WRITE_ENABLED=true only after owner OKs a first test post text.
 
 ## Next
 1. Owner setup -> doctor -> read-only smoke test -> writes on test Page.
