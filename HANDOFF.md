@@ -41,5 +41,6 @@
 
 ## Next
 1. Owner setup -> doctor -> read-only smoke test -> writes on test Page.
-2. PR staging -> main after CI green (paging verified live 2026-10-24 after reload).
+2. Merge PR #2 (staging -> main, CI green). Claude Desktop: facebook server added to its config
+   2026-10-24 (backup .bak-2026-10-24 beside it); owner must fully quit + reopen Desktop.
 3. Phase 2 options (owner decides): Instagram, Marketing API (ads), lead alerts.
