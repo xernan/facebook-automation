@@ -23,7 +23,7 @@ export function extractPhones(text: string): string[] {
   ];
 }
 
-// Card issuers people name when asking to apply (Card Max offers free credit card application help).
+// Card issuers people name when asking to apply (the Page offers free credit card application help).
 const BANKS: [string, RegExp][] = [
   ['BPI', /\bbpi\b/i],
   ['BDO', /\bbdo\b/i],

@@ -13,18 +13,18 @@
 
 ## Live status (2026-10-24)
 - `npm run login` (new): Facebook Login -> long-lived token saved to .env. Used live, works.
-- Token: app 1086733300456198, 8/10 permissions. Missing leads_retrieval + pages_manage_ads
+- Token: 8/10 permissions. Missing leads_retrieval + pages_manage_ads
   (app has no Lead Ads use case -> "Invalid Scopes"). Used `--no-leads`.
-- Pages: Oink-Oink, PenTest Philippines, Sexy Tiktoker (me/accounts) + CARD MAX 1235234309673692
-  (Business-owned, via FB_EXTRA_PAGE_IDS / direct lookup).
-- Live read OK on CARD MAX: get_page, posts, scheduled, get_post, comments, conversations,
+- Pages: 3 from me/accounts + the business Page (Business-owned, via FB_EXTRA_PAGE_IDS / direct lookup).
+  Names and ids are in local memory only (public repo).
+- Live read OK on the business Page: get_page, posts, scheduled, get_post, comments, conversations,
   page+post insights (new *_total_media_view_unique names), reviews. Writes blocked (OFF).
 
-- New: fb_messenger_leads + fb_comment_leads (leads from Messenger/comments, CSV export). Live on CARD MAX:
+- New: fb_messenger_leads + fb_comment_leads (leads from Messenger/comments, CSV export). Live on the business Page:
   2 Messenger leads, both with phone/email. Owner chose these over Lead Ads.
 
 - Leads tag banks named + carded yes/no (Card Max = free credit card application help; every PM/commenter is a lead).
-- CARD MAX observations (2026-10-24): last 25 posts have 0 comments / 0 reactions; several duplicates;
+- the business Page observations (2026-10-24): last 25 posts have 0 comments / 0 reactions; several duplicates;
   3 public test posts deleted 2026-10-24 (owner OK). FB_WRITE_ENABLED=true now; live delete verified.
 
 - QA pass 2026-10-24 (76 tests): fixed token in tool output (scrub all results), double post after

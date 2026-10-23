@@ -10,6 +10,8 @@ const RULES = [
   ['Filled FB_ secret in env-style file', /^\s*FB_(USER_ACCESS_TOKEN|PAGE_ACCESS_TOKEN|APP_SECRET)[ \t]*=[ \t]*[^\s#]{8,}/m],
   ['Private key', /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
   ['Generic API key', /\b(sk|pk|rk)_(live|test)_[A-Za-z0-9]{16,}\b/],
+  // Public repo: real Page/App/user ids (15+ digits) stay out. Tests use short fake ids.
+  ['Real Facebook id', /(?<![A-Za-z0-9])\d{15,}(?![A-Za-z0-9])/],
 ];
 const BLOCKED_FILES = [/(^|\/)\.env(\.(?!example$)[^/]+)?$/, /\.(pem|key|p12|keystore|jks)$/];
 

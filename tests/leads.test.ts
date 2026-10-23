@@ -18,7 +18,7 @@ describe('contact extraction', () => {
   });
 
   it('ignores ids, prices and landlines', () => {
-    expect(extractPhones('order 1235234309673692, price 15000, tel 02 8123 4567, 09171234567890')).toEqual([]);
+    expect(extractPhones('order 9876543210987, price 15000, tel 02 8123 4567, 09171234567890')).toEqual([]);
   });
 
   it('finds emails, lowercased and de-duplicated', () => {
@@ -46,11 +46,11 @@ describe('lead builders', () => {
   const conv = {
     id: 't_1',
     updated_time: '2026-10-20T10:00:00+0000',
-    participants: { data: [{ id: '111', name: 'CARD MAX' }, { id: '900', name: 'Ana' }] },
+    participants: { data: [{ id: '111', name: 'My Page' }, { id: '900', name: 'Ana' }] },
     messages: {
       data: [
         { message: 'Interested po sa BPI, non-carded. 09171234567', from: { id: '900' }, created_time: '2026-10-20T10:00:00+0000' },
-        { message: 'Email us at sales@cardmax.ph', from: { id: '111' }, created_time: '2026-10-20T09:00:00+0000' },
+        { message: 'Email us at sales@mypage.example', from: { id: '111' }, created_time: '2026-10-20T09:00:00+0000' },
       ],
     },
   };
@@ -65,7 +65,7 @@ describe('lead builders', () => {
     const lead = leadFromConversation('111', {
       id: 't_2',
       snippet: '',
-      participants: { data: [{ id: '111', name: 'CARD MAX' }, { id: '901', name: 'Ben', email: '901@facebook.com' }] },
+      participants: { data: [{ id: '111', name: 'My Page' }, { id: '901', name: 'Ben', email: '901@facebook.com' }] },
       messages: {
         data: [
           { message: '', from: { id: '901' }, created_time: '2026-10-20T11:00:00+0000' },
@@ -79,7 +79,7 @@ describe('lead builders', () => {
   });
 
   it('skips the Page own comments and hidden commenters', () => {
-    expect(leadFromComment('111', '111_1', { id: 'c', from: { id: '111', name: 'CARD MAX' }, message: 'x' })).toBeUndefined();
+    expect(leadFromComment('111', '111_1', { id: 'c', from: { id: '111', name: 'My Page' }, message: 'x' })).toBeUndefined();
     expect(leadFromComment('111', '111_1', { id: 'c', message: 'HM?' })).toBeUndefined();
   });
 
@@ -145,7 +145,7 @@ describe('fb_comment_leads', () => {
               data: [
                 { id: 'c1', from: { id: '5', name: 'Ben' }, message: 'HM po? 09181234567' },
                 { id: 'c2', from: { id: '6', name: 'Cy' }, message: 'nice' },
-                { id: 'c3', from: { id: '111', name: 'CARD MAX' }, message: 'hm sent you a PM' },
+                { id: 'c3', from: { id: '111', name: 'My Page' }, message: 'hm sent you a PM' },
               ],
             },
           },
