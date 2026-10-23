@@ -7,7 +7,7 @@ import { IdempotencyStore } from '../src/idempotency.js';
 import { RateLimiter } from '../src/ratelimit.js';
 import { redact } from '../src/redact.js';
 import { toScheduleTimestamp } from '../src/schedule.js';
-import { PAGE_TOKEN, USER_TOKEN, param, testConfig, testCtx } from './helpers.js';
+import { APP_SECRET, PAGE_TOKEN, USER_TOKEN, param, testConfig, testCtx } from './helpers.js';
 
 describe('config', () => {
   it('applies defaults', () => {
@@ -129,7 +129,7 @@ describe('graph client', () => {
     await ctx.graph.get('111', '111/posts');
     const call = calls.at(-1)!;
     expect(param(call, 'access_token')).toBe(PAGE_TOKEN);
-    const proof = createHmac('sha256', 'appsecret-0123456789').update(PAGE_TOKEN).digest('hex');
+    const proof = createHmac('sha256', APP_SECRET).update(PAGE_TOKEN).digest('hex');
     expect(param(call, 'appsecret_proof')).toBe(proof);
     expect(call.url.pathname).toBe('/v26.0/111/posts');
   });

@@ -1,0 +1,2 @@
+# Fake test value in the first commit (replaced by APP_SECRET in tests/helpers.ts). Not a real secret.
+e09c07012d4976a6bbe7a322ab7424d86836d8fc:tests/helpers.ts:generic-api-key:11
