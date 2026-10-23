@@ -28,8 +28,8 @@
   3 public test posts ("Test post - BPI...", "Test Post", "Test validation post...") -> owner to OK deletion.
 
 ## Open (needs owner)
+- GitHub done 2026-10-24: PR #1 merged to main; old cardmaxmarketing-blip repo deleted.
 - Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
-- Merge PR #1 on xernan/facebook-automation; delete old cardmaxmarketing-blip repo.
 - Start a NEW Claude chat so the facebook MCP tools load (this session started before .env existed).
 - Writes: FB_WRITE_ENABLED=true only after owner OKs a first test post text.
 
