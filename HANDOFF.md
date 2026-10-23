@@ -9,7 +9,7 @@
   limits, page authorization check, appsecret_proof, token redaction, media-folder-only uploads,
   CSV formula-injection guard.
 - 41 tests pass (incl. MCP client<->server, `.env.example` parses to blanks + documents every key).
-- Local only: no GitHub remote, never push. Pre-commit hook = CI.
+- Public GitHub repo cardmaxmarketing-blip/facebook-automation (free Actions). CI on staging + main.
 
 ## Open (needs owner)
 - Make the Meta App + token, fill `.env` yourself (never in chat), `npm run doctor`, restart Claude.

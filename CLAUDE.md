@@ -51,7 +51,8 @@ npm run doctor       # checks .env/token, lists Pages, prints no secrets
 
 ## Git
 
-- Local only: no GitHub remote, never push (owner's choice, saves Actions minutes). The
-  pre-commit hook is the CI gate. Work on `staging`; merge to `main` locally when the owner asks.
+- Public repo: github.com/cardmaxmarketing-blip/facebook-automation (public = free Actions).
+  Anyone can read it, so never commit secrets, Page ids, names, paths or lead data.
+- Push work to `staging`; `main` only receives staging -> main PRs after CI is green.
 - Conventional commits. Hooks live in `.githooks/` (`git config core.hooksPath .githooks`):
   secret scan + typecheck + tests on every commit.
