@@ -23,6 +23,10 @@
 - New: fb_messenger_leads + fb_comment_leads (leads from Messenger/comments, CSV export). Live on CARD MAX:
   2 Messenger leads, both with phone/email. Owner chose these over Lead Ads.
 
+- Leads tag banks named + carded yes/no (Card Max = free credit card application help; every PM/commenter is a lead).
+- CARD MAX observations (2026-10-24): last 25 posts have 0 comments / 0 reactions; several duplicates;
+  3 public test posts ("Test post - BPI...", "Test Post", "Test validation post...") -> owner to OK deletion.
+
 ## Open (needs owner)
 - Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
 - Merge PR #1 on xernan/facebook-automation; delete old cardmaxmarketing-blip repo.
