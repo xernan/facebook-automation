@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+# Personal data and uploads stay on this computer
+exports/*
+!exports/.gitkeep
+media/*
+!media/.gitkeep
+*.log

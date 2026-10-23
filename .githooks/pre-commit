@@ -1,0 +1,4 @@
+#!/bin/sh
+node scripts/secret-scan.mjs || exit 1
+npm run typecheck --silent || exit 1
+npm test --silent || exit 1

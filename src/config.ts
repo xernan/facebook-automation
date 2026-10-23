@@ -1,0 +1,57 @@
+import path from 'node:path';
+import { z } from 'zod';
+
+// Every tunable lives here with a default and min/max bounds. Override any of them in .env.
+const intIn = (def: number, min: number, max: number) =>
+  z.coerce.number().int().min(min).max(max).default(def);
+
+const boolFlag = (def: boolean) =>
+  z
+    .enum(['true', 'false'])
+    .default(def ? 'true' : 'false')
+    .transform((v) => v === 'true');
+
+export const configSchema = z.object({
+  FB_USER_ACCESS_TOKEN: z.string().min(20).optional(),
+  FB_PAGE_ACCESS_TOKEN: z.string().min(20).optional(),
+  FB_PAGE_ID: z.string().regex(/^\d+$/).optional(),
+  FB_APP_SECRET: z.string().min(16).optional(),
+  FB_GRAPH_VERSION: z.string().regex(/^v\d{2,3}\.0$/).default('v26.0'),
+  FB_WRITE_ENABLED: boolFlag(false),
+  FB_READ_RATE_PER_MIN: intIn(120, 1, 600),
+  FB_WRITE_RATE_PER_MIN: intIn(10, 1, 60),
+  FB_HTTP_TIMEOUT_MS: intIn(15000, 1000, 60000),
+  FB_IDEMPOTENCY_TTL_MIN: intIn(1440, 1, 10080),
+  FB_MAX_LIST_LIMIT: intIn(100, 1, 100),
+  FB_SCHEDULE_MIN_MINUTES: intIn(10, 10, 1440),
+  FB_SCHEDULE_MAX_DAYS: intIn(30, 1, 75),
+  FB_MAX_UPLOAD_MB: intIn(10, 1, 100),
+  FB_MEDIA_DIR: z.string().default('media'),
+  FB_EXPORT_DIR: z.string().default('exports'),
+});
+
+export type RawConfig = z.infer<typeof configSchema>;
+export type Config = RawConfig & { mediaDir: string; exportDir: string };
+
+export function loadConfig(env: NodeJS.ProcessEnv, rootDir: string): Config {
+  // Blank values in .env mean "not set".
+  const cleaned = Object.fromEntries(Object.entries(env).filter(([, v]) => v !== undefined && v !== ''));
+  const parsed = configSchema.safeParse(cleaned);
+  if (!parsed.success) {
+    // Only name the bad keys; never echo values (they may be tokens).
+    const keys = [...new Set(parsed.error.issues.map((i) => i.path.join('.')))].join(', ');
+    throw new Error(`Invalid config in .env: ${keys}`);
+  }
+  const c = parsed.data;
+  if (!c.FB_USER_ACCESS_TOKEN && !c.FB_PAGE_ACCESS_TOKEN) {
+    throw new Error('Missing token: set FB_USER_ACCESS_TOKEN or FB_PAGE_ACCESS_TOKEN in .env');
+  }
+  if (c.FB_PAGE_ACCESS_TOKEN && !c.FB_PAGE_ID) {
+    throw new Error('FB_PAGE_ID is required when FB_PAGE_ACCESS_TOKEN is set');
+  }
+  return {
+    ...c,
+    mediaDir: path.resolve(rootDir, c.FB_MEDIA_DIR),
+    exportDir: path.resolve(rootDir, c.FB_EXPORT_DIR),
+  };
+}
