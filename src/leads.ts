@@ -2,11 +2,13 @@ import { csvCell } from './files.js';
 
 // Contact details people typed themselves in Messenger or comments. Personal data: exports/ only.
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+// Meta's relay address (<id>@facebook.com) on every participant; not a real contact.
+const META_PROXY_EMAIL_RE = /^\d+@facebook\.com$/;
 // PH mobile numbers: 09XX XXX XXXX, +63 9XX XXX XXXX, 639XXXXXXXXX (spaces, dots or dashes allowed).
 const PH_MOBILE_RE = /(?<![\d+])(?:\+?63|0)[\s.-]?9\d{2}[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)/g;
 
 export function extractEmails(text: string): string[] {
-  return [...new Set((text.match(EMAIL_RE) ?? []).map((e) => e.toLowerCase()))];
+  return [...new Set((text.match(EMAIL_RE) ?? []).map((e) => e.toLowerCase()))].filter((e) => !META_PROXY_EMAIL_RE.test(e));
 }
 
 /** Phone numbers normalised to +639XXXXXXXXX. */
@@ -85,6 +87,8 @@ export function leadFromConversation(pageId: string, conv: any): ContactLead | u
   if (!person) return undefined;
   const theirs: Msg[] = (conv.messages?.data ?? []).filter((m: Msg) => m.from?.id && m.from.id !== pageId);
   const text = theirs.map((m) => m.message ?? '').join('\n');
+  // Stickers/photos come as message: '', so take the newest message with text.
+  const lastText = theirs.find((m) => m.message)?.message || conv.snippet || '';
   return {
     source: 'messenger',
     name: person.name ?? '',
@@ -94,7 +98,7 @@ export function leadFromConversation(pageId: string, conv: any): ContactLead | u
     banks: extractBanks(text),
     carded: cardedStatus(text),
     last_time: theirs[0]?.created_time ?? conv.updated_time,
-    last_text: (theirs[0]?.message ?? conv.snippet ?? '').slice(0, 300),
+    last_text: lastText.slice(0, 300),
     ref_id: conv.id,
   };
 }

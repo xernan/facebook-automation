@@ -61,6 +61,23 @@ describe('lead builders', () => {
     expect(lead).toMatchObject({ banks: ['BPI'], carded: 'no' });
   });
 
+  it('drops Meta relay emails and skips empty sticker messages for last_text', () => {
+    const lead = leadFromConversation('111', {
+      id: 't_2',
+      snippet: '',
+      participants: { data: [{ id: '111', name: 'CARD MAX' }, { id: '901', name: 'Ben', email: '901@facebook.com' }] },
+      messages: {
+        data: [
+          { message: '', from: { id: '901' }, created_time: '2026-10-20T11:00:00+0000' },
+          { message: 'hm po', from: { id: '901' }, created_time: '2026-10-20T10:00:00+0000' },
+        ],
+      },
+    })!;
+    expect(lead.emails).toEqual([]);
+    expect(lead.last_text).toBe('hm po');
+    expect(lead.last_time).toBe('2026-10-20T11:00:00+0000');
+  });
+
   it('skips the Page own comments and hidden commenters', () => {
     expect(leadFromComment('111', '111_1', { id: 'c', from: { id: '111', name: 'CARD MAX' }, message: 'x' })).toBeUndefined();
     expect(leadFromComment('111', '111_1', { id: 'c', message: 'HM?' })).toBeUndefined();
