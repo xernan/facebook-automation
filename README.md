@@ -59,8 +59,10 @@ Halimbawang utos kay Claude:
        }
      }
      ```
-5. **Subukan muna ang read.** Sabihin kay Claude: *"ilista mo ang mga Page ko at ang huling 5 post"*.
-6. **Kapag OK na,** gawing `FB_WRITE_ENABLED=true` sa `.env` at i-restart si Claude para
+5. **Tingnan kung konektado.** Sabihin kay Claude: *"i-check mo ang facebook setup"*
+   (`fb_setup_status`). Kahit wala pang `.env`, kokonekta ang server at sasabihin kung ano ang kulang.
+6. **Subukan muna ang read.** Sabihin kay Claude: *"ilista mo ang mga Page ko at ang huling 5 post"*.
+7. **Kapag OK na,** gawing `FB_WRITE_ENABLED=true` sa `.env` at i-restart si Claude para
    makapag-post, sumagot at mag-message na siya.
 
 ## Safety na naka-built in

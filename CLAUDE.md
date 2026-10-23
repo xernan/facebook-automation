@@ -11,6 +11,7 @@ the owner, on this computer. No scraping, no browser automation, no personal-pro
 |---|---|
 | `src/` | MCP server (TypeScript, `@modelcontextprotocol/sdk`, zod) |
 | `src/tools.ts` | Every tool: name, zod input, handler. Add new tools here. |
+| `src/app.ts` | Builds the MCP server; setup mode (no `.env`) + `fb_setup_status` |
 | `src/graph.ts` | Graph API client: page-token lookup, appsecret_proof, rate limits, error mapping |
 | `src/config.ts` | All tunables with defaults and min/max bounds (read from `.env`) |
 | `tests/` | vitest, fake Graph API in `tests/helpers.ts` |
@@ -50,6 +51,7 @@ npm run doctor       # checks .env/token, lists Pages, prints no secrets
 
 ## Git
 
-- Work lands on `staging`; `main` only receives staging -> main PRs after CI is green.
+- Local only: no GitHub remote, never push (owner's choice, saves Actions minutes). The
+  pre-commit hook is the CI gate. Work on `staging`; merge to `main` locally when the owner asks.
 - Conventional commits. Hooks live in `.githooks/` (`git config core.hooksPath .githooks`):
   secret scan + typecheck + tests on every commit.
