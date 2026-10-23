@@ -93,3 +93,23 @@ describe('fb_comment_leads paging', () => {
     expect(res.leads.map((l: any) => l.ref_id)).toEqual(['c1', 'c2']);
   });
 });
+
+describe('paging cursors', () => {
+  it('every list tool accepts a long Meta cursor (live cursors run over 1,000 chars)', async () => {
+    const cursor = 'QVFIV' + 'GRtVlctVGp3QXZACaWJ'.repeat(60) + 'ZDZD';
+    const { ctx } = testCtx({}, () => ({ json: { data: [] } }));
+    const listTools = tools.filter((t) => 'after' in t.input);
+    expect(listTools.length).toBeGreaterThan(3);
+    for (const t of listTools) {
+      const args: Record<string, string> = { page_id: '111', after: cursor };
+      if ('object_id' in t.input) args.object_id = '111_1';
+      if ('conversation_id' in t.input) args.conversation_id = 't_1';
+      await expect(callTool(t, args, ctx), t.name).resolves.toBeDefined();
+    }
+  });
+
+  it('rejects a cursor with characters Meta never uses', async () => {
+    const { ctx } = testCtx();
+    await expect(callTool(tool('fb_list_posts'), { page_id: '111', after: 'a&access_token=x' }, ctx)).rejects.toThrow();
+  });
+});

@@ -25,7 +25,13 @@ export interface ToolDef {
 const id = z.string().regex(/^[0-9_]+$/, 'Must be a numeric Facebook id');
 const pageId = id.describe('Page id from fb_list_pages');
 const limit = z.number().int().min(1).max(100).optional().describe('Items per page (max set by FB_MAX_LIST_LIMIT)');
-const after = z.string().max(500).optional().describe('next_cursor from a previous call');
+// Meta cursors are URL-safe base64 and can run past 1,000 characters.
+const after = z
+  .string()
+  .max(4000)
+  .regex(/^[A-Za-z0-9_\-=%]+$/, 'Use next_cursor exactly as returned')
+  .optional()
+  .describe('next_cursor from a previous call');
 const text = (max: number) => z.string().trim().min(1).max(max);
 const idemKey = z
   .string()
