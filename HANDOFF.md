@@ -12,6 +12,8 @@
 - Public GitHub repo cardmaxmarketing-blip/facebook-automation (free Actions). CI on staging + main.
 
 ## Open (needs owner)
+- GitHub Actions won't start: "account is locked due to a billing issue" on cardmaxmarketing-blip.
+  Owner: check https://github.com/settings/billing. Then re-run CI and open the staging -> main PR.
 - Make the Meta App + token, fill `.env` yourself (never in chat), `npm run doctor`, restart Claude.
 - First live run: read-only on a test Page, then FB_WRITE_ENABLED=true.
 
