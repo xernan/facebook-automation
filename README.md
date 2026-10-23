@@ -54,7 +54,7 @@ Halimbawang utos kay Claude:
        "mcpServers": {
          "facebook": {
            "command": "node",
-           "args": ["C:\\Users\\axery\\Desktop\\facebook-automation\\dist\\server.js"]
+           "args": ["C:\\Users\\<you>\\Desktop\\facebook-automation\\dist\\server.js"]
          }
        }
      }
