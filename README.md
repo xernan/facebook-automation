@@ -34,7 +34,7 @@ Halimbawang utos kay Claude:
 
 ## Setup (mga 20 minuto, isang beses lang)
 
-1. **Kunin ang token.** Sundan ang [docs/SETUP.md](docs/SETUP.md).
+1. **Kunin ang token.** Sundan ang [docs/SETUP.md](docs/SETUP.md). Pinakamadali: `npm run login`.
 2. **Gawin ang `.env`.** Kopyahin ang `.env.example`, pangalanang `.env`, at ikaw mismo
    ang mag-paste ng token doon. **Huwag i-paste ang token sa chat kay Claude.**
 3. **I-build at i-test:**

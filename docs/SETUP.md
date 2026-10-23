@@ -36,6 +36,19 @@ hindi na kailangan ng App Review.
 
 ## 3. Kunin ang token (pumili ng isa)
 
+### Pinakamadali: `npm run login`
+
+1. Ilagay muna ang `FB_APP_SECRET` sa `.env` (step 1), tapos `npm run build`.
+2. Patakbuhin ang `npm run login`. Bubukas ang Facebook Login sa browser.
+3. Piliin ang *Opt in to all current and future Pages*, i-allow ang lahat, hintayin ang "Done".
+4. Kusa nitong ise-save ang 60-day token sa `.env`. Ulitin bago mag-expire.
+
+Kung "Invalid Scopes: leads_retrieval, pages_manage_ads" ang lumabas, wala pang Lead Ads
+use case ang app. Gamitin ang `npm run login -- --no-leads`, o idagdag muna ang use case.
+
+Kung pag-aari ng Business Portfolio ang Page at hindi ito lumalabas sa `npm run doctor`,
+ilagay ang Page id sa `FB_EXTRA_PAGE_IDS` sa `.env`.
+
 ### A. System User token (inirerekomenda: hindi nag-e-expire)
 
 1. Pumunta sa **business.facebook.com → Settings → Users → System users → Add**

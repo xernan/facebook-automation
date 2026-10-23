@@ -12,7 +12,8 @@
     "secret-scan": "node scripts/secret-scan.mjs --all",
     "check": "npm run typecheck && npm test && npm run secret-scan",
     "start": "node dist/server.js",
-    "doctor": "node dist/doctor.js"
+    "doctor": "node dist/doctor.js",
+    "login": "node dist/login.js"
   },
   "engines": {
     "node": ">=20"

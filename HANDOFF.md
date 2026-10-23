@@ -12,17 +12,18 @@
 - Public GitHub repo xernan/facebook-automation (free Actions). CI on staging + main.
 
 ## Live status (2026-10-24)
-- Token in .env works (user token, app 1086733300456198, extended, appsecret_proof on).
-- Page: CARD MAX (1235234309673692), Business-owned. Found via debug_token fallback (me/accounts is empty for it).
-- Live read OK: list_pages, get_page, list_posts (+scheduled), list_conversations, page/post insights (new metric names).
-- Blocked by missing permissions: pages_manage_engagement, pages_read_user_content, pages_manage_metadata,
-  read_insights, leads_retrieval, pages_manage_ads -> get_post counts, comments, reviews, lead forms.
+- `npm run login` (new): Facebook Login -> long-lived token saved to .env. Used live, works.
+- Token: app 1086733300456198, 8/10 permissions. Missing leads_retrieval + pages_manage_ads
+  (app has no Lead Ads use case -> "Invalid Scopes"). Used `--no-leads`.
+- Pages: Oink-Oink, PenTest Philippines, Sexy Tiktoker (me/accounts) + CARD MAX 1235234309673692
+  (Business-owned, via FB_EXTRA_PAGE_IDS / direct lookup).
+- Live read OK on CARD MAX: get_page, posts, scheduled, get_post, comments, conversations,
+  page+post insights (new *_total_media_view_unique names), reviews. Writes blocked (OFF).
 
 ## Open (needs owner)
-- Add the 6 missing permissions (app Use cases -> Customize), make a new token, pick CARD MAX, extend, save .env.
-- Review + merge PR #1 (staging -> main): https://github.com/xernan/facebook-automation/pull/1 (CI green).
-- Delete old repo cardmaxmarketing-blip/facebook-automation (Settings > Danger Zone). gh lacks delete_repo scope.
-- Restart Claude so the facebook MCP connects with the token.
+- Lead Ads (optional): add Lead Ads use case to app "Card", then `npm run login`.
+- Merge PR #1 on xernan/facebook-automation; delete old cardmaxmarketing-blip repo.
+- Start a NEW Claude chat so the facebook MCP tools load (this session started before .env existed).
 - Writes: FB_WRITE_ENABLED=true only after owner OKs a first test post text.
 
 ## Next

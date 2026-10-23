@@ -179,6 +179,31 @@ describe('graph client', () => {
     await expect(g.pageToken('333')).rejects.toThrow(/not managed/);
   });
 
+  it('reaches a Business Page by direct id when the token covers all Pages', async () => {
+    const { GraphClient } = await import('../src/graph.js');
+    const fn = (async (input: string) => {
+      const u = new URL(input);
+      const json = u.pathname.endsWith('/me/accounts')
+        ? { data: [] }
+        : u.pathname.endsWith('/debug_token')
+          ? { data: { granular_scopes: [{ scope: 'pages_show_list' }] } }
+          : u.pathname.endsWith('/222')
+            ? { id: '222', name: 'Biz Page', access_token: PAGE_TOKEN }
+            : u.pathname.endsWith('/333')
+              ? { id: '333', name: 'Someone else' }
+              : { error: { code: 100, message: 'nope' } };
+      return new Response(JSON.stringify(json), { status: 'error' in json ? 400 : 200 });
+    }) as unknown as typeof fetch;
+    const g = new GraphClient(testConfig(), fn);
+    expect(await g.listPages()).toEqual([]);
+    expect(await g.pageToken('222')).toBe(PAGE_TOKEN);
+    await expect(g.pageToken('333')).rejects.toThrow(/not managed/);
+    await expect(g.pageToken('444')).rejects.toThrow(/not managed/);
+
+    const listed = new GraphClient(testConfig({ FB_EXTRA_PAGE_IDS: '222, 333' }), fn);
+    expect((await listed.listPages()).map((p) => p.id)).toEqual(['222']);
+  });
+
   it('lists missing permissions from me/permissions', async () => {
     const { ctx, calls } = testCtx({}, () => ({
       json: { data: [{ permission: 'pages_show_list', status: 'granted' }, { permission: 'pages_messaging', status: 'declined' }] },
