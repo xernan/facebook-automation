@@ -12,6 +12,8 @@
 - Public GitHub repo xernan/facebook-automation (free Actions). CI on staging + main.
 
 ## Open (needs owner)
+- Review + merge PR #1 (staging -> main): https://github.com/xernan/facebook-automation/pull/1 (CI green).
+- Delete old repo cardmaxmarketing-blip/facebook-automation (Settings > Danger Zone). gh lacks delete_repo scope.
 - Make the Meta App + token, fill `.env` yourself (never in chat), `npm run doctor`, restart Claude.
 - First live run: read-only on a test Page, then FB_WRITE_ENABLED=true.
 
