@@ -27,13 +27,20 @@
 - CARD MAX observations (2026-10-24): last 25 posts have 0 comments / 0 reactions; several duplicates;
   3 public test posts deleted 2026-10-24 (owner OK). FB_WRITE_ENABLED=true now; live delete verified.
 
+- QA pass 2026-10-24 (76 tests): fixed token in tool output (scrub all results), double post after
+  write timeout (key stays failed), same idempotency key reused for other action (now refused),
+  comment leads only first 100 per post (now pages), cursors >500 chars broke page 2 (live repro).
+  Live negative paths OK: unknown page, other page's post, retired metric.
+
 ## Open (needs owner)
-- HANDOFF.md edit not committed yet (commit was blocked); commit it next session.
+- Restart Claude so the MCP server loads the new dist/ (fixes above).
+- Low, not fixed: unknown page_id triggers a full page-list refresh each call; messenger leads
+  page size fixed at 25 (Meta cap with nested messages).
 - GitHub done 2026-10-24: PR #1 merged to main; old cardmaxmarketing-blip repo deleted.
 - Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
 - Start a NEW Claude chat so the facebook MCP tools load (this session started before .env existed).
 
 ## Next
 1. Owner setup -> doctor -> read-only smoke test -> writes on test Page.
-2. /qa on the live flows.
+2. Re-check paging live after restart (fb_list_posts with next_cursor).
 3. Phase 2 options (owner decides): Instagram, Marketing API (ads), lead alerts.
