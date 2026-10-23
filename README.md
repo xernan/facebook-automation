@@ -15,13 +15,15 @@ hindi ka mab-ban dahil sa automation.
 | Messenger | `fb_list_conversations`, `fb_get_messages`, `fb_send_message` (sagot sa loob ng 24 oras, o private reply sa nag-comment) |
 | Insights | `fb_page_insights`, `fb_post_insights` |
 | Reviews | `fb_list_reviews` |
-| **Leads** | `fb_list_lead_forms`, `fb_get_leads` (puwedeng i-export sa CSV sa `exports/`) |
+| **Leads (Messenger at comments)** | `fb_messenger_leads` (mga nag-message: pangalan, phone, email), `fb_comment_leads` (mga nag-comment, puwedeng i-filter sa "hm", "interested"). Parehong puwedeng i-export sa CSV sa `exports/` |
+| **Lead Ads** | `fb_list_lead_forms`, `fb_get_leads` (kailangan ng Lead Ads use case sa app) |
 | Iba pa | `fb_graph_get`: read-only access sa kahit anong Graph API endpoint |
 
 Halimbawang utos kay Claude:
 - "Gumawa ka ng 5 post para sa promo next week, i-schedule tuwing 9am."
 - "Sagutin mo lahat ng tanong sa comments ng huling post, at i-private reply ang nagtanong ng presyo."
-- "I-export mo ang mga bagong leads ngayong linggo sa CSV."
+- "Ilista mo ang mga nag-message ngayong linggo na nag-iwan ng number, i-export sa CSV."
+- "Sino ang nag-comment ng HM sa huling 5 post? Padalhan mo sila ng private reply." (isang private reply lang bawat comment)
 - "Anong post ang may pinakamaraming engagement nitong buwan?"
 
 ## Hindi kaya (bawal o wala sa official API)

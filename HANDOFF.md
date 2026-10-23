@@ -20,8 +20,11 @@
 - Live read OK on CARD MAX: get_page, posts, scheduled, get_post, comments, conversations,
   page+post insights (new *_total_media_view_unique names), reviews. Writes blocked (OFF).
 
+- New: fb_messenger_leads + fb_comment_leads (leads from Messenger/comments, CSV export). Live on CARD MAX:
+  2 Messenger leads, both with phone/email. Owner chose these over Lead Ads.
+
 ## Open (needs owner)
-- Lead Ads (optional): add Lead Ads use case to app "Card", then `npm run login`.
+- Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
 - Merge PR #1 on xernan/facebook-automation; delete old cardmaxmarketing-blip repo.
 - Start a NEW Claude chat so the facebook MCP tools load (this session started before .env existed).
 - Writes: FB_WRITE_ENABLED=true only after owner OKs a first test post text.
