@@ -1,5 +1,8 @@
 # Facebook Automation
 
+**Start of every session: read `HANDOFF.md` first and tell the owner where we left off.
+Update it after every milestone.**
+
 MCP server that lets Claude manage the owner's Facebook Pages (posts, scheduling, comments,
 Messenger, insights, reviews, Lead Ads leads) through the official Meta Graph API. One user:
 the owner, on this computer. No scraping, no browser automation, no personal-profile actions.
