@@ -16,6 +16,8 @@ export const configSchema = z.object({
   FB_PAGE_ACCESS_TOKEN: z.string().min(20).optional(),
   FB_PAGE_ID: z.string().regex(/^\d+$/).optional(),
   FB_APP_SECRET: z.string().min(16).optional(),
+  FB_EXTRA_PAGE_IDS: z.string().regex(/^\s*\d+(\s*,\s*\d+)*\s*$/).optional(),
+  FB_APP_ID: z.string().regex(/^\d+$/).optional(),
   FB_GRAPH_VERSION: z.string().regex(/^v\d{2,3}\.0$/).default('v26.0'),
   FB_WRITE_ENABLED: boolFlag(false),
   FB_READ_RATE_PER_MIN: intIn(120, 1, 600),
@@ -26,6 +28,11 @@ export const configSchema = z.object({
   FB_SCHEDULE_MIN_MINUTES: intIn(10, 10, 1440),
   FB_SCHEDULE_MAX_DAYS: intIn(30, 1, 75),
   FB_MAX_UPLOAD_MB: intIn(10, 1, 100),
+  FB_LEADS_SCAN_MAX: intIn(200, 1, 2000),
+  FB_LEADS_MESSAGES_PER_CHAT: intIn(25, 1, 100),
+  FB_LEADS_SCAN_POSTS: intIn(25, 1, 100),
+  FB_LOGIN_PORT: intIn(8765, 1024, 65535),
+  FB_LOGIN_TIMEOUT_MIN: intIn(5, 1, 30),
   FB_MEDIA_DIR: z.string().default('media'),
   FB_EXPORT_DIR: z.string().default('exports'),
 });
@@ -33,7 +40,7 @@ export const configSchema = z.object({
 export type RawConfig = z.infer<typeof configSchema>;
 export type Config = RawConfig & { mediaDir: string; exportDir: string };
 
-export function loadConfig(env: NodeJS.ProcessEnv, rootDir: string): Config {
+export function loadConfig(env: NodeJS.ProcessEnv, rootDir: string, { requireToken = true } = {}): Config {
   // Blank values in .env mean "not set".
   const cleaned = Object.fromEntries(Object.entries(env).filter(([, v]) => v !== undefined && v !== ''));
   const parsed = configSchema.safeParse(cleaned);
@@ -43,7 +50,7 @@ export function loadConfig(env: NodeJS.ProcessEnv, rootDir: string): Config {
     throw new Error(`Invalid config in .env: ${keys}`);
   }
   const c = parsed.data;
-  if (!c.FB_USER_ACCESS_TOKEN && !c.FB_PAGE_ACCESS_TOKEN) {
+  if (requireToken && !c.FB_USER_ACCESS_TOKEN && !c.FB_PAGE_ACCESS_TOKEN) {
     throw new Error('Missing token: set FB_USER_ACCESS_TOKEN or FB_PAGE_ACCESS_TOKEN in .env');
   }
   if (c.FB_PAGE_ACCESS_TOKEN && !c.FB_PAGE_ID) {

@@ -4,6 +4,7 @@ import type { Config } from './config.js';
 import { leadsToCsv, resolveMediaFile, writeExport, type Lead } from './files.js';
 import { GraphClient, type Params } from './graph.js';
 import { IdempotencyStore } from './idempotency.js';
+import { contactLeadsToCsv, leadFromComment, leadFromConversation, type ContactLead } from './leads.js';
 import { toScheduleTimestamp } from './schedule.js';
 
 export interface Ctx {
@@ -312,7 +313,8 @@ export const tools: ToolDef[] = [
   {
     name: 'fb_page_insights',
     description:
-      'Page insights for given metric names (e.g. page_impressions_unique, page_post_engagements, page_follows). ' +
+      'Page insights for given metric names (e.g. page_total_media_view_unique = reach, page_media_view, page_post_engagements, ' +
+      'page_follows, page_views_total). ' +
       'Meta renames metrics between versions; if one fails, check the Page Insights docs for the current name.',
     write: false,
     input: {
@@ -327,7 +329,7 @@ export const tools: ToolDef[] = [
   },
   {
     name: 'fb_post_insights',
-    description: 'Insights for one post (e.g. post_impressions_unique, post_clicks, post_reactions_by_type_total).',
+    description: 'Insights for one post (e.g. post_total_media_view_unique = reach, post_media_view, post_clicks, post_reactions_by_type_total).',
     write: false,
     input: { page_id: pageId, post_id: id, metrics: z.array(z.string().regex(/^[a-z0-9_]+$/)).min(1).max(20) },
     handler: ({ page_id, post_id, metrics }, { graph }) => {
@@ -396,6 +398,92 @@ export const tools: ToolDef[] = [
       } while (cursor && leads.length < max);
       const file = export_csv ? await writeExport(ctx.cfg.exportDir, `leads_${form_id}`, leadsToCsv(leads)) : undefined;
       return { count: leads.length, csv_file: file, leads };
+    },
+  },
+
+  // ---- leads from Messenger and comments -----------------------------------
+  {
+    name: 'fb_messenger_leads',
+    description:
+      'Find leads among people who messaged the Page: name, phone and email they typed, banks/cards they asked about, ' +
+      'carded or not, last message. Everyone who messaged is a lead; no keyword needed. ' +
+      'Newest first. Set export_csv=true to save a CSV in the exports folder. Personal data: do not paste it anywhere public.',
+    write: false,
+    input: {
+      page_id: pageId,
+      since: z.iso.datetime({ offset: true }).optional().describe('Only conversations active after this ISO date-time'),
+      only_with_contact: z.boolean().optional().describe('Only people who shared a phone or email'),
+      export_csv: z.boolean().optional(),
+    },
+    handler: async ({ page_id, since, only_with_contact, export_csv }, ctx) => {
+      const max = ctx.cfg.FB_LEADS_SCAN_MAX;
+      const sinceMs = since ? Date.parse(since) : undefined;
+      const leads: ContactLead[] = [];
+      let scanned = 0;
+      let cursor: string | undefined;
+      scan: do {
+        const res: any = await ctx.graph.get(page_id, `${page_id}/conversations`, {
+          platform: 'messenger',
+          fields: `id,updated_time,snippet,participants,messages.limit(${ctx.cfg.FB_LEADS_MESSAGES_PER_CHAT}){message,from,created_time}`,
+          limit: Math.min(ctx.cfg.FB_MAX_LIST_LIMIT, 25),
+          after: cursor,
+        });
+        for (const conv of res.data ?? []) {
+          if (sinceMs !== undefined && Date.parse(conv.updated_time) < sinceMs) break scan;
+          if (++scanned > max) break scan;
+          const lead = leadFromConversation(page_id, conv);
+          if (lead && (!only_with_contact || lead.phones.length || lead.emails.length)) leads.push(lead);
+        }
+        cursor = res.paging?.next ? res.paging?.cursors?.after : undefined;
+      } while (cursor);
+      const file = export_csv ? await writeExport(ctx.cfg.exportDir, 'messenger_leads', contactLeadsToCsv(leads)) : undefined;
+      return { scanned: Math.min(scanned, max), count: leads.length, csv_file: file, leads };
+    },
+  },
+  {
+    name: 'fb_comment_leads',
+    description:
+      'Find leads among people who commented on Page posts: name, comment, phone/email typed, banks named, carded or not. ' +
+      'Every commenter is a lead unless keywords are given. ' +
+      'Scans one post, or the newest posts. Use the comment id with fb_send_message (comment_id) for one private reply. ' +
+      'Personal data: do not paste it anywhere public.',
+    write: false,
+    input: {
+      page_id: pageId,
+      post_id: id.optional().describe('Only this post. Default: the newest posts (FB_LEADS_SCAN_POSTS)'),
+      keywords: z.array(z.string().trim().min(1).max(50)).max(20).optional().describe('Only comments containing one of these words'),
+      since: z.iso.datetime({ offset: true }).optional().describe('Only comments after this ISO date-time'),
+      only_with_contact: z.boolean().optional(),
+      export_csv: z.boolean().optional(),
+    },
+    handler: async ({ page_id, post_id, keywords, since, only_with_contact, export_csv }, ctx) => {
+      if (post_id) assertOwnPost(page_id, post_id);
+      const postIds: string[] = post_id
+        ? [post_id]
+        : ((await ctx.graph.get(page_id, `${page_id}/posts`, { fields: 'id', limit: ctx.cfg.FB_LEADS_SCAN_POSTS })).data ?? []).map(
+            (p: any) => p.id,
+          );
+      const sinceMs = since ? Date.parse(since) : undefined;
+      const words = (keywords ?? []).map((k: string) => k.toLowerCase());
+      const leads: ContactLead[] = [];
+      let scanned = 0;
+      scan: for (const pid of postIds) {
+        const res: any = await ctx.graph.get(page_id, `${pid}/comments`, {
+          fields: 'id,from,message,created_time',
+          filter: 'stream',
+          order: 'reverse_chronological',
+          limit: ctx.cfg.FB_MAX_LIST_LIMIT,
+        });
+        for (const c of res.data ?? []) {
+          if (++scanned > ctx.cfg.FB_LEADS_SCAN_MAX) break scan;
+          if (sinceMs !== undefined && Date.parse(c.created_time) < sinceMs) continue;
+          if (words.length && !words.some((w: string) => (c.message ?? '').toLowerCase().includes(w))) continue;
+          const lead = leadFromComment(page_id, pid, c);
+          if (lead && (!only_with_contact || lead.phones.length || lead.emails.length)) leads.push(lead);
+        }
+      }
+      const file = export_csv ? await writeExport(ctx.cfg.exportDir, 'comment_leads', contactLeadsToCsv(leads)) : undefined;
+      return { posts_scanned: postIds.length, count: leads.length, csv_file: file, leads };
     },
   },
 

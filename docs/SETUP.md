@@ -36,6 +36,19 @@ hindi na kailangan ng App Review.
 
 ## 3. Kunin ang token (pumili ng isa)
 
+### Pinakamadali: `npm run login`
+
+1. Ilagay muna ang `FB_APP_SECRET` sa `.env` (step 1), tapos `npm run build`.
+2. Patakbuhin ang `npm run login`. Bubukas ang Facebook Login sa browser.
+3. Piliin ang *Opt in to all current and future Pages*, i-allow ang lahat, hintayin ang "Done".
+4. Kusa nitong ise-save ang 60-day token sa `.env`. Ulitin bago mag-expire.
+
+Kung "Invalid Scopes: leads_retrieval, pages_manage_ads" ang lumabas, wala pang Lead Ads
+use case ang app. Gamitin ang `npm run login -- --no-leads`, o idagdag muna ang use case.
+
+Kung pag-aari ng Business Portfolio ang Page at hindi ito lumalabas sa `npm run doctor`,
+ilagay ang Page id sa `FB_EXTRA_PAGE_IDS` sa `.env`.
+
 ### A. System User token (inirerekomenda: hindi nag-e-expire)
 
 1. Pumunta sa **business.facebook.com → Settings → Users → System users → Add**
@@ -67,7 +80,8 @@ Dapat lumabas ang Pages mo. Kung may error:
 |---|---|
 | `Access token is invalid or expired` | Gumawa ng bagong token (step 3) |
 | `Missing permission` | Kulang ang permission sa step 2. Gumawa ulit ng token pagkatapos idagdag. |
-| `manages no Pages` | Hindi naka-assign ang Page sa System User, o kulang ang `pages_show_list` |
+| `manages no Pages` / `no Page was shared` | Sa pag-generate ng token, i-check ang Page mo sa "Choose Pages" step (o i-assign sa System User) |
+| `Permissions MISSING` | Idagdag ang mga nakalista sa app, tapos gumawa ng bagong token |
 | `No internet connection` | I-check ang internet |
 
 ## 5. Bago mag-launch o mag-share

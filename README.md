@@ -15,13 +15,15 @@ hindi ka mab-ban dahil sa automation.
 | Messenger | `fb_list_conversations`, `fb_get_messages`, `fb_send_message` (sagot sa loob ng 24 oras, o private reply sa nag-comment) |
 | Insights | `fb_page_insights`, `fb_post_insights` |
 | Reviews | `fb_list_reviews` |
-| **Leads** | `fb_list_lead_forms`, `fb_get_leads` (puwedeng i-export sa CSV sa `exports/`) |
+| **Leads (Messenger at comments)** | `fb_messenger_leads` (mga nag-message: pangalan, phone, email), `fb_comment_leads` (mga nag-comment, puwedeng i-filter sa "hm", "interested"). Parehong puwedeng i-export sa CSV sa `exports/` |
+| **Lead Ads** | `fb_list_lead_forms`, `fb_get_leads` (kailangan ng Lead Ads use case sa app) |
 | Iba pa | `fb_graph_get`: read-only access sa kahit anong Graph API endpoint |
 
 Halimbawang utos kay Claude:
 - "Gumawa ka ng 5 post para sa promo next week, i-schedule tuwing 9am."
 - "Sagutin mo lahat ng tanong sa comments ng huling post, at i-private reply ang nagtanong ng presyo."
-- "I-export mo ang mga bagong leads ngayong linggo sa CSV."
+- "Ilista mo ang mga nag-message ngayong linggo na nag-iwan ng number, i-export sa CSV."
+- "Sino ang nag-comment ng HM sa huling 5 post? Padalhan mo sila ng private reply." (isang private reply lang bawat comment)
 - "Anong post ang may pinakamaraming engagement nitong buwan?"
 
 ## Hindi kaya (bawal o wala sa official API)
@@ -34,7 +36,7 @@ Halimbawang utos kay Claude:
 
 ## Setup (mga 20 minuto, isang beses lang)
 
-1. **Kunin ang token.** Sundan ang [docs/SETUP.md](docs/SETUP.md).
+1. **Kunin ang token.** Sundan ang [docs/SETUP.md](docs/SETUP.md). Pinakamadali: `npm run login`.
 2. **Gawin ang `.env`.** Kopyahin ang `.env.example`, pangalanang `.env`, at ikaw mismo
    ang mag-paste ng token doon. **Huwag i-paste ang token sa chat kay Claude.**
 3. **I-build at i-test:**
@@ -54,13 +56,15 @@ Halimbawang utos kay Claude:
        "mcpServers": {
          "facebook": {
            "command": "node",
-           "args": ["C:\\Users\\axery\\Desktop\\facebook-automation\\dist\\server.js"]
+           "args": ["C:\\Users\\<you>\\Desktop\\facebook-automation\\dist\\server.js"]
          }
        }
      }
      ```
-5. **Subukan muna ang read.** Sabihin kay Claude: *"ilista mo ang mga Page ko at ang huling 5 post"*.
-6. **Kapag OK na,** gawing `FB_WRITE_ENABLED=true` sa `.env` at i-restart si Claude para
+5. **Tingnan kung konektado.** Sabihin kay Claude: *"i-check mo ang facebook setup"*
+   (`fb_setup_status`). Kahit wala pang `.env`, kokonekta ang server at sasabihin kung ano ang kulang.
+6. **Subukan muna ang read.** Sabihin kay Claude: *"ilista mo ang mga Page ko at ang huling 5 post"*.
+7. **Kapag OK na,** gawing `FB_WRITE_ENABLED=true` sa `.env` at i-restart si Claude para
    makapag-post, sumagot at mag-message na siya.
 
 ## Safety na naka-built in

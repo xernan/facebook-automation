@@ -28,8 +28,34 @@ export function explainGraphError(code: number | undefined, subcode: number | un
   if (code === 10 || (code !== undefined && code >= 200 && code <= 299))
     return `Missing permission for this action. Check the app permissions in docs/SETUP.md. (${raw})`;
   if (code === 368) return `Meta blocked this action as possible spam or policy violation. Do not retry. (${raw})`;
+  if (code === 100 && /valid insights metric/i.test(raw))
+    return (
+      'Meta retired this metric name. For reach use page_total_media_view_unique (Page) or ' +
+      `post_total_media_view_unique (post); see the Page Insights docs for others. (${raw})`
+    );
   if (code === 100 && subcode === 33) return `Object not found, or this token cannot see it. (${raw})`;
   return raw;
+}
+
+/** Permissions the tools need (docs/SETUP.md step 2). */
+export const REQUIRED_PERMISSIONS = [
+  'pages_show_list',
+  'pages_read_engagement',
+  'pages_manage_posts',
+  'pages_manage_engagement',
+  'pages_read_user_content',
+  'pages_manage_metadata',
+  'pages_messaging',
+  'read_insights',
+  'leads_retrieval',
+  'pages_manage_ads',
+] as const;
+
+/** Only the Lead Ads tools need these. An app needs a Lead Ads use case before Login accepts them. */
+export const LEAD_PERMISSIONS: readonly string[] = ['leads_retrieval', 'pages_manage_ads'];
+
+function extraPageIds(cfg: Config): string[] {
+  return (cfg.FB_EXTRA_PAGE_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 }
 
 export interface PageInfo {
@@ -143,6 +169,15 @@ export class GraphClient {
         for (const p of res.data ?? []) map.set(p.id, p);
         next = res.paging?.next ? res.paging?.cursors?.after : undefined;
       } while (next);
+      // Pages owned by a Business Portfolio are missing from me/accounts unless the token also has
+      // business_management. Look up the Pages the token was granted (debug_token) one by one.
+      // With "all Pages" access there is no list of ids, so FB_EXTRA_PAGE_IDS names them instead.
+      const ids = new Set([...(await this.grantedPageIds()), ...extraPageIds(this.cfg)]);
+      for (const pageId of ids) {
+        if (map.has(pageId)) continue;
+        const p = await this.lookupPage(pageId);
+        if (p) map.set(p.id, p);
+      }
     }
     if (this.cfg.FB_PAGE_ACCESS_TOKEN && this.cfg.FB_PAGE_ID && !map.has(this.cfg.FB_PAGE_ID)) {
       const res = await this.request('GET', this.cfg.FB_PAGE_ID, this.cfg.FB_PAGE_ACCESS_TOKEN, { fields: 'id,name' });
@@ -152,10 +187,41 @@ export class GraphClient {
     return [...map.values()];
   }
 
+  /** A Page the user can manage, found by id. Meta only returns its access_token to people who manage it. */
+  private async lookupPage(pageId: string): Promise<PageInfo | undefined> {
+    try {
+      const p = await this.request('GET', pageId, this.cfg.FB_USER_ACCESS_TOKEN!, { fields: 'id,name,access_token' });
+      return p.access_token ? { id: p.id, name: p.name, access_token: p.access_token } : undefined;
+    } catch (err) {
+      if (err instanceof GraphError && err.code !== undefined) return undefined; // not found / no access
+      throw err; // network, timeout, rate limit
+    }
+  }
+
+  /** Page ids the user token was granted pages_show_list for (empty when it covers all Pages). */
+  private async grantedPageIds(): Promise<string[]> {
+    const token = this.cfg.FB_USER_ACCESS_TOKEN!;
+    const res = await this.request('GET', 'debug_token', token, { input_token: token });
+    const scope = (res.data?.granular_scopes ?? []).find((g: any) => g.scope === 'pages_show_list');
+    return (scope?.target_ids ?? []).filter((id: unknown) => typeof id === 'string' && /^\d+$/.test(id));
+  }
+
+  /** Which required permissions the user token has. Undefined for a Page-only token (no user to ask). */
+  async checkPermissions(): Promise<{ granted: string[]; missing: string[] } | undefined> {
+    if (!this.cfg.FB_USER_ACCESS_TOKEN) return undefined;
+    const res = await this.request('GET', 'me/permissions', this.cfg.FB_USER_ACCESS_TOKEN, { limit: 100 });
+    const granted: string[] = (res.data ?? []).filter((p: any) => p.status === 'granted').map((p: any) => p.permission);
+    return { granted, missing: REQUIRED_PERMISSIONS.filter((p) => !granted.includes(p)) };
+  }
+
   /** Authorization check: the page must be one this token manages. */
   async pageToken(pageId: string): Promise<string> {
     let page = (await this.listPages()).find((p) => p.id === pageId);
     if (!page) page = (await this.listPages(true)).find((p) => p.id === pageId);
+    if (!page && this.cfg.FB_USER_ACCESS_TOKEN && /^\d+$/.test(pageId)) {
+      page = await this.lookupPage(pageId);
+      if (page) this.pages?.set(page.id, page);
+    }
     if (!page) throw new GraphError(`Page ${pageId} is not managed by this token. Use fb_list_pages to see allowed pages.`);
     return page.access_token;
   }

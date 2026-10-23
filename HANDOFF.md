@@ -1,21 +1,39 @@
-# Handoff (2026-10-23)
+# Handoff (2026-10-24, live)
 
 ## Done
-- MCP server, 22 tools on Graph API v26.0: pages, posts (+schedule, photo, video), comments,
-  Messenger (+private reply), insights, reviews, Lead Ads leads (+CSV export), read-only graph_get.
+- MCP server, 22 tools + `fb_setup_status`, Graph API v26.0: pages, posts (+schedule, photo, video),
+  comments, Messenger (+private reply), insights, reviews, Lead Ads leads (+CSV export), read-only graph_get.
+- Setup mode: server connects even with no/bad `.env`; every tool answers "Setup needed: ...".
+  (Was the cause of "facebook: Connection closed".)
 - Safety: write switch (off by default), confirm on delete, idempotency keys, read/write rate
   limits, page authorization check, appsecret_proof, token redaction, media-folder-only uploads,
   CSV formula-injection guard.
-- 36 tests pass; 6 mutation checks proved the guards are tested. Secret scan + pre-commit hook + CI.
-- Docs: README.md (owner, Tagalog), docs/SETUP.md (token steps), CLAUDE.md (agent rules).
+- 41 tests pass (incl. MCP client<->server, `.env.example` parses to blanks + documents every key).
+- Public GitHub repo xernan/facebook-automation (free Actions). CI on staging + main.
 
-## Open
-- Owner: make the Meta App + token, fill .env (never in chat), `npm run doctor`.
-- No live Graph API test yet (no token). First live run: read-only on a test Page.
-- No git remote yet: create GitHub repo, push `staging`, confirm CI green.
-- Add test: `.env.example` parses with dotenv to all-blank values (inline `#` comments).
+## Live status (2026-10-24)
+- `npm run login` (new): Facebook Login -> long-lived token saved to .env. Used live, works.
+- Token: app 1086733300456198, 8/10 permissions. Missing leads_retrieval + pages_manage_ads
+  (app has no Lead Ads use case -> "Invalid Scopes"). Used `--no-leads`.
+- Pages: Oink-Oink, PenTest Philippines, Sexy Tiktoker (me/accounts) + CARD MAX 1235234309673692
+  (Business-owned, via FB_EXTRA_PAGE_IDS / direct lookup).
+- Live read OK on CARD MAX: get_page, posts, scheduled, get_post, comments, conversations,
+  page+post insights (new *_total_media_view_unique names), reviews. Writes blocked (OFF).
+
+- New: fb_messenger_leads + fb_comment_leads (leads from Messenger/comments, CSV export). Live on CARD MAX:
+  2 Messenger leads, both with phone/email. Owner chose these over Lead Ads.
+
+- Leads tag banks named + carded yes/no (Card Max = free credit card application help; every PM/commenter is a lead).
+- CARD MAX observations (2026-10-24): last 25 posts have 0 comments / 0 reactions; several duplicates;
+  3 public test posts ("Test post - BPI...", "Test Post", "Test validation post...") -> owner to OK deletion.
+
+## Open (needs owner)
+- Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
+- Merge PR #1 on xernan/facebook-automation; delete old cardmaxmarketing-blip repo.
+- Start a NEW Claude chat so the facebook MCP tools load (this session started before .env existed).
+- Writes: FB_WRITE_ENABLED=true only after owner OKs a first test post text.
 
 ## Next
-1. Owner setup -> doctor -> read-only smoke test -> FB_WRITE_ENABLED=true on test Page.
-2. Run /qa on the live flows.
-3. Phase 2 options: Instagram (Graph API), Marketing API (ads), webhook for instant new-lead alerts.
+1. Owner setup -> doctor -> read-only smoke test -> writes on test Page.
+2. /qa on the live flows.
+3. Phase 2 options (owner decides): Instagram, Marketing API (ads), lead alerts.
