@@ -1,4 +1,9 @@
 #!/bin/sh
+# Public repo: commits must use a GitHub noreply email, never a real address.
+case "$(git config user.email)" in
+  *@users.noreply.github.com) ;;
+  *) echo "Commit email must be a GitHub noreply address (git config --local user.email)."; exit 1 ;;
+esac
 node scripts/secret-scan.mjs || exit 1
 npm run typecheck --silent || exit 1
 npm test --silent || exit 1
