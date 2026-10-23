@@ -12,6 +12,8 @@ export class GraphError extends Error {
     readonly code?: number,
     readonly subcode?: number,
     readonly status?: number,
+    /** A write that may have reached Meta before the connection failed. */
+    readonly uncertain = false,
   ) {
     super(message);
     this.name = 'GraphError';
@@ -135,7 +137,20 @@ export class GraphClient {
       res = await this.fetchFn(url, { method, body, signal: AbortSignal.timeout(this.cfg.FB_HTTP_TIMEOUT_MS) });
     } catch (err) {
       const name = (err as Error)?.name;
-      if (name === 'TimeoutError' || name === 'AbortError') throw new GraphError('Request timed out. Try again.');
+      const timedOut = name === 'TimeoutError' || name === 'AbortError';
+      // Never connected (no DNS, refused): the write surely did not happen.
+      const neverSent = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED'].includes((err as any)?.cause?.code);
+      if (method !== 'GET' && !neverSent) {
+        const first = timedOut ? 'Request timed out.' : 'No internet connection.';
+        throw new GraphError(
+          `${first} The action may have gone through. Check the Page before trying again with a new idempotency_key.`,
+          undefined,
+          undefined,
+          undefined,
+          true,
+        );
+      }
+      if (timedOut) throw new GraphError('Request timed out. Try again.');
       throw new GraphError('No internet connection');
     }
 

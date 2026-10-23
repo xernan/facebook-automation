@@ -135,10 +135,10 @@ export const tools: ToolDef[] = [
       scheduled_time: scheduled,
       idempotency_key: idemKey,
     },
-    handler: async ({ page_id, message, link, scheduled_time, idempotency_key }, ctx) => {
+    handler: async ({ page_id, message, link, scheduled_time }, ctx) => {
       if (!message && !link) throw new Error('Give a message, a link, or both.');
       const params = { message, link, ...scheduleParams(ctx, scheduled_time) };
-      return ctx.idem.run(idempotency_key, () => ctx.graph.post(page_id, `${page_id}/feed`, params));
+      return ctx.graph.post(page_id, `${page_id}/feed`, params);
     },
   },
   {
@@ -154,17 +154,15 @@ export const tools: ToolDef[] = [
       scheduled_time: scheduled,
       idempotency_key: idemKey,
     },
-    handler: async ({ page_id, image_url, image_file, caption, scheduled_time, idempotency_key }, ctx) => {
+    handler: async ({ page_id, image_url, image_file, caption, scheduled_time }, ctx) => {
       if (!!image_url === !!image_file) throw new Error('Give exactly one of image_url or image_file.');
       const params: Params = { caption, ...scheduleParams(ctx, scheduled_time) };
-      return ctx.idem.run(idempotency_key, async () => {
-        if (image_url) return ctx.graph.post(page_id, `${page_id}/photos`, { ...params, url: image_url });
-        const f = await resolveMediaFile(ctx.cfg.mediaDir, image_file, ctx.cfg.FB_MAX_UPLOAD_MB * 1048576);
-        const form = new FormData();
-        form.set('source', new Blob([await fs.readFile(f.full)], { type: f.mime }), f.name);
-        for (const [k, v] of Object.entries(params)) if (v !== undefined) form.set(k, String(v));
-        return ctx.graph.post(page_id, `${page_id}/photos`, {}, form);
-      });
+      if (image_url) return ctx.graph.post(page_id, `${page_id}/photos`, { ...params, url: image_url });
+      const f = await resolveMediaFile(ctx.cfg.mediaDir, image_file, ctx.cfg.FB_MAX_UPLOAD_MB * 1048576);
+      const form = new FormData();
+      form.set('source', new Blob([await fs.readFile(f.full)], { type: f.mime }), f.name);
+      for (const [k, v] of Object.entries(params)) if (v !== undefined) form.set(k, String(v));
+      return ctx.graph.post(page_id, `${page_id}/photos`, {}, form);
     },
   },
   {
@@ -179,15 +177,13 @@ export const tools: ToolDef[] = [
       scheduled_time: scheduled,
       idempotency_key: idemKey,
     },
-    handler: ({ page_id, video_url, title, description, scheduled_time, idempotency_key }, ctx) =>
-      ctx.idem.run(idempotency_key, () =>
-        ctx.graph.post(page_id, `${page_id}/videos`, {
-          file_url: video_url,
-          title,
-          description,
-          ...scheduleParams(ctx, scheduled_time),
-        }),
-      ),
+    handler: ({ page_id, video_url, title, description, scheduled_time }, ctx) =>
+      ctx.graph.post(page_id, `${page_id}/videos`, {
+        file_url: video_url,
+        title,
+        description,
+        ...scheduleParams(ctx, scheduled_time),
+      }),
   },
   {
     name: 'fb_update_post',
@@ -232,8 +228,7 @@ export const tools: ToolDef[] = [
     description: 'Reply publicly as the Page to a comment, or comment on a post.',
     write: true,
     input: { page_id: pageId, object_id: id.describe('Comment id to reply to, or post id'), message: text(8000), idempotency_key: idemKey },
-    handler: ({ page_id, object_id, message, idempotency_key }, ctx) =>
-      ctx.idem.run(idempotency_key, () => ctx.graph.post(page_id, `${object_id}/comments`, { message })),
+    handler: ({ page_id, object_id, message }, ctx) => ctx.graph.post(page_id, `${object_id}/comments`, { message }),
   },
   {
     name: 'fb_hide_comment',
@@ -297,7 +292,7 @@ export const tools: ToolDef[] = [
         .describe('Only for allowed cases outside the 24-hour window. Never for promotions.'),
       idempotency_key: idemKey,
     },
-    handler: ({ page_id, recipient_psid, comment_id, text: body, message_tag, idempotency_key }, ctx) => {
+    handler: ({ page_id, recipient_psid, comment_id, text: body, message_tag }, ctx) => {
       if (!!recipient_psid === !!comment_id) throw new Error('Give exactly one of recipient_psid or comment_id.');
       const params: Params = {
         recipient: JSON.stringify(recipient_psid ? { id: recipient_psid } : { comment_id }),
@@ -305,7 +300,7 @@ export const tools: ToolDef[] = [
         messaging_type: message_tag ? 'MESSAGE_TAG' : 'RESPONSE',
         tag: message_tag,
       };
-      return ctx.idem.run(idempotency_key, () => ctx.graph.post(page_id, `${page_id}/messages`, params));
+      return ctx.graph.post(page_id, `${page_id}/messages`, params);
     },
   },
 
@@ -467,23 +462,30 @@ export const tools: ToolDef[] = [
       const words = (keywords ?? []).map((k: string) => k.toLowerCase());
       const leads: ContactLead[] = [];
       let scanned = 0;
+      let postsScanned = 0;
       scan: for (const pid of postIds) {
-        const res: any = await ctx.graph.get(page_id, `${pid}/comments`, {
-          fields: 'id,from,message,created_time',
-          filter: 'stream',
-          order: 'reverse_chronological',
-          limit: ctx.cfg.FB_MAX_LIST_LIMIT,
-        });
-        for (const c of res.data ?? []) {
-          if (++scanned > ctx.cfg.FB_LEADS_SCAN_MAX) break scan;
-          if (sinceMs !== undefined && Date.parse(c.created_time) < sinceMs) continue;
-          if (words.length && !words.some((w: string) => (c.message ?? '').toLowerCase().includes(w))) continue;
-          const lead = leadFromComment(page_id, pid, c);
-          if (lead && (!only_with_contact || lead.phones.length || lead.emails.length)) leads.push(lead);
-        }
+        postsScanned++;
+        let cursor: string | undefined;
+        do {
+          const res: any = await ctx.graph.get(page_id, `${pid}/comments`, {
+            fields: 'id,from,message,created_time',
+            filter: 'stream',
+            order: 'reverse_chronological',
+            limit: ctx.cfg.FB_MAX_LIST_LIMIT,
+            after: cursor,
+          });
+          for (const c of res.data ?? []) {
+            if (++scanned > ctx.cfg.FB_LEADS_SCAN_MAX) break scan;
+            if (sinceMs !== undefined && Date.parse(c.created_time) < sinceMs) continue;
+            if (words.length && !words.some((w: string) => (c.message ?? '').toLowerCase().includes(w))) continue;
+            const lead = leadFromComment(page_id, pid, c);
+            if (lead && (!only_with_contact || lead.phones.length || lead.emails.length)) leads.push(lead);
+          }
+          cursor = res.paging?.next ? res.paging?.cursors?.after : undefined;
+        } while (cursor);
       }
       const file = export_csv ? await writeExport(ctx.cfg.exportDir, 'comment_leads', contactLeadsToCsv(leads)) : undefined;
-      return { posts_scanned: postIds.length, count: leads.length, csv_file: file, leads };
+      return { posts_scanned: postsScanned, count: leads.length, csv_file: file, leads };
     },
   },
 
@@ -504,7 +506,10 @@ export const tools: ToolDef[] = [
       params: z
         .record(z.string().regex(/^[a-z_]+$/), z.string().max(2000))
         .optional()
-        .refine((p) => !p || !Object.keys(p).some((k) => /token|secret|proof/.test(k)), 'Auth params are not allowed'),
+        .refine(
+          (p) => !p || !Object.entries(p).some(([k, v]) => /token|secret|proof/i.test(`${k} ${v}`)),
+          'Auth params and token fields are not allowed',
+        ),
     },
     handler: ({ page_id, path, params }, { graph }) => graph.get(page_id, path, params),
   },
@@ -515,5 +520,10 @@ export async function callTool(def: ToolDef, args: unknown, ctx: Ctx) {
     throw new Error('Write actions are turned off. Set FB_WRITE_ENABLED=true in .env and restart Claude to allow them.');
   }
   const parsed = z.object(def.input).strict().parse(args);
+  // Tools that take idempotency_key run once per key; the same key with other args is refused.
+  if ('idempotency_key' in def.input) {
+    const { idempotency_key, ...rest } = parsed;
+    return ctx.idem.run(idempotency_key as string | undefined, () => def.handler(parsed, ctx), JSON.stringify([def.name, rest]));
+  }
   return def.handler(parsed, ctx);
 }
