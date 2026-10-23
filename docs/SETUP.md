@@ -67,7 +67,8 @@ Dapat lumabas ang Pages mo. Kung may error:
 |---|---|
 | `Access token is invalid or expired` | Gumawa ng bagong token (step 3) |
 | `Missing permission` | Kulang ang permission sa step 2. Gumawa ulit ng token pagkatapos idagdag. |
-| `manages no Pages` | Hindi naka-assign ang Page sa System User, o kulang ang `pages_show_list` |
+| `manages no Pages` / `no Page was shared` | Sa pag-generate ng token, i-check ang Page mo sa "Choose Pages" step (o i-assign sa System User) |
+| `Permissions MISSING` | Idagdag ang mga nakalista sa app, tapos gumawa ng bagong token |
 | `No internet connection` | I-check ang internet |
 
 ## 5. Bago mag-launch o mag-share

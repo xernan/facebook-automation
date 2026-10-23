@@ -32,6 +32,20 @@ export function explainGraphError(code: number | undefined, subcode: number | un
   return raw;
 }
 
+/** Permissions the tools need (docs/SETUP.md step 2). */
+export const REQUIRED_PERMISSIONS = [
+  'pages_show_list',
+  'pages_read_engagement',
+  'pages_manage_posts',
+  'pages_manage_engagement',
+  'pages_read_user_content',
+  'pages_manage_metadata',
+  'pages_messaging',
+  'read_insights',
+  'leads_retrieval',
+  'pages_manage_ads',
+] as const;
+
 export interface PageInfo {
   id: string;
   name: string;
@@ -150,6 +164,14 @@ export class GraphClient {
     }
     this.pages = map;
     return [...map.values()];
+  }
+
+  /** Which required permissions the user token has. Undefined for a Page-only token (no user to ask). */
+  async checkPermissions(): Promise<{ granted: string[]; missing: string[] } | undefined> {
+    if (!this.cfg.FB_USER_ACCESS_TOKEN) return undefined;
+    const res = await this.request('GET', 'me/permissions', this.cfg.FB_USER_ACCESS_TOKEN, { limit: 100 });
+    const granted: string[] = (res.data ?? []).filter((p: any) => p.status === 'granted').map((p: any) => p.permission);
+    return { granted, missing: REQUIRED_PERMISSIONS.filter((p) => !granted.includes(p)) };
   }
 
   /** Authorization check: the page must be one this token manages. */

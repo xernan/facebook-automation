@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
@@ -156,6 +158,18 @@ describe('graph client', () => {
     await expect(g.listPages()).rejects.toThrow('No internet connection');
   });
 
+  it('lists missing permissions from me/permissions', async () => {
+    const { ctx, calls } = testCtx({}, () => ({
+      json: { data: [{ permission: 'pages_show_list', status: 'granted' }, { permission: 'pages_messaging', status: 'declined' }] },
+    }));
+    const res = await ctx.graph.checkPermissions();
+    expect(calls.at(-1)!.url.pathname).toBe('/v26.0/me/permissions');
+    expect(param(calls.at(-1)!, 'access_token')).toBe(USER_TOKEN);
+    expect(res!.granted).toEqual(['pages_show_list']);
+    expect(res!.missing).toContain('pages_messaging');
+    expect(res!.missing).not.toContain('pages_show_list');
+  });
+
   it('enforces the local write limit', async () => {
     const { ctx } = testCtx({ FB_WRITE_RATE_PER_MIN: '1' });
     await ctx.graph.post('111', '111/feed', { message: 'a' });
@@ -165,5 +179,14 @@ describe('graph client', () => {
   it('explains the messaging window error before the generic permission error', () => {
     expect(explainGraphError(10, 2018278, 'raw')).toMatch(/24-hour/);
     expect(explainGraphError(10, undefined, 'raw')).toMatch(/permission/);
+  });
+});
+
+describe('process exit', () => {
+  // process.exit() with open fetch sockets crashes Node on Windows (libuv assertion). Use exitCode.
+  it('src never calls process.exit()', () => {
+    for (const f of readdirSync('src')) {
+      expect(readFileSync(path.join('src', f), 'utf8'), f).not.toMatch(/process\.exit\(/);
+    }
   });
 });
