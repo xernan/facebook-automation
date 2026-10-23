@@ -158,6 +158,27 @@ describe('graph client', () => {
     await expect(g.listPages()).rejects.toThrow('No internet connection');
   });
 
+  it('finds Business-owned Pages that me/accounts leaves out', async () => {
+    const { GraphClient } = await import('../src/graph.js');
+    const seen: string[] = [];
+    const fn = (async (input: string) => {
+      const u = new URL(input);
+      seen.push(u.pathname);
+      const json = u.pathname.endsWith('/me/accounts')
+        ? { data: [] }
+        : u.pathname.endsWith('/debug_token')
+          ? { data: { granular_scopes: [{ scope: 'pages_show_list', target_ids: ['222'] }] } }
+          : u.pathname.endsWith('/222')
+            ? { id: '222', name: 'Biz Page', access_token: PAGE_TOKEN }
+            : { error: { code: 100, message: 'nope' } };
+      return new Response(JSON.stringify(json), { status: 'error' in json ? 400 : 200 });
+    }) as unknown as typeof fetch;
+    const g = new GraphClient(testConfig(), fn);
+    expect((await g.listPages()).map((p) => p.name)).toEqual(['Biz Page']);
+    expect(await g.pageToken('222')).toBe(PAGE_TOKEN);
+    await expect(g.pageToken('333')).rejects.toThrow(/not managed/);
+  });
+
   it('lists missing permissions from me/permissions', async () => {
     const { ctx, calls } = testCtx({}, () => ({
       json: { data: [{ permission: 'pages_show_list', status: 'granted' }, { permission: 'pages_messaging', status: 'declined' }] },
@@ -179,6 +200,12 @@ describe('graph client', () => {
   it('explains the messaging window error before the generic permission error', () => {
     expect(explainGraphError(10, 2018278, 'raw')).toMatch(/24-hour/);
     expect(explainGraphError(10, undefined, 'raw')).toMatch(/permission/);
+  });
+
+  it('points retired insights metrics to their replacement', () => {
+    expect(explainGraphError(100, undefined, '(#100) The value must be a valid insights metric')).toMatch(
+      /page_total_media_view_unique/,
+    );
   });
 });
 

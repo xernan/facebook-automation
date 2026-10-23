@@ -19,7 +19,7 @@ export interface Call {
   body: URLSearchParams | FormData | undefined;
 }
 
-/** Fake Graph API: answers me/accounts, records every call, and returns `reply` for the rest. */
+/** Fake Graph API: answers me/accounts and debug_token, records every call, and returns `reply` for the rest. */
 export function fakeFetch(reply: (c: Call) => { status?: number; json: unknown } = () => ({ json: { id: 'ok' } })) {
   const calls: Call[] = [];
   const fn = (async (input: string, init: RequestInit) => {
@@ -28,6 +28,8 @@ export function fakeFetch(reply: (c: Call) => { status?: number; json: unknown }
     let out: { status?: number; json: unknown };
     if (call.url.pathname.endsWith('/me/accounts')) {
       out = { json: { data: [{ id: PAGE_ID, name: 'Test Page', access_token: PAGE_TOKEN, tasks: ['CREATE_CONTENT'] }] } };
+    } else if (call.url.pathname.endsWith('/debug_token')) {
+      out = { json: { data: { granular_scopes: [] } } };
     } else {
       out = reply(call);
     }

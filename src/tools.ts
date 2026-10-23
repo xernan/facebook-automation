@@ -312,7 +312,8 @@ export const tools: ToolDef[] = [
   {
     name: 'fb_page_insights',
     description:
-      'Page insights for given metric names (e.g. page_impressions_unique, page_post_engagements, page_follows). ' +
+      'Page insights for given metric names (e.g. page_total_media_view_unique = reach, page_media_view, page_post_engagements, ' +
+      'page_follows, page_views_total). ' +
       'Meta renames metrics between versions; if one fails, check the Page Insights docs for the current name.',
     write: false,
     input: {
@@ -327,7 +328,7 @@ export const tools: ToolDef[] = [
   },
   {
     name: 'fb_post_insights',
-    description: 'Insights for one post (e.g. post_impressions_unique, post_clicks, post_reactions_by_type_total).',
+    description: 'Insights for one post (e.g. post_total_media_view_unique = reach, post_media_view, post_clicks, post_reactions_by_type_total).',
     write: false,
     input: { page_id: pageId, post_id: id, metrics: z.array(z.string().regex(/^[a-z0-9_]+$/)).min(1).max(20) },
     handler: ({ page_id, post_id, metrics }, { graph }) => {

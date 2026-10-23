@@ -28,6 +28,11 @@ export function explainGraphError(code: number | undefined, subcode: number | un
   if (code === 10 || (code !== undefined && code >= 200 && code <= 299))
     return `Missing permission for this action. Check the app permissions in docs/SETUP.md. (${raw})`;
   if (code === 368) return `Meta blocked this action as possible spam or policy violation. Do not retry. (${raw})`;
+  if (code === 100 && /valid insights metric/i.test(raw))
+    return (
+      'Meta retired this metric name. For reach use page_total_media_view_unique (Page) or ' +
+      `post_total_media_view_unique (post); see the Page Insights docs for others. (${raw})`
+    );
   if (code === 100 && subcode === 33) return `Object not found, or this token cannot see it. (${raw})`;
   return raw;
 }
@@ -157,6 +162,13 @@ export class GraphClient {
         for (const p of res.data ?? []) map.set(p.id, p);
         next = res.paging?.next ? res.paging?.cursors?.after : undefined;
       } while (next);
+      // Pages owned by a Business Portfolio are missing from me/accounts unless the token also has
+      // business_management. Look up the Pages the token was granted (debug_token) one by one.
+      for (const pageId of await this.grantedPageIds()) {
+        if (map.has(pageId)) continue;
+        const p = await this.request('GET', pageId, this.cfg.FB_USER_ACCESS_TOKEN, { fields: 'id,name,access_token' });
+        if (p.access_token) map.set(p.id, { id: p.id, name: p.name, access_token: p.access_token });
+      }
     }
     if (this.cfg.FB_PAGE_ACCESS_TOKEN && this.cfg.FB_PAGE_ID && !map.has(this.cfg.FB_PAGE_ID)) {
       const res = await this.request('GET', this.cfg.FB_PAGE_ID, this.cfg.FB_PAGE_ACCESS_TOKEN, { fields: 'id,name' });
@@ -164,6 +176,14 @@ export class GraphClient {
     }
     this.pages = map;
     return [...map.values()];
+  }
+
+  /** Page ids the user token was granted pages_show_list for (empty when it covers all Pages). */
+  private async grantedPageIds(): Promise<string[]> {
+    const token = this.cfg.FB_USER_ACCESS_TOKEN!;
+    const res = await this.request('GET', 'debug_token', token, { input_token: token });
+    const scope = (res.data?.granular_scopes ?? []).find((g: any) => g.scope === 'pages_show_list');
+    return (scope?.target_ids ?? []).filter((id: unknown) => typeof id === 'string' && /^\d+$/.test(id));
   }
 
   /** Which required permissions the user token has. Undefined for a Page-only token (no user to ask). */
