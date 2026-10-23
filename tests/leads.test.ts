@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { contactLeadsToCsv, extractEmails, extractPhones, leadFromComment, leadFromConversation } from '../src/leads.js';
+import { cardedStatus, contactLeadsToCsv, extractBanks, extractEmails, extractPhones, leadFromComment, leadFromConversation } from '../src/leads.js';
 import { callTool, tools } from '../src/tools.js';
 import { testCtx } from './helpers.js';
 
@@ -26,6 +26,22 @@ describe('contact extraction', () => {
   });
 });
 
+describe('credit card interest', () => {
+  it('names the banks people ask about', () => {
+    expect(extractBanks('pa-apply po sa BPI or Union Bank, rcbc flex din')).toEqual(['BPI', 'RCBC', 'UnionBank']);
+    expect(extractBanks('apply po')).toEqual([]);
+  });
+
+  it('tells carded from first-time applicants', () => {
+    expect(cardedStatus('carded po ako, 2 yrs na')).toBe('yes');
+    expect(cardedStatus('may credit card na ako sa BDO')).toBe('yes');
+    expect(cardedStatus('non-carded po')).toBe('no');
+    expect(cardedStatus('wala pa akong credit card')).toBe('no');
+    expect(cardedStatus('first time ko po')).toBe('no');
+    expect(cardedStatus('interested po')).toBeUndefined();
+  });
+});
+
 describe('lead builders', () => {
   const conv = {
     id: 't_1',
@@ -33,7 +49,7 @@ describe('lead builders', () => {
     participants: { data: [{ id: '111', name: 'CARD MAX' }, { id: '900', name: 'Ana' }] },
     messages: {
       data: [
-        { message: 'Interested po, 09171234567', from: { id: '900' }, created_time: '2026-10-20T10:00:00+0000' },
+        { message: 'Interested po sa BPI, non-carded. 09171234567', from: { id: '900' }, created_time: '2026-10-20T10:00:00+0000' },
         { message: 'Email us at sales@cardmax.ph', from: { id: '111' }, created_time: '2026-10-20T09:00:00+0000' },
       ],
     },
@@ -42,6 +58,7 @@ describe('lead builders', () => {
   it('takes contact info only from the customer, not the Page', () => {
     const lead = leadFromConversation('111', conv)!;
     expect(lead).toMatchObject({ name: 'Ana', person_id: '900', phones: ['+639171234567'], emails: [], ref_id: 't_1' });
+    expect(lead).toMatchObject({ banks: ['BPI'], carded: 'no' });
   });
 
   it('skips the Page own comments and hidden commenters', () => {
@@ -50,7 +67,9 @@ describe('lead builders', () => {
   });
 
   it('guards CSV against formula injection', () => {
-    const csv = contactLeadsToCsv([{ source: 'comment', name: '=HYPERLINK("x")', emails: [], phones: [], last_text: '', ref_id: 'c' }]);
+    const csv = contactLeadsToCsv([
+      { source: 'comment', name: '=HYPERLINK("x")', emails: [], phones: [], banks: [], last_text: '', ref_id: 'c' },
+    ]);
     expect(csv).toContain(`"'=HYPERLINK(""x"")"`);
   });
 });

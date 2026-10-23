@@ -242,3 +242,12 @@ describe('process exit', () => {
     }
   });
 });
+
+describe('source hygiene', () => {
+  // A broken edit once turned regex \b into a backspace character, silently breaking matches.
+  it('src has no stray control characters', () => {
+    for (const f of readdirSync('src')) {
+      expect(readFileSync(path.join('src', f), 'utf8'), f).not.toMatch(/[\x00-\x08\x0b\x0c\x0e-\x1f]/);
+    }
+  });
+});

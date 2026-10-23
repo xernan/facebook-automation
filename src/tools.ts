@@ -405,7 +405,8 @@ export const tools: ToolDef[] = [
   {
     name: 'fb_messenger_leads',
     description:
-      'Find leads among people who messaged the Page: name, phone and email they typed, last message. ' +
+      'Find leads among people who messaged the Page: name, phone and email they typed, banks/cards they asked about, ' +
+      'carded or not, last message. Everyone who messaged is a lead; no keyword needed. ' +
       'Newest first. Set export_csv=true to save a CSV in the exports folder. Personal data: do not paste it anywhere public.',
     write: false,
     input: {
@@ -442,7 +443,8 @@ export const tools: ToolDef[] = [
   {
     name: 'fb_comment_leads',
     description:
-      'Find leads among people who commented on Page posts (e.g. "HM?", "interested"): name, comment, phone/email typed. ' +
+      'Find leads among people who commented on Page posts: name, comment, phone/email typed, banks named, carded or not. ' +
+      'Every commenter is a lead unless keywords are given. ' +
       'Scans one post, or the newest posts. Use the comment id with fb_send_message (comment_id) for one private reply. ' +
       'Personal data: do not paste it anywhere public.',
     write: false,

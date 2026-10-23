@@ -21,6 +21,41 @@ export function extractPhones(text: string): string[] {
   ];
 }
 
+// Card issuers people name when asking to apply (Card Max offers free credit card application help).
+const BANKS: [string, RegExp][] = [
+  ['BPI', /\bbpi\b/i],
+  ['BDO', /\bbdo\b/i],
+  ['Metrobank', /\bmetro\s?bank\b/i],
+  ['RCBC', /\brcbc\b/i],
+  ['EastWest', /\beast\s?west\b/i],
+  ['UnionBank', /\bunion\s?bank\b|\bubp\b/i],
+  ['Security Bank', /\bsecurity\s?bank\b|\bsecbank\b/i],
+  ['PNB', /\bpnb\b/i],
+  ['China Bank', /\bchina\s?bank\b/i],
+  ['AUB', /\baub\b|\basia\s?united\b/i],
+  ['Citi', /\bciti(bank)?\b/i],
+  ['HSBC', /\bhsbc\b/i],
+  ['Maybank', /\bmaybank\b/i],
+  ['PSBank', /\bpsbank\b/i],
+];
+
+export function extractBanks(text: string): string[] {
+  return BANKS.filter(([, re]) => re.test(text)).map(([name]) => name);
+}
+
+const NOT_CARDED =
+  /\bnon[\s-]?carded\b|\bnot\s+carded\b|\bwala\s+(pa\s+)?(akong\s+|ako\s+)?(cc|credit\s?card)\b|\bwalang\s+(cc|credit\s?card)\b|\bfirst\s+(time|card)\b|\bno\s+(cc|credit\s?card)\b/;
+const CARDED =
+  /\bcarded\b|\bmay\s+(na\s+)?(akong\s+)?(cc|credit\s?card)\b|\bexisting\s+(cc|card|credit\s?card)\b|\bhave\s+(a\s+)?(cc|credit\s?card)\b/;
+
+/** "yes" = already has a credit card (carded), "no" = first card, undefined = not said. */
+export function cardedStatus(text: string): 'yes' | 'no' | undefined {
+  const t = text.toLowerCase();
+  if (NOT_CARDED.test(t)) return 'no';
+  if (CARDED.test(t)) return 'yes';
+  return undefined;
+}
+
 export interface ContactLead {
   source: 'messenger' | 'comment';
   name: string;
@@ -28,6 +63,9 @@ export interface ContactLead {
   person_id?: string;
   emails: string[];
   phones: string[];
+  /** Banks or cards they named. */
+  banks: string[];
+  carded?: 'yes' | 'no';
   last_time?: string;
   last_text: string;
   /** Messenger conversation id, or comment id (use it for a private reply). */
@@ -53,6 +91,8 @@ export function leadFromConversation(pageId: string, conv: any): ContactLead | u
     person_id: person.id,
     emails: extractEmails(`${text}\n${person.email ?? ''}`),
     phones: extractPhones(text),
+    banks: extractBanks(text),
+    carded: cardedStatus(text),
     last_time: theirs[0]?.created_time ?? conv.updated_time,
     last_text: (theirs[0]?.message ?? conv.snippet ?? '').slice(0, 300),
     ref_id: conv.id,
@@ -69,6 +109,8 @@ export function leadFromComment(pageId: string, postId: string, c: any): Contact
     person_id: c.from?.id,
     emails: extractEmails(text),
     phones: extractPhones(text),
+    banks: extractBanks(text),
+    carded: cardedStatus(text),
     last_time: c.created_time,
     last_text: text.slice(0, 300),
     ref_id: c.id,
@@ -77,12 +119,14 @@ export function leadFromComment(pageId: string, postId: string, c: any): Contact
 }
 
 export function contactLeadsToCsv(leads: ContactLead[]): string {
-  const header = ['source', 'name', 'phones', 'emails', 'last_time', 'last_text', 'person_id', 'ref_id', 'post_id'];
+  const header = ['source', 'name', 'phones', 'emails', 'banks', 'carded', 'last_time', 'last_text', 'person_id', 'ref_id', 'post_id'];
   const rows = leads.map((l) => [
     l.source,
     l.name,
     l.phones.join('; '),
     l.emails.join('; '),
+    l.banks.join('; '),
+    l.carded,
     l.last_time,
     l.last_text,
     l.person_id,
