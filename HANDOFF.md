@@ -33,7 +33,6 @@
   Live negative paths OK: unknown page, other page's post, retired metric.
 
 ## Open (needs owner)
-- Restart Claude so the MCP server loads the new dist/ (fixes above).
 - Low, not fixed: unknown page_id triggers a full page-list refresh each call; messenger leads
   page size fixed at 25 (Meta cap with nested messages).
 - GitHub done 2026-10-24: PR #1 merged to main; old cardmaxmarketing-blip repo deleted.
@@ -42,5 +41,5 @@
 
 ## Next
 1. Owner setup -> doctor -> read-only smoke test -> writes on test Page.
-2. Re-check paging live after restart (fb_list_posts with next_cursor).
+2. PR staging -> main after CI green (paging verified live 2026-10-24 after reload).
 3. Phase 2 options (owner decides): Instagram, Marketing API (ads), lead alerts.
