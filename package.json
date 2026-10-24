@@ -13,7 +13,8 @@
     "check": "npm run typecheck && npm test && npm run secret-scan",
     "start": "node dist/server.js",
     "doctor": "node dist/doctor.js",
-    "login": "node dist/login.js"
+    "login": "node dist/login.js",
+    "watch": "node dist/watch.js"
   },
   "engines": {
     "node": ">=20"

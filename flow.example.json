@@ -1,0 +1,28 @@
+{
+  "greeting": "Hi! Thanks for messaging. We help you apply for a credit card for free.",
+  "consent": {
+    "prompt": "Before we start: we will collect your details only for your credit card application (Data Privacy Act of 2012). Do you agree? (Yes / No)",
+    "decline_reply": "No problem. Message us anytime if you change your mind."
+  },
+  "carded": {
+    "prompt": "Do you have a credit card now? (Yes / No)",
+    "reject_reply": "Thank you! Sorry, we have no offer right now for people without a credit card. You can try again after 6 months."
+  },
+  "banks": {
+    "prompt": "Which banks are your credit cards from? (e.g. BDO, BPI, Metrobank, RCBC, EastWest)",
+    "unknown_reply": "Please type the bank names of your credit cards (e.g. BDO, BPI, Metrobank).",
+    "exclude_if_all": ["BPI", "Metrobank", "RCBC", "EastWest"],
+    "excluded_reply": "Thank you, and congrats on all your credit cards!"
+  },
+  "steps": [
+    { "key": "personal", "prompt": "1) Full name (First, Middle, Last)\n2) Name to appear on card\n3) Birthday (mm/dd/yy) and place of birth\n4) Gender and civil status" },
+    { "key": "contact", "prompt": "1) Mobile number\n2) Email address\n3) Home phone (if any)" },
+    { "key": "spouse", "prompt": "Spouse: name, birthday, mobile number and occupation", "only_if_married": true }
+  ],
+  "id_photo": {
+    "prompt": "Last step: please send a clear photo of one valid government ID.",
+    "need_image_reply": "Please send the ID as a photo."
+  },
+  "done_reply": "Thank you! Your application details are complete. We will update you here.",
+  "yes_no_reply": "Please answer Yes or No."
+}
