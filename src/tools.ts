@@ -73,7 +73,10 @@ export const tools: ToolDef[] = [
     write: false,
     input: { refresh: z.boolean().optional() },
     handler: async ({ refresh }, { graph }) =>
-      (await graph.listPages(refresh)).map(({ id, name, tasks }) => ({ id, name, tasks })),
+      (await graph.listPages(refresh)).map(({ id, name, tasks }) =>
+        // Business-owned Pages come from a direct lookup, which returns no tasks; they still work.
+        tasks ? { id, name, tasks } : { id, name, access: 'Business Page: full access through its Page token (Meta lists no tasks)' },
+      ),
   },
   {
     name: 'fb_get_page',
