@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fontkit from '@pdf-lib/fontkit';
-import { PDFCheckBox, PDFDocument, PDFDropdown, PDFRadioGroup, PDFTextField, type PDFFont } from 'pdf-lib';
+import { PDFArray, PDFCheckBox, PDFDict, PDFDocument, PDFDropdown, PDFName, PDFRadioGroup, PDFRef, PDFTextField, type PDFFont } from 'pdf-lib';
 import type { BankKey, BuiltApplication, Settings } from './application.js';
 
 // Fills a bank's PDF template. Box names say what goes in them (same naming as the card app's templates):
@@ -199,5 +199,34 @@ export async function fillBankPdf(
 
   // Flatten: answers become part of the page, so every viewer and printer shows them (some print form boxes blank).
   if (settings.flatten) form.flatten();
+  dropDeadAnnotations(pdf);
   return { bytes: await pdf.save(), filled };
+}
+
+/**
+ * Removing or flattening form boxes can leave each page's annotation list pointing at widgets that no longer
+ * exist. Viewers skip them, but Adobe Acrobat refuses to print the file. Keep only annotations that still exist
+ * and are not form widgets of removed boxes.
+ */
+export function dropDeadAnnotations(pdf: PDFDocument): number {
+  const live = new Set(pdf.getForm().getFields().flatMap((f) => f.acroField.getWidgets().map((w) => w.dict)));
+  let dropped = 0;
+  for (const page of pdf.getPages()) {
+    const annots = page.node.lookup(PDFName.of('Annots'));
+    if (!(annots instanceof PDFArray)) continue;
+    const keep = PDFArray.withContext(pdf.context);
+    for (let i = 0; i < annots.size(); i++) {
+      const raw = annots.get(i);
+      const dict = raw instanceof PDFRef ? pdf.context.lookup(raw) : raw;
+      const isWidget = dict instanceof PDFDict && dict.lookup(PDFName.of('Subtype')) === PDFName.of('Widget');
+      if (!(dict instanceof PDFDict) || (isWidget && !live.has(dict))) {
+        dropped++;
+        continue;
+      }
+      keep.push(raw);
+    }
+    if (keep.size() === 0) page.node.delete(PDFName.of('Annots'));
+    else page.node.set(PDFName.of('Annots'), keep);
+  }
+  return dropped;
 }

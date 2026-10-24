@@ -197,6 +197,8 @@ describe('finalizeLead', () => {
     const r = await finalizeLead(dir, tpl, 'lead-999-x.json', details, NOW);
     const pdf = await PDFDocument.load(readFileSync(path.join(dir, r.folder, 'Metrobank.pdf')));
     expect(pdf.getForm().getFields()).toHaveLength(0);
+    // No dangling widget references left on the page (Acrobat will not print those).
+    expect(pdf.getPages()[0]!.node.Annots()).toBeUndefined();
   });
 
   it('folder names are safe on Windows', () => {
