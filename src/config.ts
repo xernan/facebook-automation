@@ -59,6 +59,7 @@ export const configSchema = z.object({
   FB_COMMENT_INTERVAL_SEC: intIn(120, 60, 3600),
   FB_COMMENT_MIN_DELAY_SEC: intIn(90, 30, 3600),
   FB_COMMENT_MAX_PER_HOUR: intIn(15, 1, 60),
+  FB_COMMENT_MAX_PER_DAY: intIn(60, 1, 300),
   FB_COMMENT_POST_DAYS: intIn(7, 1, 30),
 });
 

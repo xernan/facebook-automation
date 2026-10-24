@@ -10,7 +10,7 @@ import { botMayAnswer, loadTestMode } from './testmode.js';
 // safety limits so the Page never looks like a spam bot to Meta:
 //   - only people's top-level comments on our own recent posts, never our own, one reply per comment;
 //   - wait FB_COMMENT_MIN_DELAY_SEC after the comment before replying (no instant bot replies);
-//   - at most FB_COMMENT_MAX_PER_HOUR replies an hour;
+//   - at most FB_COMMENT_MAX_PER_HOUR replies an hour and FB_COMMENT_MAX_PER_DAY in 24 hours;
 //   - never the same reply text twice in 24 hours (Meta flags copy-paste replies);
 //   - every text passes the Community Standards guard (graph.post);
 //   - a private Messenger reply (comment to DM) only once per comment, only when Messenger is live, and only
@@ -46,9 +46,10 @@ export async function saveCommentState(dir: string, s: CommentState, now = new D
   await fs.rename(tmp, path.join(dir, FILE));
 }
 
-export function repliesInLastHour(s: CommentState, now = new Date()): number {
-  return Object.values(s.handled).filter((h) => h.action === 'reply' && now.getTime() - new Date(h.at).getTime() < 3_600_000).length;
+export function repliesInLast(s: CommentState, ms: number, now = new Date()): number {
+  return Object.values(s.handled).filter((h) => h.action === 'reply' && now.getTime() - new Date(h.at).getTime() < ms).length;
 }
+export const repliesInLastHour = (s: CommentState, now = new Date()) => repliesInLast(s, 3_600_000, now);
 
 export interface PendingComment {
   comment_id: string;
@@ -89,7 +90,8 @@ export async function findPendingComments(ctx: Ctx, pageId: string, now = new Da
     }
   }
   out.sort((a, b) => a.created_time.localeCompare(b.created_time));
-  return { comments: out, replies_left_this_hour: Math.max(0, ctx.cfg.FB_COMMENT_MAX_PER_HOUR - repliesInLastHour(s, now)) };
+  const left = Math.min(ctx.cfg.FB_COMMENT_MAX_PER_HOUR - repliesInLastHour(s, now), ctx.cfg.FB_COMMENT_MAX_PER_DAY - repliesInLast(s, 86_400_000, now));
+  return { comments: out, replies_left_this_hour: Math.max(0, left) };
 }
 
 // Owner rule: replies must read like a person typed them, not like AI. These give a bot away.
@@ -110,8 +112,9 @@ export function soundsLikeBot(reply: string): string | undefined {
 }
 
 /** Why this reply may not be sent, or undefined when it may. Shared by the tool and tests. */
-export function replyRefusal(s: CommentState, maxPerHour: number, reply: string, now = new Date()): string | undefined {
+export function replyRefusal(s: CommentState, maxPerHour: number, reply: string, now = new Date(), maxPerDay = Infinity): string | undefined {
   if (repliesInLastHour(s, now) >= maxPerHour) return `Hourly limit reached (${maxPerHour}). Try again later.`;
+  if (repliesInLast(s, 86_400_000, now) >= maxPerDay) return `Daily limit reached (${maxPerDay} in 24 hours). Try again tomorrow.`;
   const h = hashText(reply);
   if (s.sent.some((x) => x.hash === h && now.getTime() - new Date(x.at).getTime() < 86_400_000))
     return 'Same reply text was already used today. Write a reply for this person.';
@@ -162,7 +165,7 @@ export const commentTools: ToolDef[] = [
       }
       if (!c.ready) throw new Error(`Too soon: wait until ${ctx.cfg.FB_COMMENT_MIN_DELAY_SEC}s after the comment.`);
       if (!reply) throw new Error('reply is required for action="reply".');
-      const refusal = replyRefusal(s, ctx.cfg.FB_COMMENT_MAX_PER_HOUR, reply, now) ?? (private_message ? contentProblem(private_message) && `Not sent: the private message ${contentProblem(private_message)}.` : undefined);
+      const refusal = replyRefusal(s, ctx.cfg.FB_COMMENT_MAX_PER_HOUR, reply, now, ctx.cfg.FB_COMMENT_MAX_PER_DAY) ?? (private_message ? contentProblem(private_message) && `Not sent: the private message ${contentProblem(private_message)}.` : undefined);
       if (refusal) throw new Error(refusal);
       await ctx.graph.post(page_id, `${comment_id}/comments`, { message: reply });
       s.handled[comment_id] = { at: now.toISOString(), action: 'reply' };

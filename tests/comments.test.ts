@@ -94,6 +94,9 @@ describe('comment replies', () => {
     expect(replyRefusal(s, 15, 'Nice  one, thanks!', now)).toMatch(/already used/);
     for (let i = 0; i < 3; i++) s.handled[`x${i}`] = { at: ago(100), action: 'reply' };
     expect(replyRefusal(s, 3, 'Different text here', now)).toMatch(/Hourly limit/);
+    for (let i = 0; i < 4; i++) s.handled[`y${i}`] = { at: ago(5 * 3600), action: 'reply' };
+    expect(replyRefusal(s, 15, 'Different text here', now, 7)).toMatch(/Daily limit/);
+    expect(replyRefusal(s, 15, 'Different text here', now, 8)).toBeUndefined();
     expect(replyRefusal(s, 15, 'Guaranteed approval for you', now)).toMatch(/approval/);
     expect(replyRefusal(s, 15, 'Tag a friend who needs this', now)).toMatch(/engagement bait/);
   });
