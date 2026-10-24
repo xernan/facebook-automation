@@ -7,6 +7,7 @@ import { flowSchema, type Flow, type Person } from './flow.js';
 // this computer and is never committed or logged.
 
 export interface Outbox {
+  choices?: string[];
   text: string;
   /** Message ids this reply answers; they count as handled once it is sent. */
   for_messages: string[];

@@ -10,7 +10,7 @@ import { findPending } from './flowtools.js';
 // it wakes Claude (headless) with only the flow and messaging tools, and Claude handles the chats.
 // Logs go to stderr and never include names, messages or tokens.
 
-const ALLOWED = ['fb_flow_pending', 'fb_flow_answer', 'fb_send_message', 'fb_get_messages'].map((t) => `mcp__facebook__${t}`);
+const ALLOWED = [...['fb_flow_pending', 'fb_flow_answer', 'fb_send_message', 'fb_get_messages'].map((t) => `mcp__facebook__${t}`), 'WebSearch'];
 
 export function operatorPrompt(pageId: string): string {
   return [
@@ -23,6 +23,10 @@ export function operatorPrompt(pageId: string): string {
     '     language they used (Taglish is fine), then repeat current_question in that same message. After it is sent,',
     '     call fb_flow_answer kind="question" with those message ids.',
     '   - reply null (finished, excluded or cooldown): reply yourself only if they asked something.',
+    '   - next_question.wants_suggestions: you may WebSearch public facts for it (e.g. the branch address of the employer',
+    '     they named, or its line of business) and pass up to 5 as suggestions to fb_flow_answer. Only facts you found and',
+    '     are sure of. If unsure, pass none. Never suggest or guess personal details (names, birthplace, home address,',
+    "     mother's maiden name).",
     '3. Never ask for a card number, CVV, OTP, PIN or passwords. Never promise approval, rates or promos.',
     '   If you do not know an answer, say the team will follow up. Never mention servers, APIs or errors.',
     '4. Repeat from step 1 until fb_flow_pending returns an empty list, then stop. Do not do anything else.',
@@ -54,7 +58,7 @@ async function main() {
     new Promise<number | null>((resolve) => {
       const child = spawn(
         claudeBin(ctx.cfg.FB_WATCH_CLAUDE_BIN),
-        ['-p', operatorPrompt(pageId), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', '', '--allowedTools', ALLOWED.join(',')],
+        ['-p', operatorPrompt(pageId), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', 'WebSearch', '--allowedTools', ALLOWED.join(',')],
         { cwd: ctx.cfg.flowDir, stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true },
       );
       const timer = setTimeout(() => {

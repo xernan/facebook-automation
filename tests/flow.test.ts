@@ -1,8 +1,8 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { advance, flowSchema, newPerson, parseYesNo, validAnswer, type Person } from '../src/flow.js';
+import { advance, cleanSuggestions, flowSchema, newPerson, parseYesNo, validAnswer, type Person } from '../src/flow.js';
 import { FlowStore, loadFlow } from '../src/flowstore.js';
 import { callTool, tools } from '../src/tools.js';
 import { param, testCtx, type Call } from './helpers.js';
@@ -329,6 +329,7 @@ describe('watcher prompt', () => {
     expect(p).toContain('page_id 123');
     expect(p).toMatch(/Never ask for a card number, CVV, OTP, PIN/);
     expect(p).toMatch(/Never promise approval/);
+    expect(p).toMatch(/Never suggest or guess personal details/);
   });
 });
 
@@ -390,5 +391,108 @@ describe('pending-application question (EastWest returns: duplicate / with pendi
 
   it('flag_if_yes without yes_no is refused', () => {
     expect(() => flowSchema.parse({ ...flow, steps: [{ key: 'a', prompt: 'x', flag_if_yes: 'a' }] })).toThrow();
+  });
+});
+
+describe('buttons, optional groups and suggestions', () => {
+  const f = flowSchema.parse({
+    ...flow,
+    consent: { ...flow.consent, choices: ['Oo', 'Hindi'] },
+    steps: [
+      { key: 'employer_name', prompt: 'Employer?' },
+      { key: 'office_address', prompt: 'Office address?', suggest: true },
+      { key: 'civil_status', prompt: 'Civil status?', sets_married: true, choices: ['Single', 'Married'] },
+      { key: 'reference_name', prompt: 'Reference name?', optional_group: 'reference' },
+      { key: 'reference_mobile', prompt: 'Reference mobile?', optional_group: 'reference', validate: 'mobile', invalid_reply: 'Bad number.' },
+      { key: 'spouse_name', prompt: 'Spouse?', only_if_married: true },
+    ],
+  });
+  const start = () => {
+    let r = advance(f, newPerson(NOW), { text: 'hi' }, NOW, 180);
+    for (const a of ['oo', 'meron']) r = advance(f, r.person, { text: a }, NOW, 180);
+    return advance(f, r.person, { text: 'BDO' }, NOW, 180);
+  };
+  const SUGG = ['Alabang Town Center, Ayala Alabang, Muntinlupa', 'Festival Mall, Filinvest, Alabang, Muntinlupa'];
+
+  it('consent question carries its buttons', () => {
+    const r = advance(f, newPerson(NOW), { text: 'hi' }, NOW, 180);
+    expect(r.choices).toEqual(['Oo', 'Hindi']);
+  });
+
+  it('suggestions for the next question are numbered with number buttons + Iba', () => {
+    const r = advance(f, start().person, { text: 'Jollibee Alabang' }, NOW, 180, SUGG);
+    expect(r.reply).toBe(`Office address?\n\n1) ${SUGG[0]}\n2) ${SUGG[1]}`);
+    expect(r.choices).toEqual(['1', '2', 'Iba']);
+  });
+
+  it('tapping a number saves that suggestion; typing saves the typed text', () => {
+    const asked = advance(f, start().person, { text: 'Jollibee Alabang' }, NOW, 180, SUGG);
+    expect(advance(f, asked.person, { text: '2' }, NOW, 180).person.answers.office_address).toBe(SUGG[1]);
+    expect(advance(f, asked.person, { text: 'SM Southmall' }, NOW, 180).person.answers.office_address).toBe('SM Southmall');
+    expect(advance(f, asked.person, { text: '7' }, NOW, 180).person.answers.office_address).toBe('7');
+  });
+
+  it('"Iba" asks them to type and keeps the question', () => {
+    const asked = advance(f, start().person, { text: 'Jollibee Alabang' }, NOW, 180, SUGG);
+    const r = advance(f, asked.person, { text: 'Iba' }, NOW, 180);
+    expect(r.reply).toBe(f.other_reply);
+    expect(r.person.answers.office_address).toBeUndefined();
+    expect(r.person.suggestions).toBeUndefined();
+  });
+
+  it('suggestions are ignored for a question without suggest', () => {
+    const r = advance(f, start().person, { text: 'x' }, NOW, 180);
+    const r2 = advance(f, r.person, { text: 'Some address' }, NOW, 180, ['should not show']);
+    expect(r2.reply).toBe('Civil status?');
+    expect(r2.choices).toEqual(['Single', 'Married']);
+  });
+
+  it('optional group: first question shows Skip; "skip" skips the whole group', () => {
+    let r = start();
+    for (const a of ['Jollibee', 'ATC', 'single']) r = advance(f, r.person, { text: a }, NOW, 180);
+    expect(r.reply).toBe('Reference name?');
+    expect(r.choices).toEqual(['Skip']);
+    r = advance(f, r.person, { text: 'Skip' }, NOW, 180);
+    expect(r.person.stage).toBe('id_photo');
+    expect(r.person.answers.reference_name).toBeUndefined();
+  });
+
+  it('a real reference name is not mistaken for skip', () => {
+    let r = start();
+    for (const a of ['Jollibee', 'ATC', 'married', 'Pedro Wala Cruz']) r = advance(f, r.person, { text: a }, NOW, 180);
+    expect(r.person.answers.reference_name).toBe('Pedro Wala Cruz');
+    expect(r.reply).toBe('Reference mobile?');
+    r = advance(f, r.person, { text: '09171234567' }, NOW, 180);
+    expect(r.reply).toBe('Spouse?');
+  });
+
+  it('cleanSuggestions trims, dedupes, drops blanks and long ones, keeps 5', () => {
+    expect(cleanSuggestions([' a ', 'a', '', 'x'.repeat(201), 'b', 'c', 'd', 'e', 'f'])).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+
+  it('button titles over 20 characters are refused in the flow file', () => {
+    expect(() => flowSchema.parse({ ...flow, consent: { ...flow.consent, choices: ['x'.repeat(21)] } })).toThrow();
+  });
+});
+
+describe('flow tools: buttons are sent as Messenger quick replies', () => {
+  it('sends quick_replies with the consent question', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'flowqr-'));
+    const flowFile = path.join(dir, 'flow.json');
+    writeFileSync(flowFile, JSON.stringify({ ...flow, consent: { ...flow.consent, choices: ['Oo', 'Hindi'] } }));
+    const bodies: any[] = [];
+    const { ctx } = testCtx({ FB_WRITE_ENABLED: 'true', FB_FLOW_FILE: flowFile, FB_FLOW_DIR: dir }, (c: Call) => {
+      if (c.url.pathname.endsWith('/111/messages')) {
+        bodies.push(JSON.parse(param(c, 'message')!));
+        return { json: { message_id: 'm_out' } };
+      }
+      return { json: { id: 'm_1', message: 'hi', from: { id: PSID }, created_time: new Date().toISOString() } };
+    });
+    const r: any = await callTool(tool('fb_flow_answer'), { page_id: '111', psid: PSID, message_ids: ['m_1'], kind: 'answer' }, ctx);
+    expect(r.buttons).toEqual(['Oo', 'Hindi']);
+    expect(bodies[0].quick_replies).toEqual([
+      { content_type: 'text', title: 'Oo', payload: 'Oo' },
+      { content_type: 'text', title: 'Hindi', payload: 'Hindi' },
+    ]);
   });
 });

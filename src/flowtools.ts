@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { advance, currentPrompt, newPerson, type Person } from './flow.js';
+import { advance, cleanSuggestions, currentPrompt, newPerson, nextStepIf, type Person } from './flow.js';
 import { FlowStore, loadFlow, type FlowState } from './flowstore.js';
 import type { Ctx, ToolDef } from './tools.js';
 
@@ -67,6 +67,8 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
     const p = state.people[person.id];
     if (msgs.length === 0 && !p?.outbox) continue;
     const cur = p ?? newPerson(now);
+    const joined = { text: msgs.map((m) => m.text).filter(Boolean).join('\n'), image_url: msgs.find((m) => m.image_url)?.image_url };
+    const next = msgs.length ? nextStepIf(flow, cur, joined, now, ctx.cfg.FB_FLOW_COOLDOWN_DAYS) : undefined;
     out.push({
       psid: person.id,
       name: person.name,
@@ -75,15 +77,23 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
       outbox_pending: !!p?.outbox,
       can_reply: !!msgs.at(-1) && withinWindow(ctx, msgs.at(-1)!.created_time, now),
       messages: msgs.map((m) => ({ id: m.id, text: m.text, has_image: !!m.image_url, created_time: m.created_time })),
+      // If these messages answer the current question, this is asked next. When wants_suggestions is true you may
+      // pass up to 5 suggestions to fb_flow_answer, ONLY from public facts you are sure of (e.g. a company branch
+      // address). Never suggest personal details (names, birthplace, home address, mother's maiden name).
+      next_question: next ? { key: next.key, prompt: next.prompt, wants_suggestions: !!next.suggest } : undefined,
+      answers_so_far: cur.answers,
     });
   }
   return out;
 }
 
-async function send(ctx: Ctx, page_id: string, to: string, text: string) {
+async function send(ctx: Ctx, page_id: string, to: string, text: string, choices?: string[]) {
+  const message = choices?.length
+    ? { text, quick_replies: choices.map((c) => ({ content_type: 'text', title: c, payload: c })) }
+    : { text };
   await ctx.graph.post(page_id, `${page_id}/messages`, {
     recipient: JSON.stringify({ id: to }),
-    message: JSON.stringify({ text }),
+    message: JSON.stringify(message),
     messaging_type: 'RESPONSE',
   });
 }
@@ -112,8 +122,13 @@ export const flowTools: ToolDef[] = [
       psid,
       message_ids: z.array(z.string().regex(/^m_[A-Za-z0-9_-]+$/)).min(1).max(20),
       kind: z.enum(['answer', 'question']),
+      suggestions: z
+        .array(z.string().max(200))
+        .max(5)
+        .optional()
+        .describe('For the next question only, when fb_flow_pending says wants_suggestions. Public facts you are sure of; never guess.'),
     },
-    handler: async ({ page_id, psid: who, message_ids, kind }, ctx) => {
+    handler: async ({ page_id, psid: who, message_ids, kind, suggestions }, ctx) => {
       const now = new Date();
       const s = store(ctx);
       const flow = loadFlow(ctx.cfg.flowFile);
@@ -123,7 +138,7 @@ export const flowTools: ToolDef[] = [
 
         // A reply that failed to send earlier goes first, exactly once.
         if (person.outbox) {
-          await send(ctx, page_id, who, person.outbox.text);
+          await send(ctx, page_id, who, person.outbox.text, person.outbox.choices);
           markHandled(state, person.outbox.for_messages);
           const sent = person.outbox.text;
           delete person.outbox;
@@ -158,7 +173,7 @@ export const flowTools: ToolDef[] = [
         }
 
         const input = { text: msgs.map((m) => m.text).filter(Boolean).join('\n'), image_url: msgs.find((m) => m.image_url)?.image_url };
-        const r = advance(flow, person, input, now, ctx.cfg.FB_FLOW_COOLDOWN_DAYS);
+        const r = advance(flow, person, input, now, ctx.cfg.FB_FLOW_COOLDOWN_DAYS, cleanSuggestions(suggestions));
         const next: Person = r.person;
 
         let leadFile: string | undefined;
@@ -178,11 +193,11 @@ export const flowTools: ToolDef[] = [
         }
 
         // Save the reply before sending: if sending fails, the next call resends it instead of re-running the script.
-        next.outbox = { text: r.reply, for_messages: ids };
+        next.outbox = { text: r.reply, for_messages: ids, choices: r.choices };
         state.people[who] = next;
         await s.save(state);
         try {
-          await send(ctx, page_id, who, r.reply);
+          await send(ctx, page_id, who, r.reply, r.choices);
         } catch (err: any) {
           // Meta may have delivered it before the connection broke: never send twice.
           if (!err?.uncertain) throw err;
@@ -194,7 +209,7 @@ export const flowTools: ToolDef[] = [
         delete next.outbox;
         markHandled(state, ids);
         await s.save(state);
-        return { reply: r.reply, stage: next.stage, lead_saved: leadFile };
+        return { reply: r.reply, buttons: r.choices, stage: next.stage, lead_saved: leadFile };
       });
     },
   },
