@@ -8,6 +8,8 @@
 const RULES: { re: RegExp; why: string }[] = [
   { re: /\b(otp|cvv|cvc|pin|mpin)\b/i, why: 'mentions OTP/CVV/PIN (reads like phishing, even when saying we never ask for it)' },
   { re: /\b(password|passcode|log\s?in details)\b/i, why: 'mentions passwords or login details' },
+  // Account-recovery wording (Community Standards, Cybersecurity: social engineering). Ask "pangalan ng nanay" plainly.
+  { re: /\bmaiden\s+name\b|\bsecurity\s+question|\bverification\s+code/i, why: 'sounds like an account-recovery question' },
   // "no." / "no:" / "#" only, so "Credit Card No Annual Fee" is fine.
   { re: /\b(card|account|acct)\s*(numbers?|no\.|no:|#)/i, why: 'mentions card or account numbers' },
   { re: /\b(guarantee[ds]?|garantisado|siguradong\s+approv\w*|sure\s+approv\w*|100\s*%\s*approv\w*|instant\s+approv\w*|auto\s*approv\w*)/i, why: 'promises approval (banks decide)' },

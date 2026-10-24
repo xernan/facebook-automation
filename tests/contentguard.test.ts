@@ -15,12 +15,14 @@ describe('Community Standards guard', () => {
     expect(contentProblem('Siguradong approved ka')).toBeDefined();
     expect(contentProblem('May processing fee na 500')).toBeDefined();
     expect(contentProblem('What is your password')).toBeDefined();
+    expect(contentProblem("Mother's maiden name?")).toBeDefined();
   });
 
   it('allows the normal flow wording', () => {
     for (const t of [
       'Hi! Salamat sa pag-message sa CARD MAX. Tutulungan ka naming mag-apply ng credit card, libre.',
       'Saan ka pinanganak?',
+      'Buong pangalan ng nanay mo? (First, Middle, Last)',
       'Optional: TIN number mo? Pindutin ang Skip kung hindi mo alam.',
       'Mobile number ng reference mo?',
       'Pakisend ang photo ng valid ID mo.',
