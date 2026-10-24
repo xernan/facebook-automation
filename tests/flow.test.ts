@@ -425,6 +425,13 @@ describe('buttons, optional groups and suggestions', () => {
     expect(r.choices).toEqual(['1', '2', 'Iba']);
   });
 
+  it('short suggestions (≤20 chars) are the buttons themselves, no numbered list', () => {
+    const r = advance(f, start().person, { text: 'Jollibee Alabang' }, NOW, 180, ['Restaurant', 'Food service']);
+    expect(r.reply).toBe('Office address?');
+    expect(r.choices).toEqual(['Restaurant', 'Food service', 'Iba']);
+    expect(advance(f, r.person, { text: 'Food service' }, NOW, 180).person.answers.office_address).toBe('Food service');
+  });
+
   it('tapping a number saves that suggestion; typing saves the typed text', () => {
     const asked = advance(f, start().person, { text: 'Jollibee Alabang' }, NOW, 180, SUGG);
     expect(advance(f, asked.person, { text: '2' }, NOW, 180).person.answers.office_address).toBe(SUGG[1]);

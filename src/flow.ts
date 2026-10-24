@@ -182,6 +182,8 @@ function question(flow: Flow, p: Person, step: Step, suggestions: string[]): Que
   const base = step.optional_group && isFirstOfGroup(flow, p.step) ? [...(step.choices ?? []), flow.skip_choice] : step.choices;
   if (step.suggest && suggestions.length > 0) {
     p.suggestions = suggestions;
+    // Short ones fit on a button (Messenger limit: 20 characters), so the words themselves are tapped.
+    if (suggestions.every((s) => s.length <= 20)) return { reply: step.prompt, choices: [...suggestions, flow.other_choice] };
     const list = suggestions.map((s, i) => `${i + 1}) ${s}`).join('\n');
     return { reply: `${step.prompt}\n\n${list}`, choices: [...suggestions.map((_, i) => String(i + 1)), flow.other_choice] };
   }
