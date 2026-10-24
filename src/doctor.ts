@@ -1,5 +1,6 @@
 // `npm run doctor`: checks .env and the token without printing any secret.
 import { createContext } from './context.js';
+import { permissionVerdict } from './graph.js';
 
 // Use process.exitCode, never the exit call: exiting while fetch sockets are open crashes Node on Windows.
 async function main() {
@@ -27,12 +28,17 @@ async function main() {
     return;
   }
   console.log(`Pages this token manages (${pages.length}):`);
-  for (const p of pages) console.log(`  ${p.id}  ${p.name}  [${(p.tasks ?? []).join(', ')}]`);
-  if (perms?.missing.length) {
-    console.log('Partly OK: some tools will fail until the missing permissions are added.');
+  for (const p of pages) {
+    // Business-owned Pages come from a direct lookup with no task list; they still work.
+    console.log(`  ${p.id}  ${p.name}  [${p.tasks ? p.tasks.join(', ') : 'Business Page: full access'}]`);
+  }
+  const verdict = permissionVerdict(perms?.missing ?? []);
+  if (!verdict.ok) {
+    console.log(`Partly OK: some tools will fail until these permissions are added: ${verdict.core.join(', ')}`);
     process.exitCode = 1;
     return;
   }
+  if (verdict.leads.length) console.log('Lead Ads tools are off (no leads_retrieval); every other tool works.');
   console.log('OK');
 }
 

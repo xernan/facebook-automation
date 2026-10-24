@@ -144,3 +144,67 @@ describe('fb_list_pages for Business Pages', () => {
     expect(biz.access).toMatch(/Business/);
   });
 });
+
+describe('write whose answer is cut off mid-body', () => {
+  it('is marked as maybe done, so a retry with the same key does not post twice', async () => {
+    const cfg = testConfig(WRITE_ON);
+    let posts = 0;
+    const fn = (async (input: string, init: RequestInit) => {
+      const u = new URL(input);
+      if (u.pathname.endsWith('/me/accounts'))
+        return new Response(JSON.stringify({ data: [{ id: '111', name: 'P', access_token: PAGE_TOKEN }] }));
+      if (u.pathname.endsWith('/debug_token')) return new Response(JSON.stringify({ data: {} }));
+      if (init.method === 'POST') {
+        posts++;
+        const body = new ReadableStream({ start: (c) => c.error(new TypeError('terminated')) });
+        return new Response(body, { status: 200 });
+      }
+      return new Response('{}');
+    }) as unknown as typeof fetch;
+    const ctx: Ctx = { cfg, graph: new GraphClient(cfg, fn), idem: new IdempotencyStore(60_000) };
+    const args = { page_id: '111', message: 'hi', idempotency_key: 'cut-key-1' };
+    await expect(callTool(tool('fb_create_post'), args, ctx)).rejects.toThrow(/may have gone through/);
+    await expect(callTool(tool('fb_create_post'), args, ctx)).rejects.toThrow(/may have gone through/);
+    expect(posts).toBe(1);
+  });
+
+  it('a read cut off mid-body says "No internet connection"', async () => {
+    const cfg = testConfig();
+    const fn = (async () =>
+      new Response(new ReadableStream({ start: (c) => c.error(new TypeError('terminated')) }))) as unknown as typeof fetch;
+    await expect(new GraphClient(cfg, fn).listPages()).rejects.toThrow('No internet connection');
+  });
+});
+
+describe('maybe-done message', () => {
+  it('does not mention idempotency_key for tools that have none', async () => {
+    const cfg = testConfig(WRITE_ON);
+    const fn = (async (input: string, init: RequestInit) => {
+      const u = new URL(input);
+      if (u.pathname.endsWith('/me/accounts'))
+        return new Response(JSON.stringify({ data: [{ id: '111', name: 'P', access_token: PAGE_TOKEN }] }));
+      if (u.pathname.endsWith('/debug_token')) return new Response(JSON.stringify({ data: {} }));
+      throw Object.assign(new Error('timeout'), { name: 'TimeoutError' });
+    }) as unknown as typeof fetch;
+    const ctx: Ctx = { cfg, graph: new GraphClient(cfg, fn), idem: new IdempotencyStore(60_000) };
+    const err = await callTool(tool('fb_hide_comment'), { page_id: '111', comment_id: '1_2', hidden: true }, ctx).catch((e) => e);
+    expect(err.message).toMatch(/may have gone through/);
+    expect(err.message).not.toMatch(/idempotency_key/);
+  });
+});
+
+describe('standard base64 cursors', () => {
+  it('accepts + and / in a cursor', async () => {
+    const { ctx } = testCtx({}, () => ({ json: { data: [] } }));
+    await expect(callTool(tool('fb_list_posts'), { page_id: '111', after: 'MTAx+NTE/xOTQ=' }, ctx)).resolves.toBeDefined();
+  });
+});
+
+describe('doctor verdict', () => {
+  it('missing only Lead Ads permissions is OK, not a failure', async () => {
+    const { permissionVerdict } = await import('../src/graph.js');
+    expect(permissionVerdict(['leads_retrieval', 'pages_manage_ads']).ok).toBe(true);
+    expect(permissionVerdict(['pages_messaging', 'leads_retrieval']).ok).toBe(false);
+    expect(permissionVerdict([]).ok).toBe(true);
+  });
+});

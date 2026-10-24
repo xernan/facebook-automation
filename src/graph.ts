@@ -39,6 +39,18 @@ export function explainGraphError(code: number | undefined, subcode: number | un
   return raw;
 }
 
+/** A failed connection. A write may already have reached Meta unless the connection never opened. */
+function networkError(method: string, err: unknown): GraphError {
+  const name = (err as Error)?.name;
+  const timedOut = name === 'TimeoutError' || name === 'AbortError';
+  const neverSent = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED'].includes((err as any)?.cause?.code);
+  const first = timedOut ? 'Request timed out.' : 'No internet connection.';
+  if (method !== 'GET' && !neverSent) {
+    return new GraphError(`${first} The action may have gone through. Check the Page before trying again.`, undefined, undefined, undefined, true);
+  }
+  return new GraphError(timedOut ? 'Request timed out. Try again.' : 'No internet connection');
+}
+
 /** Permissions the tools need (docs/SETUP.md step 2). */
 export const REQUIRED_PERMISSIONS = [
   'pages_show_list',
@@ -55,6 +67,13 @@ export const REQUIRED_PERMISSIONS = [
 
 /** Only the Lead Ads tools need these. An app needs a Lead Ads use case before Login accepts them. */
 export const LEAD_PERMISSIONS: readonly string[] = ['leads_retrieval', 'pages_manage_ads'];
+
+/** Missing Lead Ads permissions only turn off the Lead Ads tools; anything else is a real problem. */
+export function permissionVerdict(missing: string[]): { ok: boolean; core: string[]; leads: string[] } {
+  const leads = missing.filter((p) => LEAD_PERMISSIONS.includes(p));
+  const core = missing.filter((p) => !LEAD_PERMISSIONS.includes(p));
+  return { ok: core.length === 0, core, leads };
+}
 
 function extraPageIds(cfg: Config): string[] {
   return (cfg.FB_EXTRA_PAGE_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -134,29 +153,15 @@ export class GraphClient {
       body = qs;
     }
 
+    // The connection can fail while sending or while reading Meta's answer; both go through here.
     let res: Response;
+    let text: string;
     try {
       res = await this.fetchFn(url, { method, body, signal: AbortSignal.timeout(this.cfg.FB_HTTP_TIMEOUT_MS) });
+      text = await res.text();
     } catch (err) {
-      const name = (err as Error)?.name;
-      const timedOut = name === 'TimeoutError' || name === 'AbortError';
-      // Never connected (no DNS, refused): the write surely did not happen.
-      const neverSent = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED'].includes((err as any)?.cause?.code);
-      if (method !== 'GET' && !neverSent) {
-        const first = timedOut ? 'Request timed out.' : 'No internet connection.';
-        throw new GraphError(
-          `${first} The action may have gone through. Check the Page before trying again with a new idempotency_key.`,
-          undefined,
-          undefined,
-          undefined,
-          true,
-        );
-      }
-      if (timedOut) throw new GraphError('Request timed out. Try again.');
-      throw new GraphError('No internet connection');
+      throw networkError(method, err);
     }
-
-    const text = await res.text();
     let json: any;
     try {
       json = text ? JSON.parse(text) : {};

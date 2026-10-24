@@ -29,7 +29,7 @@ const limit = z.number().int().min(1).max(100).optional().describe('Items per pa
 const after = z
   .string()
   .max(4000)
-  .regex(/^[A-Za-z0-9_\-=%]+$/, 'Use next_cursor exactly as returned')
+  .regex(/^[A-Za-z0-9_\-=%+/]+$/, 'Use next_cursor exactly as returned')
   .optional()
   .describe('next_cursor from a previous call');
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -532,7 +532,13 @@ export async function callTool(def: ToolDef, args: unknown, ctx: Ctx) {
   // Tools that take idempotency_key run once per key; the same key with other args is refused.
   if ('idempotency_key' in def.input) {
     const { idempotency_key, ...rest } = parsed;
-    return ctx.idem.run(idempotency_key as string | undefined, () => def.handler(parsed, ctx), JSON.stringify([def.name, rest]));
+    return ctx.idem
+      .run(idempotency_key as string | undefined, () => def.handler(parsed, ctx), JSON.stringify([def.name, rest]))
+      .catch((err) => {
+        // This key stays failed after a maybe-done write; a real retry needs a new one.
+        if (err?.uncertain && idempotency_key) err.message += ' If it did not, retry with a new idempotency_key.';
+        throw err;
+      });
   }
   return def.handler(parsed, ctx);
 }
