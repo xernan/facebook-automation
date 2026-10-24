@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
-import { ageOn, buildApplication, yearsFrom, type Lead } from '../src/application.js';
+import { ageOn, buildApplication, splitName, yearsFrom, type Lead } from '../src/application.js';
 import { finalizeLead, folderName, listApplicants, saveSettings } from '../src/leadout.js';
 import { combText, formatPdfDate, pdfDigits } from '../src/pdf.js';
 
@@ -102,6 +102,25 @@ describe('owner rules in buildApplication', () => {
     ['10+', 10],
     ['matagal', undefined],
   ])('yearsFrom(%s) = %s', (a, n) => expect(yearsFrom(a)).toBe(n));
+
+  it('names are split for First / Middle / Last columns; Claude can override ambiguous ones', () => {
+    expect(splitName('Maria Santos Cruz')).toEqual({ first: 'Maria', middle: 'Santos', last: 'Cruz' });
+    expect(splitName('Ana Dela Cruz')).toEqual({ first: 'Ana', last: 'Dela Cruz' });
+    expect(splitName('Maria Santos Dela Cruz')).toEqual({ first: 'Maria', middle: 'Santos', last: 'Dela Cruz' });
+    expect(splitName('Juan Reyes De los Santos')).toEqual({ first: 'Juan', middle: 'Reyes', last: 'De los Santos' });
+    expect(splitName('Ma. Luisa Garcia Sta. Maria')).toEqual({ first: 'Ma. Luisa', middle: 'Garcia', last: 'Sta. Maria' });
+    expect(splitName('Jose San Juan')).toEqual({ first: 'Jose', last: 'San Juan' });
+    expect(splitName('Ana Cruz')).toEqual({ first: 'Ana', last: 'Cruz' });
+    expect(splitName('Ana')).toBeUndefined();
+    const b = buildApplication(
+      lead({ answers: { ...lead().answers, mothers_maiden_name: 'Maria Luisa Dela Cruz' } }),
+      { ...details, mother_name_parts: { first: 'Maria Luisa', last: 'Dela Cruz' } },
+      NOW,
+    );
+    expect(b.data.mother_maiden_name_first).toBe('Maria Luisa');
+    expect(b.data.mother_maiden_name_middle).toBeUndefined();
+    expect(b.data.mother_maiden_name_last).toBe('Dela Cruz');
+  });
 
   it('ageOn counts the birthday correctly', () => {
     expect(ageOn('1990-10-26', NOW)).toBe(35);

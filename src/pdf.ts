@@ -53,6 +53,9 @@ export function combText(text: string, boxes: number): string {
 
 const DATE_KEYS = new Set(['birthday', 'date_hired']);
 
+/** Boxes a bank prints as First / Middle / Last columns (checked on the real template). */
+const NAME_COLUMNS: Partial<Record<BankKey, string[]>> = { eastwest: ['mother_maiden_name', 'spouse_name'] };
+
 // Answers print in a narrow, thick letter (Archivo Narrow, SIL Open Font License: fonts/OFL.txt) so they are easy
 // to read on paper and long names/addresses still fit their boxes.
 const FONT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'fonts');
@@ -159,8 +162,23 @@ export async function fillBankPdf(
       const widget = field.acroField.getWidgets()[0]!;
       const rect = widget.getRectangle();
       const cells = field.isCombed() ? (field.getMaxLength() ?? 0) : 0;
+      const page = pages.find((pg) => pg.ref === widget.P()) ?? pages[0]!;
+      const key = field.getName().replace(/__\d+$/, '');
+      if (NAME_COLUMNS[bank]?.includes(key) && app.data[`${key}_first`]) {
+        // One name part centered in each third of the box, under its First / Middle / Last label.
+        const third = rect.width / 3;
+        const parts = [app.data[`${key}_first`], app.data[`${key}_middle`], app.data[`${key}_last`]];
+        const largest = settings.text_uniform_size || settings.text_max_size;
+        parts.forEach((part, i) => {
+          if (!part) return;
+          const size = Math.min(largest, fitFontSize(font, part, { width: third, height: settings.text_uniform_size ? 1e6 : rect.height }, 0, 1e6));
+          const y = rect.y + Math.max(0.8, (rect.height - size * 0.72) / 2);
+          page.drawText(part, { x: rect.x + i * third + (third - font.widthOfTextAtSize(part, size)) / 2, y, size, font });
+        });
+        form.removeField(field);
+        continue;
+      }
       if (settings.text_uniform_size) {
-        const page = pages.find((pg) => pg.ref === widget.P()) ?? pages[0]!;
         const size = Math.min(settings.text_uniform_size, fitFontSize(font, t, { width: rect.width, height: 1e6 }, cells, 1e6));
         const y = rect.y + Math.max(0.8, (rect.height - size * 0.72) / 2);
         if (cells) {

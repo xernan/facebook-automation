@@ -24,6 +24,22 @@ const addr = z
   })
   .strict();
 
+const nameParts = z.object({ first: text(80), middle: text(80).optional(), last: text(80) }).strict();
+
+// Surname particles: "Dela Cruz", "De los Santos", "San Jose", "Sta. Maria" are one last name.
+const PARTICLES = new Set(['de', 'del', 'dela', 'delas', 'delos', 'di', 'da', 'la', 'las', 'los', 'san', 'santa', 'sta', 'sto', 'santo', 'van', 'von', 'y']);
+
+/** Split a full name: last name (with its particles), the word before = middle name, the rest = first name. */
+export function splitName(full: string): { first: string; middle?: string; last: string } | undefined {
+  const w = full.trim().split(/\s+/).filter(Boolean);
+  if (w.length < 2) return undefined;
+  let i = w.length - 1;
+  while (i - 1 >= 1 && PARTICLES.has(w[i - 1]!.toLowerCase().replace(/\.$/, ''))) i--;
+  const last = w.slice(i).join(' ');
+  if (i <= 1) return { first: w.slice(0, i).join(' '), last };
+  return { first: w.slice(0, i - 1).join(' '), middle: w[i - 1]!, last };
+}
+
 /** What Claude read on the ID(s) and looked up. Every field is optional: unknown stays blank and is listed. */
 export const detailsSchema = z
   .object({
@@ -44,6 +60,9 @@ export const detailsSchema = z
     industry: text(80).optional(),
     department: text(80).optional(),
     employment_type: z.enum(['Private Sector', 'Government', 'Self-employed']).optional(),
+    /** How to split names that some forms print in First / Middle / Last columns (when the words are ambiguous). */
+    mother_name_parts: nameParts.optional(),
+    spouse_name_parts: nameParts.optional(),
   })
   .strict();
 export type Details = z.infer<typeof detailsSchema>;
@@ -201,6 +220,16 @@ export function buildApplication(lead: Lead, details: Details, now: Date): Built
   data.other_card_number = 'Refuse to give';
 
   if (lead.married) put('spouse_name', a.spouse_name, 'Spouse name');
+  for (const [key, given] of [
+    ['mother_maiden_name', details.mother_name_parts],
+    ['spouse_name', details.spouse_name_parts],
+  ] as const) {
+    const parts = given ?? (data[key] ? splitName(data[key]!) : undefined);
+    if (!parts || !data[key]) continue;
+    put(`${key}_first`, parts.first);
+    put(`${key}_middle`, parts.middle);
+    put(`${key}_last`, parts.last);
+  }
   put('ref_name', a.reference_name);
   put('ref_mobile', a.reference_mobile);
 
