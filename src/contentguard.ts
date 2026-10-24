@@ -8,7 +8,8 @@
 const RULES: { re: RegExp; why: string }[] = [
   { re: /\b(otp|cvv|cvc|pin|mpin)\b/i, why: 'mentions OTP/CVV/PIN (reads like phishing, even when saying we never ask for it)' },
   { re: /\b(password|passcode|log\s?in details)\b/i, why: 'mentions passwords or login details' },
-  { re: /\b(card|account|acct)\s*(number|no\b|no\.|#)/i, why: 'mentions card or account numbers' },
+  // "no." / "no:" / "#" only, so "Credit Card No Annual Fee" is fine.
+  { re: /\b(card|account|acct)\s*(numbers?|no\.|no:|#)/i, why: 'mentions card or account numbers' },
   { re: /\b(guarantee[ds]?|garantisado|siguradong\s+approv\w*|sure\s+approv\w*|100\s*%\s*approv\w*|instant\s+approv\w*|auto\s*approv\w*)/i, why: 'promises approval (banks decide)' },
   { re: /\b(processing|application|upfront|advance|reservation)\s+fee\b/i, why: 'mentions an upfront fee' },
   { re: /\b(no\s+income|walang\s+income|kahit\s+walang\s+trabaho)\b/i, why: 'implies skipping bank requirements' },

@@ -25,6 +25,7 @@ describe('Community Standards guard', () => {
       'Mobile number ng reference mo?',
       'Pakisend ang photo ng valid ID mo.',
       'Ang bangko pa rin ang magdedesisyon sa approval.',
+      'The RCBC Credit Card No Annual Fee For Life promo is here!',
     ])
       expect(contentProblem(t)).toBeUndefined();
   });
