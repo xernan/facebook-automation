@@ -45,6 +45,7 @@ function render() {
   if (view === 'form' && open) return renderForm(a);
   if (open) return renderOne(a);
   if (view === 'archive') return renderArchive(a);
+  if (view === 'marketing') return renderMarketing(a);
   // Main page: this month's applicants only; earlier months are in Archive.
   const cm = S.stats.current_month;
   const mine = new Set(cm.weeks.flatMap((w) => w.folders));
@@ -57,15 +58,15 @@ function render() {
     `<div class="bar"><i class="${w.reached ? 'done' : ''}" style="width:${pct}%"></i></div>` +
     `<div class="stats"><div class="stat"><b>${w.complete} / ${w.quota}</b>Complete applications</div><div class="stat"><b>${w.ready}</b>Ready (nothing to check)</div><div class="stat"><b>${w.printed}</b>Printed</div><div class="stat"><b>${S.flow.waiting || 0}</b>In chat now</div></div></div>` +
     weeksTable(cm, 'This month') +
-    `<div class="card"><table><tr><th>Completed</th><th>Name</th><th>Mobile</th><th>PDFs</th><th>Flags</th><th>To check</th><th>Printed</th></tr>` +
+    `<div class="card"><table><tr><th>Completed</th><th>Name</th><th>Mobile</th><th>PDFs</th><th>Flags</th><th>To check</th><th>Printed</th><th>Bank result</th></tr>` +
     (rows.length
       ? rows
           .map(
             (r, i) =>
-              `<tr class="row" data-i="${i}"><td>${esc(r.completed_at.slice(0, 16).replace('T', ' '))}</td><td><b>${esc(r.name || '(no name yet)')}</b></td><td>${esc(r.mobile)}</td><td>${esc(r.banks_with_pdf)}</td><td>${r.flags ? `<span class="pill warn">${esc(r.flags)}</span>` : ''}</td><td>${r.missing_list.length} item(s)</td><td>${r.printed ? '<span class="pill ok">Yes</span>' : '<span class="pill warn">No</span>'}</td></tr>`,
+              `<tr class="row" data-i="${i}"><td>${esc(r.completed_at.slice(0, 16).replace('T', ' '))}</td><td><b>${esc(r.name || '(no name yet)')}</b></td><td>${esc(r.mobile)}</td><td>${esc(r.banks_with_pdf)}</td><td>${r.flags ? `<span class="pill warn">${esc(r.flags)}</span>` : ''}</td><td>${r.missing_list.length} item(s)</td><td>${r.printed ? '<span class="pill ok">Yes</span>' : '<span class="pill warn">No</span>'}</td><td>${resultPill(r.result)}</td></tr>`,
           )
           .join('')
-      : '<tr><td colspan="7" class="muted">No applicants yet. Finished Messenger applications show up here.</td></tr>') +
+      : '<tr><td colspan="8" class="muted">No applicants yet. Finished Messenger applications show up here.</td></tr>') +
     '</table></div>';
   a.querySelectorAll('tr.row').forEach(
     (t) =>
@@ -75,6 +76,8 @@ function render() {
       }),
   );
 }
+
+const resultPill = (x) => (x === 'Approved' ? '<span class="pill ok">Approved</span>' : x === 'Declined' ? '<span class="pill bad">Declined</span>' : '<span class="pill warn">Pending</span>');
 
 const monthName = (m) => new Date(m + '-01T00:00:00').toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
 
@@ -137,7 +140,12 @@ function renderOne(a) {
       .join('')}</ul></div>` +
     `<div class="card"><b>To check before submitting</b><ul>${r.missing_list.map((m) => `<li>${esc(m)}</li>`).join('')}</ul><b>Defaults used</b><ul>${r.defaults_list
       .map((m) => `<li class="muted">${esc(m)}</li>`)
-      .join('')}</ul></div></div>`;
+      .join('')}</ul></div>` +
+    `<div class="card"><b>Bank result</b><label for="o_result">Result</label><select id="o_result">${['Pending', 'Approved', 'Declined']
+      .map((x) => `<option${x === r.result ? ' selected' : ''}>${x}</option>`)
+      .join('')}</select><label for="o_card">Approved card (e.g. Metrobank Titanium)</label><input id="o_card" maxlength="60" value="${esc(r.approved_card)}">` +
+    `<label><input type="checkbox" id="o_proof" style="min-width:0"${r.proof_ok ? ' checked' : ''}> Client said OK to a thank-you post (first-name initial only, no ID, card or photo)</label>` +
+    `<p><button class="btn" id="o_save">Save result</button></p></div></div>`;
   $('#back').onclick = () => {
     open = null;
     render();
@@ -150,6 +158,18 @@ function renderOne(a) {
     try {
       await post('/api/print', { folder: r.folder });
       msg('Sent to the printer');
+      load();
+    } catch (e) {
+      msg(e.message);
+    }
+  };
+  $('#o_save').onclick = async () => {
+    const result = $('#o_result').value;
+    const card = $('#o_card').value.trim();
+    if (result === 'Approved' && !card) return msg('Type the approved card first.');
+    try {
+      await post('/api/outcome', { folder: r.folder, result, card, proof_ok: $('#o_proof').checked });
+      msg('Saved');
       load();
     } catch (e) {
       msg(e.message);
@@ -404,6 +424,79 @@ async function renderForm(a) {
   };
 }
 const autoCardName = (fn, mn, ln) => [fn, mn ? mn[0] + '.' : '', ln].filter(Boolean).join(' ').toUpperCase();
+
+// Marketing: bank results, thank-you posts (only with the client's OK), how our posts do, and a rule check for drafts.
+async function renderMarketing(a, fresh) {
+  a.innerHTML = '<div class="card muted">Loading…</div>';
+  let m;
+  try {
+    m = await (await fetch('/api/marketing' + (fresh ? '?fresh=1' : ''))).json();
+  } catch {
+    a.innerHTML = '<div class="card muted">No internet connection</div>';
+    return;
+  }
+  const p = m.page || {};
+  const n = (x) => Number(x || 0);
+  const posts = p.posts || [];
+  const avg = posts.length ? (posts.reduce((t, x) => t + n(x.reactions) + n(x.comments) + n(x.shares), 0) / posts.length).toFixed(1) : '0';
+  a.innerHTML =
+    `<div class="card"><h3>Bank results</h3><div class="stats"><div class="stat"><b>${m.counts.approved}</b>Approved</div><div class="stat"><b>${m.counts.pending}</b>Pending</div><div class="stat"><b>${m.counts.declined}</b>Declined</div><div class="stat"><b>${m.proof.filter((x) => x.draft).length}</b>Ready for a thank-you post</div></div>` +
+    `<p class="muted">Set the result on each applicant's page. A thank-you post needs the client's OK and shows the first-name initial only.</p></div>` +
+    `<div class="card"><h3>Thank-you posts</h3>${
+      m.proof.length
+        ? `<table><tr><th>Name</th><th>Card</th><th>Client OK</th><th>Draft</th></tr>${m.proof
+            .map(
+              (x, i) =>
+                `<tr><td>${esc(x.name)}</td><td>${esc(x.card)}</td><td>${x.proof_ok ? '<span class="pill ok">Yes</span>' : '<span class="pill warn">Ask first</span>'}</td><td>${
+                  x.draft ? `<pre style="white-space:pre-wrap;margin:0;font:inherit">${esc(x.draft)}</pre><button class="btn sec" data-copy="${i}">Copy</button>` : '<span class="muted">Needs the client OK and the card name</span>'
+                }</td></tr>`,
+            )
+            .join('')}</table>`
+        : '<p class="muted">No approved applicants yet.</p>'
+    }</div>` +
+    `<div class="card"><h3>Check a draft post</h3><p class="muted">Paste a post before publishing. It uses the same rules the system uses (Meta Community Standards, engagement bait, approval claims).</p><textarea id="draft" rows="5" maxlength="5000" style="width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px"></textarea><p><button class="btn" id="check">Check</button> <span id="checkres"></span></p></div>` +
+    `<div class="card"><div class="row2"><h3 style="margin:0">Our posts</h3><span class="muted">Average engagement per post: ${avg}</span><button class="btn sec" id="refresh" style="margin-left:auto">Refresh</button></div>${
+      !p.configured
+        ? '<p class="muted">Facebook is not connected on this PC, so post results are not shown.</p>'
+        : p.error
+          ? `<p class="muted">${esc(p.error)}</p>`
+          : `<table><tr><th>Date</th><th>Post</th><th>Reactions</th><th>Comments</th><th>Shares</th><th>Flags</th></tr>${posts
+              .map(
+                (x) =>
+                  `<tr><td>${esc(String(x.created_time).slice(0, 10))}</td><td>${x.permalink_url ? `<a href="${esc(x.permalink_url)}" target="_blank" rel="noreferrer">${esc(x.text.slice(0, 90) || '(no text)')}</a>` : esc(x.text.slice(0, 90))}</td><td>${n(x.reactions)}</td><td>${n(x.comments)}</td><td>${n(x.shares)}</td><td>${x.duplicate ? '<span class="pill warn">Posted twice</span> ' : ''}${x.problem ? `<span class="pill bad">${esc(x.problem)}</span>` : ''}</td></tr>`,
+              )
+              .join('')}</table>` +
+            `<h3 style="margin-top:14px">Scheduled</h3>${
+              (p.scheduled || []).length
+                ? `<table><tr><th>When</th><th>Post</th><th>Flags</th></tr>${p.scheduled
+                    .map((x) => `<tr><td>${esc(new Date(x.when).toLocaleString('en-PH'))}</td><td>${esc(x.text.slice(0, 120))}</td><td>${x.problem ? `<span class="pill bad">${esc(x.problem)}</span>` : '<span class="pill ok">OK</span>'}</td></tr>`)
+                    .join('')}</table>`
+                : '<p class="muted">Nothing scheduled.</p>'
+            }`
+    }</div>`;
+  a.querySelectorAll('[data-copy]').forEach(
+    (b) =>
+      (b.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(m.proof[Number(b.dataset.copy)].draft);
+          msg('Copied');
+        } catch {
+          msg('Select the text and copy it by hand.');
+        }
+      }),
+  );
+  $('#refresh').onclick = () => renderMarketing(a, true);
+  $('#check').onclick = async () => {
+    const text = $('#draft').value.trim();
+    if (!text) return msg('Paste a post first.');
+    try {
+      const r = await post('/api/check', { text });
+      $('#checkres').innerHTML = r.problem ? `<span class="pill bad">Do not post: ${esc(r.problem)}</span>` : '<span class="pill ok">OK to post</span>';
+    } catch (e) {
+      msg(e.message);
+    }
+  };
+}
 
 function renderSettings(a) {
   const s = S.settings;

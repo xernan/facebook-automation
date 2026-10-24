@@ -214,6 +214,11 @@ export interface ApplicantRow {
   flags: string;
   missing: string;
   printed: boolean;
+  /** Bank result the owner set in the dashboard (Pending until then). */
+  result: string;
+  approved_card: string;
+  /** Client said OK to a proof post (first-name initial only). */
+  proof_ok: boolean;
 }
 
 export async function listApplicants(flowDir: string): Promise<ApplicantRow[]> {
@@ -234,6 +239,9 @@ export async function listApplicants(flowDir: string): Promise<ApplicantRow[]> {
         flags: (d.flags ?? []).join(', '),
         missing: (d.missing ?? []).join('; '),
         printed: !!d.printed,
+        result: d.outcome?.result ?? 'Pending',
+        approved_card: d.outcome?.card ?? '',
+        proof_ok: !!d.outcome?.proof_ok,
       });
     } catch {
       // A folder without details.json is not an applicant.
@@ -257,13 +265,16 @@ export async function writeClientsXlsx(flowDir: string): Promise<void> {
     { header: 'Flags', key: 'flags', width: 20 },
     { header: 'Missing / check', key: 'missing', width: 60 },
     { header: 'Printed', key: 'printed', width: 9 },
+    { header: 'Bank result', key: 'result', width: 12 },
+    { header: 'Approved card', key: 'approved_card', width: 26 },
+    { header: 'Proof post OK', key: 'proof_ok', width: 13 },
     { header: 'Folder', key: 'folder', width: 34 },
   ];
   ws.getRow(1).font = { bold: true };
   for (const r of rows) {
     // Text that starts like a formula is stored as plain text (CSV/Excel formula injection).
     const safe = Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === 'string' && /^[=+\-@]/.test(v) ? `'${v}` : v]));
-    ws.addRow({ ...safe, completed_at: r.completed_at.slice(0, 16).replace('T', ' '), printed: r.printed ? 'Yes' : 'No' });
+    ws.addRow({ ...safe, completed_at: r.completed_at.slice(0, 16).replace('T', ' '), printed: r.printed ? 'Yes' : 'No', proof_ok: r.proof_ok ? 'Yes' : 'No' });
   }
   // Weekly totals against the quota, newest first (same numbers as the dashboard).
   const settings = await loadSettings(flowDir).catch(() => settingsSchema.parse({}));

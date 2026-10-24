@@ -12,6 +12,9 @@ import { listApplicants, loadSettings, saveForm, saveSettings, writeClientsXlsx 
 import { findAcrobat, listPrinters, printPdf } from './printer.js';
 import { forgetPhone, loadPhonebook, lookupPhone } from './phonebook.js';
 import { applicationStats } from './stats.js';
+import { contentProblem } from './contentguard.js';
+import { GraphClient } from './graph.js';
+import { postStats, proofDraft, setOutcome } from './marketing.js';
 import dotenv from 'dotenv';
 
 // Local dashboard (this PC only, 127.0.0.1): applicants, their PDFs/IDs and missing items, print, and settings.
@@ -89,7 +92,7 @@ nav button{background:none;border:0;color:#cfd8e3;font:inherit;padding:6px 10px;
 main{padding:16px 20px;max-width:1200px;margin:auto}.card{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
 .card h3{margin:0 0 6px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600;font-size:12px}
 tr.row{cursor:pointer}tr.row:hover{background:#f0f4fa}.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600}
-.ok{background:#e3f4e8;color:var(--ok)}.warn{background:#fff1dc;color:var(--warn)}.muted{color:var(--muted)}
+.ok{background:#e3f4e8;color:var(--ok)}.bad{background:#fde8e6;color:var(--bad)}.warn{background:#fff1dc;color:var(--warn)}.muted{color:var(--muted)}
 button.btn{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:7px 12px;font:inherit;cursor:pointer}button.btn.sec{background:#e8edf3;color:var(--ink)}
 .row2{display:flex;gap:12px;flex-wrap:wrap;align-items:center}label{display:block;font-size:12px;color:var(--muted);margin:8px 0 3px}
 input,select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;min-width:0;width:100%}ul{margin:6px 0;padding-left:18px}
@@ -99,7 +102,7 @@ input,select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-ra
 .bar{height:10px;background:#e8edf3;border-radius:999px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--accent)}.bar i.done{background:var(--ok)}
 .stats{display:flex;gap:10px;flex-wrap:wrap}.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:120px}.stat b{font-size:20px;display:block}
 </style></head><body>
-<header><b>CARD MAX</b><nav><button data-v="list" class="on">Applicants</button><button data-v="archive">Archive</button><button data-v="settings">Settings</button></nav><span class="muted" style="margin-left:auto;color:#9fb0c6">This PC only</span></header>
+<header><b>CARD MAX</b><nav><button data-v="list" class="on">Applicants</button><button data-v="archive">Archive</button><button data-v="marketing">Marketing</button><button data-v="settings">Settings</button></nav><span class="muted" style="margin-left:auto;color:#9fb0c6">This PC only</span></header>
 <main id="app">Loading…</main><div id="msg"></div>
 <script>window.TOKEN=${JSON.stringify(token)};</script><script src="/app.js"></script></body></html>`;
 }
@@ -113,7 +116,9 @@ async function readJson(req: http.IncomingMessage): Promise<any> {
   return body ? JSON.parse(body) : {};
 }
 
-export function createDashboard(opts: { flowDir: string; templatesDir: string; port: number; token?: string }) {
+type PageGetter = { get(pageId: string, path: string, params?: Record<string, string>): Promise<any> };
+
+export function createDashboard(opts: { flowDir: string; templatesDir: string; port: number; token?: string; graph?: PageGetter; pageId?: string }) {
   const token = opts.token ?? randomBytes(24).toString('hex');
   const hosts = new Set([`localhost:${opts.port}`, `127.0.0.1:${opts.port}`]);
   // Listing printers starts PowerShell (1-2 s); the page refreshes every 15 s, so keep the list for a minute.
@@ -121,6 +126,16 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
   const printers = () => {
     if (!printerCache || Date.now() - printerCache.at > 60_000) printerCache = { at: Date.now(), list: listPrinters().catch(() => []) };
     return printerCache.list;
+  };
+  // Page posts from Facebook: kept 5 minutes so the page does not call Facebook on every refresh.
+  let postCache: { at: number; data: Promise<unknown> } | undefined;
+  const pagePosts = (fresh: boolean) => {
+    if (!opts.graph || !opts.pageId) return Promise.resolve({ configured: false });
+    if (fresh || !postCache || Date.now() - postCache.at > 300_000) {
+      postCache = { at: Date.now(), data: postStats(opts.graph, opts.pageId).then((r) => ({ configured: true, ...r })) };
+      postCache.data.catch(() => (postCache = undefined));
+    }
+    return postCache.data;
   };
   const server = http.createServer(async (req, res) => {
     const send = (code: number, body: unknown, type = 'application/json') => {
@@ -175,6 +190,20 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
           phonebook: await loadPhonebook(opts.flowDir).catch(() => []),
         });
       }
+      if (req.method === 'GET' && url.pathname === '/api/marketing') {
+        const rows = await listApplicants(opts.flowDir);
+        const proof = rows
+          .filter((r) => r.result === 'Approved')
+          .map((r) => ({ folder: r.folder, name: r.name, card: r.approved_card, proof_ok: r.proof_ok, draft: proofDraft({ name: r.name, result: r.result, card: r.approved_card, proof_ok: r.proof_ok }) }));
+        const counts = { pending: rows.filter((r) => r.result === 'Pending').length, approved: proof.length, declined: rows.filter((r) => r.result === 'Declined').length };
+        let page: unknown;
+        try {
+          page = await pagePosts(url.searchParams.get('fresh') === '1');
+        } catch {
+          page = { configured: true, error: 'No internet connection' };
+        }
+        return send(200, { counts, proof, page });
+      }
       if (req.method === 'GET' && url.pathname === '/file') {
         const full = safeFile(opts.flowDir, url.searchParams.get('folder') ?? '', url.searchParams.get('name') ?? '');
         const type = full && TYPES[path.extname(full).toLowerCase()];
@@ -197,6 +226,17 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
           const ok = await forgetPhone(opts.flowDir, String(body.company ?? ''), String(body.city ?? ''));
           return ok ? send(200, { ok: true }) : send(404, { error: 'Not found' });
         }
+        if (url.pathname === '/api/outcome') {
+          const file = safeFile(opts.flowDir, String(body.folder ?? ''), 'details.json');
+          if (!file) return send(404, { error: 'Unknown applicant.' });
+          await setOutcome(file, { result: body.result, card: body.card, proof_ok: body.proof_ok === true });
+          await writeClientsXlsx(opts.flowDir).catch(() => undefined);
+          return send(200, { ok: true });
+        }
+        if (url.pathname === '/api/check') {
+          const text = String(body.text ?? '').slice(0, 5000);
+          return send(200, { problem: contentProblem(text) ?? null });
+        }
         if (url.pathname === '/api/printed') {
           await setPrinted(opts.flowDir, String(body.folder ?? ''), body.printed === true);
           return send(200, { ok: true });
@@ -218,6 +258,14 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
 if (process.argv[1] && path.resolve(process.argv[1]).endsWith(path.join('dist', 'dashboard.js'))) {
   dotenv.config({ path: path.join(ROOT_DIR, '.env'), quiet: true });
   const cfg = loadConfig(process.env, ROOT_DIR, { requireToken: false });
-  const { server } = createDashboard({ flowDir: cfg.flowDir, templatesDir: cfg.templatesDir, port: cfg.FB_DASHBOARD_PORT });
+  // Read-only use of the Page token for the Marketing tab (post results). Without a token the tab says so.
+  const hasToken = !!(cfg.FB_USER_ACCESS_TOKEN || cfg.FB_PAGE_ACCESS_TOKEN);
+  const { server } = createDashboard({
+    flowDir: cfg.flowDir,
+    templatesDir: cfg.templatesDir,
+    port: cfg.FB_DASHBOARD_PORT,
+    graph: hasToken ? new GraphClient(cfg) : undefined,
+    pageId: cfg.FB_FLOW_PAGE_ID,
+  });
   server.listen(cfg.FB_DASHBOARD_PORT, '127.0.0.1', () => console.error(`Dashboard: http://localhost:${cfg.FB_DASHBOARD_PORT}`));
 }
