@@ -24,7 +24,7 @@ describe('marketing', () => {
     expect(proofDraft({ name: 'Juan Dela Cruz', result: 'Pending', card: 'Metrobank Titanium', proof_ok: true })).toBeUndefined();
     expect(proofDraft({ name: 'Juan Dela Cruz', result: 'Approved', proof_ok: true })).toBeUndefined();
     const d = proofDraft({ name: 'Juan Dela Cruz', result: 'Approved', card: 'Metrobank Titanium', proof_ok: true })!;
-    expect(d).toContain('J.!');
+    expect(d).toContain('Thank you for trusting us, J.!'); // posts are in English (owner rule)
     expect(d).not.toMatch(/Juan|Cruz/);
     expect(contentProblem(d)).toBeUndefined();
     // A card name that breaks a rule gives no draft.

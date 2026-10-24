@@ -38,7 +38,8 @@ export function initialOf(fullName: string): string {
 /** Draft proof post, or undefined when the applicant is not approved, gave no OK, or the text would break a rule. */
 export function proofDraft(a: { name: string; result?: string; card?: string; proof_ok?: boolean }): string | undefined {
   if (a.result !== 'Approved' || !a.proof_ok || !a.card) return undefined;
-  const text = `Approved: ${a.card} ✅\n\nSalamat sa tiwala, ${initialOf(a.name)}! May credit card ka na at gusto mo ng isa pa? Libre ang tulong namin sa pag-apply. Mag-message lang sa CARD MAX.\n\nAng bangko pa rin ang nagdedesisyon sa approval.`;
+  // Posts are in English (owner rule).
+  const text = `Approved: ${a.card} ✅\n\nThank you for trusting us, ${initialOf(a.name)}! Already have a credit card and want another one? We help you apply for free. Just send CARD MAX a message.\n\nThe bank still decides on approval.`;
   return contentProblem(text) ? undefined : text;
 }
 
