@@ -11,7 +11,7 @@ import { FlowStore } from './flowstore.js';
 import { listApplicants, loadSettings, saveForm, saveSettings, writeClientsXlsx } from './leadout.js';
 import { findAcrobat, listPrinters, printPdf } from './printer.js';
 import { forgetPhone, loadPhonebook, lookupPhone } from './phonebook.js';
-import { applicationStats } from './stats.js';
+import { applicationStats, funnelStats } from './stats.js';
 import { contentProblem } from './contentguard.js';
 import { GraphClient } from './graph.js';
 import { postStats, proofDraft, setOutcome } from './marketing.js';
@@ -182,7 +182,8 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
         const settings = await loadSettings(opts.flowDir);
         return send(200, {
           applicants,
-          stats: applicationStats(rows, { quota: settings.weekly_quota, startDay: settings.week_start_day }),
+          stats: applicationStats(rows, { quota: settings.weekly_quota, startDay: settings.week_start_day, target: settings.weekly_target }),
+          funnel: funnelStats(Object.values(state.people), rows, settings.week_start_day),
           flow: { waiting },
           settings,
           printers: await printers(),
@@ -231,7 +232,7 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
         if (url.pathname === '/api/outcome') {
           const file = safeFile(opts.flowDir, String(body.folder ?? ''), 'details.json');
           if (!file) return send(404, { error: 'Unknown applicant.' });
-          await setOutcome(file, { result: body.result, card: body.card, proof_ok: body.proof_ok === true });
+          await setOutcome(file, { result: body.result, card: body.card, proof_ok: body.proof_ok === true, source: body.source });
           await writeClientsXlsx(opts.flowDir).catch(() => undefined);
           return send(200, { ok: true });
         }

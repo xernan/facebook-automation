@@ -51,12 +51,12 @@ function render() {
   const mine = new Set(cm.weeks.flatMap((w) => w.folders));
   const rows = S.applicants.filter((r) => mine.has(r.folder));
   const w = S.stats.this_week;
-  const pct = Math.min(100, Math.round((w.complete / w.quota) * 100));
   a.innerHTML =
-    `<div class="card"><div class="row2"><h3 style="margin:0">This week</h3><span class="muted">${esc(w.start)} to ${esc(w.end)}</span>` +
-    `<span style="margin-left:auto">${w.reached ? '<span class="pill ok">Quota reached</span>' : `<span class="pill warn">${w.remaining} more to reach the quota</span>`}</span></div>` +
-    `<div class="bar"><i class="${w.reached ? 'done' : ''}" style="width:${pct}%"></i></div>` +
-    `<div class="stats"><div class="stat"><b>${w.complete} / ${w.quota}</b>Complete applications</div><div class="stat"><b>${w.ready}</b>Ready (nothing to check)</div><div class="stat"><b>${w.printed}</b>Printed</div><div class="stat"><b>${S.flow.waiting || 0}</b>In chat now</div></div></div>` +
+    `<div class="card"><div class="row2"><h3 style="margin:0">This week</h3><span class="muted">${esc(w.start)} to ${esc(w.end)}</span></div>` +
+    goalBar('Target', w.complete, w.target, w.pct_target, w.target_reached) +
+    goalBar('Quota', w.complete, w.quota, w.pct_quota, w.reached) +
+    `<div class="stats"><div class="stat"><b>${w.complete}</b>Complete applications</div><div class="stat"><b>${w.ready}</b>Ready (nothing to check)</div><div class="stat"><b>${w.printed}</b>Printed</div><div class="stat"><b>${S.flow.waiting || 0}</b>In chat now</div></div></div>` +
+    funnelCard(S.funnel) +
     weeksTable(cm, 'This month') +
     `<div class="card"><table><tr><th>Completed</th><th>Name</th><th>Mobile</th><th>PDFs</th><th>Flags</th><th>To check</th><th>Printed</th><th>Bank result</th></tr>` +
     (rows.length
@@ -79,20 +79,58 @@ function render() {
 
 const resultPill = (x) => (x === 'Approved' ? '<span class="pill ok">Approved</span>' : x === 'Declined' ? '<span class="pill bad">Declined</span>' : '<span class="pill warn">Pending</span>');
 
+// Goal with %: "4 / 10 · 40%" and a bar.
+const goalPill = (n, goal, p, done) => `<span class="pill ${done ? 'ok' : 'warn'}">${n} / ${goal} · ${p}%</span>`;
+const goalBar = (label, n, goal, p, done) =>
+  `<div class="row2" style="margin-top:8px"><b style="min-width:60px">${label}</b><span>${n} / ${goal}</span><b style="margin-left:auto">${p}%</b>${done ? '<span class="pill ok">Reached</span>' : `<span class="muted">${Math.max(goal - n, 0)} to go</span>`}</div><div class="bar"><i class="${done ? 'done' : ''}" style="width:${Math.min(100, p)}%"></i></div>`;
+
+// Funnel: chats → qualified → complete → approved, this week / this month / all time.
+function funnelCard(f) {
+  if (!f) return '';
+  const cols = [f.this_week, f.this_month, f.all_time];
+  const row = (label, get, hint) => `<tr><td>${label}${hint ? ` <span class="muted">${hint}</span>` : ''}</td>${cols.map((c) => `<td>${get(c)}</td>`).join('')}</tr>`;
+  return (
+    `<div class="card"><h3>Funnel</h3><table><tr><th></th><th>This week</th><th>This month</th><th>All time</th></tr>` +
+    row('Chats started', (c) => `<b>${c.started}</b>`) +
+    row('Qualified', (c) => `${c.qualified} <span class="muted">(${c.pct_qualified}%)</span>`, 'has a card, answering') +
+    row('Complete applications', (c) => `<b>${c.complete}</b> <span class="muted">(${c.pct_complete}%)</span>`, '% of chats') +
+    row('No credit card yet', (c) => c.no_card) +
+    row('Said no / stopped', (c) => c.said_no) +
+    row('Already has all our banks', (c) => c.all_banks) +
+    row('Still in chat', (c) => c.in_progress) +
+    row('Approved by the bank', (c) => `<b>${c.approved}</b> <span class="muted">(${c.pct_approved}% of decided)</span>`) +
+    row('Declined / pending', (c) => `${c.declined} / ${c.pending}`) +
+    `</table></div>`
+  );
+}
+
+function sourceCard(f) {
+  const rows = f?.by_source || [];
+  return (
+    `<div class="card"><h3>Where applicants come from</h3>` +
+    (rows.length
+      ? `<table><tr><th>Source</th><th>Complete</th><th>Share</th><th>Approved</th><th>Approval rate</th></tr>${rows
+          .map((r) => `<tr><td>${esc(r.source)}</td><td><b>${r.complete}</b></td><td>${r.share_pct}%</td><td>${r.approved}</td><td>${r.pct_approved}%</td></tr>`)
+          .join('')}</table>`
+      : '<p class="muted">No applicants yet. Set "Where they came from" on each applicant page.</p>') +
+    `</div>`
+  );
+}
+
 const monthName = (m) => new Date(m + '-01T00:00:00').toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
 
 function weeksTable(m, title) {
   return (
-    `<div class="card"><h3>${esc(title)} · ${esc(monthName(m.month))}</h3><table><tr><th>Week</th><th>Complete</th><th>Quota</th><th>Ready</th><th>Printed</th></tr>` +
+    `<div class="card"><h3>${esc(title)} · ${esc(monthName(m.month))}</h3><table><tr><th>Week</th><th>Complete</th><th>Target</th><th>Quota</th><th>Ready</th><th>Printed</th></tr>` +
     m.weeks
       .slice()
       .reverse()
       .map(
         (w) =>
-          `<tr><td>${esc(w.start)} to ${esc(w.end)}</td><td><b>${w.complete}</b></td><td>${w.reached ? '<span class="pill ok">Reached</span>' : `<span class="pill warn">${w.complete} / ${w.quota}</span>`}</td><td>${w.ready}</td><td>${w.printed}</td></tr>`,
+          `<tr><td>${esc(w.start)} to ${esc(w.end)}</td><td><b>${w.complete}</b></td><td>${goalPill(w.complete, w.target, w.pct_target, w.target_reached)}</td><td>${goalPill(w.complete, w.quota, w.pct_quota, w.reached)}</td><td>${w.ready}</td><td>${w.printed}</td></tr>`,
       )
       .join('') +
-    `<tr><td><b>Month total</b></td><td><b>${m.complete}</b></td><td></td><td><b>${m.ready}</b></td><td><b>${m.printed}</b></td></tr></table></div>`
+    `<tr><td><b>Month total</b></td><td><b>${m.complete}</b></td><td>${goalPill(m.complete, m.target, m.pct_target, m.complete >= m.target)}</td><td>${goalPill(m.complete, m.quota, m.pct_quota, m.complete >= m.quota)}</td><td><b>${m.ready}</b></td><td><b>${m.printed}</b></td></tr></table></div>`
   );
 }
 
@@ -144,6 +182,9 @@ function renderOne(a) {
     `<div class="card"><b>Bank result</b><label for="o_result">Result</label><select id="o_result">${['Pending', 'Approved', 'Declined']
       .map((x) => `<option${x === r.result ? ' selected' : ''}>${x}</option>`)
       .join('')}</select><label for="o_card">Approved card (e.g. Metrobank Titanium)</label><input id="o_card" maxlength="60" value="${esc(r.approved_card)}">` +
+    `<label for="o_source">Where they came from</label><select id="o_source">${['Unknown', 'Page post', 'Group', 'Referral', 'Old client', 'Friend or family', 'Other']
+      .map((x) => `<option${x === (r.source || 'Unknown') ? ' selected' : ''}>${x}</option>`)
+      .join('')}</select>` +
     `<label><input type="checkbox" id="o_proof" style="min-width:0"${r.proof_ok ? ' checked' : ''}> Client said OK to a thank-you post (first-name initial only, no ID, card or photo)</label>` +
     `<p><button class="btn" id="o_save">Save result</button></p></div></div>`;
   $('#back').onclick = () => {
@@ -168,7 +209,7 @@ function renderOne(a) {
     const card = $('#o_card').value.trim();
     if (result === 'Approved' && !card) return msg('Type the approved card first.');
     try {
-      await post('/api/outcome', { folder: r.folder, result, card, proof_ok: $('#o_proof').checked });
+      await post('/api/outcome', { folder: r.folder, result, card, proof_ok: $('#o_proof').checked, source: $('#o_source').value });
       msg('Saved');
       load();
     } catch (e) {
@@ -442,6 +483,7 @@ async function renderMarketing(a, fresh) {
   a.innerHTML =
     `<div class="card"><h3>Bank results</h3><div class="stats"><div class="stat"><b>${m.counts.approved}</b>Approved</div><div class="stat"><b>${m.counts.pending}</b>Pending</div><div class="stat"><b>${m.counts.declined}</b>Declined</div><div class="stat"><b>${m.proof.filter((x) => x.draft).length}</b>Ready for a thank-you post</div></div>` +
     `<p class="muted">Set the result on each applicant's page. A thank-you post needs the client's OK and shows the first-name initial only.</p></div>` +
+    sourceCard(S.funnel) +
     `<div class="card"><h3>Thank-you posts</h3>${
       m.proof.length
         ? `<table><tr><th>Name</th><th>Card</th><th>Client OK</th><th>Draft</th></tr>${m.proof
@@ -508,7 +550,7 @@ function renderSettings(a) {
     `<div class="card"><h3>Card to apply for (per bank)</h3><div class="row2"><div><label>Metrobank</label>${sel('cc_metrobank', o.metrobank || [], s.card_choice.metrobank)}</div><div><label>EastWest</label>${sel('cc_eastwest', o.eastwest || [], s.card_choice.eastwest)}</div><div><label>China Bank</label>${sel('cc_chinabank', o.chinabank || [], s.card_choice.chinabank)}</div></div></div>` +
     `<div class="card"><h3>Printing</h3><label>Printer</label>${sel('printer', S.printers, s.printer)}<label><input type="checkbox" id="auto_print" style="min-width:0"${s.auto_print ? ' checked' : ''}> Print new complete applications automatically (PC must be on)</label>${S.acrobat ? '' : '<p class="pill warn">Adobe Acrobat not found: printing will not work</p>'}</div>` +
     `<div class="card"><h3>Text on the forms</h3><div class="row2"><div><label>Answer size (pt, 0 = fit each box)</label><input id="text_uniform_size" type="number" step="0.5" min="0" max="20" value="${s.text_uniform_size}"></div><div><label><input type="checkbox" id="text_bold" style="min-width:0"${s.text_bold ? ' checked' : ''}> Bold</label></div></div></div>` +
-    `<div class="card"><h3>Weekly quota</h3><div class="row2"><div><label>Complete applications per week</label><input id="weekly_quota" type="number" min="1" max="1000" step="1" value="${s.weekly_quota}"></div>` +
+    `<div class="card"><h3>Weekly goals</h3><div class="row2"><div><label>Target per week (what we aim for now)</label><input id="weekly_target" type="number" min="1" max="1000" step="1" value="${s.weekly_target}"></div><div><label>Quota per week (the real goal)</label><input id="weekly_quota" type="number" min="1" max="1000" step="1" value="${s.weekly_quota}"></div>` +
     `<div><label>Week starts on</label><select id="week_start_day">${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => `<option value="${i}"${i === s.week_start_day ? ' selected' : ''}>${d}</option>`).join('')}</select></div></div></div>` +
     '<button class="btn" id="save">Save settings</button>' +
     `<div class="card" style="margin-top:14px"><h3>Test mode</h3><p class="muted">While test mode is on, the bots (Messenger and comment replies) answer only the people listed below. Turn it off only for the launch.</p>` +
@@ -560,10 +602,12 @@ function renderSettings(a) {
       text_bold: $('#text_bold').checked,
       text_uniform_size: Number(v('text_uniform_size')),
       weekly_quota: Number(v('weekly_quota')),
+      weekly_target: Number(v('weekly_target')),
       week_start_day: Number(v('week_start_day')),
       card_choice: Object.fromEntries(['metrobank', 'eastwest', 'chinabank'].map((b) => [b, v('cc_' + b)]).filter(([, x]) => x)),
     };
     if (!Number.isInteger(body.weekly_quota) || body.weekly_quota < 1 || body.weekly_quota > 1000) return msg('Weekly quota must be a whole number from 1 to 1000.');
+    if (!Number.isInteger(body.weekly_target) || body.weekly_target < 1 || body.weekly_target > 1000) return msg('Weekly target must be a whole number from 1 to 1000.');
     try {
       await post('/api/settings', body);
       msg('Settings saved');

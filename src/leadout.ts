@@ -219,6 +219,8 @@ export interface ApplicantRow {
   approved_card: string;
   /** Client said OK to a proof post (first-name initial only). */
   proof_ok: boolean;
+  /** Where they came from (dashboard). */
+  source: string;
 }
 
 export async function listApplicants(flowDir: string): Promise<ApplicantRow[]> {
@@ -242,6 +244,7 @@ export async function listApplicants(flowDir: string): Promise<ApplicantRow[]> {
         result: d.outcome?.result ?? 'Pending',
         approved_card: d.outcome?.card ?? '',
         proof_ok: !!d.outcome?.proof_ok,
+        source: d.outcome?.source ?? 'Unknown',
       });
     } catch {
       // A folder without details.json is not an applicant.
@@ -268,6 +271,7 @@ export async function writeClientsXlsx(flowDir: string): Promise<void> {
     { header: 'Bank result', key: 'result', width: 12 },
     { header: 'Approved card', key: 'approved_card', width: 26 },
     { header: 'Proof post OK', key: 'proof_ok', width: 13 },
+    { header: 'Source', key: 'source', width: 16 },
     { header: 'Folder', key: 'folder', width: 34 },
   ];
   ws.getRow(1).font = { bold: true };
@@ -278,13 +282,16 @@ export async function writeClientsXlsx(flowDir: string): Promise<void> {
   }
   // Weekly totals against the quota, newest first (same numbers as the dashboard).
   const settings = await loadSettings(flowDir).catch(() => settingsSchema.parse({}));
-  const st = applicationStats(rows, { quota: settings.weekly_quota, startDay: settings.week_start_day });
+  const st = applicationStats(rows, { quota: settings.weekly_quota, startDay: settings.week_start_day, target: settings.weekly_target });
   const wk = wb.addWorksheet('Weekly');
   wk.columns = [
     { header: 'Month', key: 'month', width: 10 },
     { header: 'Week', key: 'week', width: 26 },
     { header: 'Complete', key: 'complete', width: 10 },
+    { header: 'Target', key: 'target', width: 8 },
+    { header: '% of target', key: 'pct_target', width: 11 },
     { header: 'Quota', key: 'quota', width: 8 },
+    { header: '% of quota', key: 'pct_quota', width: 11 },
     { header: 'Reached', key: 'reached', width: 9 },
     { header: 'Ready (nothing to check)', key: 'ready', width: 24 },
     { header: 'Printed', key: 'printed', width: 9 },
@@ -292,9 +299,9 @@ export async function writeClientsXlsx(flowDir: string): Promise<void> {
   wk.getRow(1).font = { bold: true };
   for (const m of [st.current_month, ...st.archive]) {
     for (const w of m.weeks) {
-      wk.addRow({ month: m.month, week: `${w.start} to ${w.end}`, complete: w.complete, quota: w.quota, reached: w.reached ? 'Yes' : 'No', ready: w.ready, printed: w.printed });
+      wk.addRow({ month: m.month, week: `${w.start} to ${w.end}`, complete: w.complete, target: w.target, pct_target: `${w.pct_target}%`, quota: w.quota, pct_quota: `${w.pct_quota}%`, reached: w.reached ? 'Yes' : 'No', ready: w.ready, printed: w.printed });
     }
-    wk.addRow({ month: m.month, week: 'Month total', complete: m.complete, ready: m.ready, printed: m.printed }).font = { bold: true };
+    wk.addRow({ month: m.month, week: 'Month total', complete: m.complete, target: m.target, pct_target: `${m.pct_target}%`, quota: m.quota, pct_quota: `${m.pct_quota}%`, ready: m.ready, printed: m.printed }).font = { bold: true };
   }
   const tmp = path.join(flowDir, `CLIENTS.${process.pid}.tmp.xlsx`);
   await wb.xlsx.writeFile(tmp);

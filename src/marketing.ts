@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { z } from 'zod';
 import { contentProblem } from './contentguard.js';
+import { SOURCES } from './stats.js';
 
 // Marketing helpers for the dashboard: bank result + proof-post consent per applicant, and how our Page posts do.
 // Proof posts ("Approved: <card>, salamat Ms. J.!") are the posts that grew the agent pages we studied; they need
@@ -10,6 +11,8 @@ export const outcomeSchema = z.object({
   result: z.enum(['Pending', 'Approved', 'Declined']),
   card: z.string().trim().max(60).optional(),
   proof_ok: z.boolean().default(false),
+  /** Where the applicant came from, so we can see which channel converts. */
+  source: z.enum(SOURCES).default('Unknown'),
 });
 export type Outcome = z.infer<typeof outcomeSchema>;
 
@@ -22,6 +25,7 @@ export async function setOutcome(file: string, input: unknown, now = new Date())
     result: o.result,
     card: o.card || undefined,
     proof_ok: o.proof_ok,
+    source: o.source,
     // Keep the date they first said yes; clear it when the OK is withdrawn.
     proof_ok_at: o.proof_ok ? (prev.proof_ok_at ?? now.toISOString()) : undefined,
     updated_at: now.toISOString(),

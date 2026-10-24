@@ -84,6 +84,8 @@ export const settingsSchema = z
     printer: z.string().max(200).default(''),
     /** Complete applications to reach each week (the owner submits to the banks weekly). */
     weekly_quota: z.number().int().min(1).max(1000).default(10),
+    /** What we aim for now while the Page grows (owner: 10 a week in Nov 2026); shown next to the quota. */
+    weekly_target: z.number().int().min(1).max(1000).default(10),
     /** First day of the submit week: 0 = Sunday, 1 = Monday ... 6 = Saturday. */
     week_start_day: z.number().int().min(0).max(6).default(1),
   })

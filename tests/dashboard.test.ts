@@ -57,12 +57,14 @@ describe('dashboard', () => {
 
   it('bank result needs the token; marketing shows it; draft check uses the guard', async () => {
     const { base, folder } = await start();
-    const body = JSON.stringify({ folder, result: 'Approved', card: 'EastWest Platinum', proof_ok: true });
+    const body = JSON.stringify({ folder, result: 'Approved', card: 'EastWest Platinum', proof_ok: true, source: 'Group' });
     expect((await fetch(`${base}/api/outcome`, { method: 'POST', body })).status).toBe(403);
     expect((await fetch(`${base}/api/outcome`, { method: 'POST', body: JSON.stringify({ folder: '..', result: 'Approved' }), headers: { 'x-token': 'tok' } })).status).toBe(404);
     expect((await fetch(`${base}/api/outcome`, { method: 'POST', body, headers: { 'x-token': 'tok' } })).status).toBe(200);
     const s = await (await fetch(`${base}/api/state`)).json();
     expect(s.applicants[0]).toMatchObject({ result: 'Approved', approved_card: 'EastWest Platinum', proof_ok: true });
+    expect(s.funnel.by_source).toEqual([{ source: 'Group', complete: 1, share_pct: 100, approved: 1, pct_approved: 100 }]);
+    expect(s.stats.this_week.target).toBe(10);
     const m = await (await fetch(`${base}/api/marketing`)).json();
     expect(m.counts).toEqual({ pending: 0, approved: 1, declined: 0 });
     expect(m.proof[0].draft).toContain('J.!');

@@ -134,6 +134,8 @@ export interface Person {
   /** Suggestions shown with the current question; a reply "1".."n" picks one. */
   suggestions?: string[];
   updated_at: string;
+  /** When they first wrote (for the funnel stats). Older records may not have it. */
+  started_at?: string;
   /** A reply saved but not sent yet (see fb_flow_answer). */
   outbox?: { text: string; for_messages: string[]; choices?: string[] };
 }
@@ -173,6 +175,7 @@ export const newPerson = (now: Date): Person => ({
   banks: [],
   married: false,
   updated_at: now.toISOString(),
+  started_at: now.toISOString(),
 });
 
 // Whole words only. The old bot matched substrings, so "Oo, meron ako noon" read as "no".
