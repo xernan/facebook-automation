@@ -48,9 +48,9 @@ export class ClaudeBrake {
 }
 
 /** One key for the chats waiting now: who, their newest unhandled message, and a waiting outbox. */
-export function pendingKey(list: { psid: string; outbox_pending: boolean; messages: { id: string }[] }[]): string {
+export function pendingKey(list: { psid: string; outbox_pending: boolean; needs_id_review?: boolean; messages: { id: string }[] }[]): string {
   return list
-    .map((p) => `${p.psid}:${p.messages.at(-1)?.id ?? ''}:${p.outbox_pending ? 'o' : ''}`)
+    .map((p) => `${p.psid}:${p.messages.at(-1)?.id ?? ''}:${p.outbox_pending ? 'o' : ''}${p.needs_id_review ? 'i' : ''}`)
     .sort()
     .join('|');
 }

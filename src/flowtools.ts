@@ -69,7 +69,9 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
       .filter((m: InMsg) => new Date(m.created_time).getTime() >= start && !state.handled.includes(m.id))
       .reverse();
     const p = state.people[person.id];
-    if (msgs.length === 0 && !p?.outbox) continue;
+    // ID photos saved (right away, by the watcher) but not read by Claude yet.
+    const needsIdReview = p?.stage === 'id_photo' && (p.id_files?.length ?? 0) > (p.id_review?.length ?? 0);
+    if (msgs.length === 0 && !p?.outbox && !needsIdReview) continue;
     const cur = p ?? newPerson(now);
     const joined = { text: msgs.map((m) => m.text).filter(Boolean).join('\n'), image_url: msgs.find((m) => m.image_url)?.image_url };
     const next = msgs.length ? nextStepIf(flow, cur, joined, now, ctx.cfg.FB_FLOW_COOLDOWN_DAYS) : undefined;
@@ -79,6 +81,7 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
       stage: cur.stage,
       current_question: currentPrompt(flow, cur),
       outbox_pending: !!p?.outbox,
+      needs_id_review: needsIdReview,
       can_reply: !!msgs.at(-1) && withinWindow(ctx, msgs.at(-1)!.created_time, now),
       messages: msgs.map((m) => ({ id: m.id, text: m.text, has_image: !!m.image_url, created_time: m.created_time })),
       // If these messages answer the current question, this is asked next. When wants_suggestions is true you may

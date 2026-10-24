@@ -236,7 +236,7 @@ async function renderForm(a) {
     field('email', 'Email', f.email, { type: 'email', req: 1 }) +
     field('mobile', 'Mobile number', f.mobile, { req: 1 }) +
     field('home_phone', 'Home phone', f.home_phone) +
-    field('tin_number', 'TIN', f.tin_number, { hint: 'Only from the applicant or their TIN ID.' }) +
+    field('tin_number', 'TIN', f.tin_number, { hint: 'Auto-filled when a TIN shows on the ID they sent. Otherwise ask them by call or text and type it here.' }) +
     field('gsis_sss_number', 'SSS / GSIS number', f.gsis_sss_number) +
     `</div></div>` +
     `<div class="card"><h3>Address</h3><div class="fgrid">` +

@@ -383,8 +383,10 @@ const GREETING_WORDS = new Set(['hi', 'hello', 'helo', 'hey', 'good', 'gud', 'mo
  * Anything that may be a question, an image, or a reply at the ID step goes to Claude.
  */
 export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean {
+  // An ID photo is downloaded to our folder at once (nothing is sent); Claude reads it right after.
+  if (input.image_url) return p.stage === 'id_photo';
   const text = input.text.trim();
-  if (input.image_url || !text || text.includes('?')) return false;
+  if (!text || text.includes('?')) return false;
   const w = words(text);
   if (w.some((x) => QUESTION_WORDS.has(x))) return false;
   switch (p.stage) {

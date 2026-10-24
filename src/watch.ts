@@ -125,7 +125,7 @@ async function main() {
         }
       }
       // Whatever the fast lane did not finish goes to Claude (never while Meta blocks messaging).
-      const waiting = (list: typeof pending) => list.filter((p) => p.outbox_pending || (p.can_reply && p.messages.length > 0));
+      const waiting = (list: typeof pending) => list.filter((p) => p.outbox_pending || p.needs_id_review || (p.can_reply && p.messages.length > 0));
       const rest = Date.now() < blockedUntil || waiting(pending).length === 0 ? [] : waiting(fast.length ? await findPending(ctx, pageId) : pending);
       const key = pendingKey(rest);
       if (rest.length > 0 && brake.canRun(key)) {

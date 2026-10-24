@@ -299,6 +299,10 @@ describe('flow tools', () => {
       for (const mid of Object.keys(msgs).slice(0, 8)) r = await answer(ctx, [mid]);
       expect(r.needs_id_review).toBe(true);
       expect(r.id_photos).toBe(1);
+      // The photo is already in our folder; the pending list keeps asking Claude to read it.
+      expect(readdirSync(path.join(dir, 'valid_ids'))).toHaveLength(1);
+      const pend = async () => ((await callTool(tool('fb_flow_pending'), { page_id: '111' }, ctx)) as any[]).find((p) => p.psid === PSID);
+      expect((await pend())?.needs_id_review).toBe(true);
 
       const imgs: any = await callTool(tool('fb_flow_id_images'), { psid: PSID }, ctx);
       expect(imgs.__content.filter((c: any) => c.type === 'image')).toHaveLength(1);
@@ -309,6 +313,7 @@ describe('flow tools', () => {
 
       r = await review([prcFront]);
       expect(r.id_ok).toBe(false);
+      expect((await pend())?.needs_id_review).toBe(false);
       expect(r.reply).toBe(flow.id_photo.need_back_reply);
 
       r = await answer(ctx, ['m_9']);
@@ -639,9 +644,13 @@ describe('fast lane (script answers without Claude)', () => {
     expect(can(at('consent'), 'ewan ko')).toBe(false);
     expect(can(at('consent'), 'oo pero paano?')).toBe(false);
     expect(can(at('banks'), 'yung sa mall')).toBe(false);
-    expect(can(at('id_photo'), '', 'https://scontent.xx.fbcdn.net/x.jpg')).toBe(false);
+    expect(can(at('consent'), '', 'https://scontent.xx.fbcdn.net/x.jpg')).toBe(false);
     expect(can(at('id_photo'), 'ok')).toBe(false);
     expect(can(at('done'), 'thanks')).toBe(false);
+  });
+
+  it('an ID photo at the ID step is downloaded at once (Claude reads it after)', () => {
+    expect(can(at('id_photo'), '', 'https://scontent.xx.fbcdn.net/x.jpg')).toBe(true);
   });
 
   it('steps: tapped buttons, valid numbers and plain short answers; bad numbers and questions go to Claude', () => {
