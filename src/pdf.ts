@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fontkit from '@pdf-lib/fontkit';
-import { PDFArray, PDFCheckBox, PDFDict, PDFDocument, PDFDropdown, PDFName, PDFRadioGroup, PDFRef, PDFTextField, type PDFFont } from 'pdf-lib';
+import { PDFArray, PDFCheckBox, PDFDict, PDFDocument, PDFDropdown, PDFName, PDFRadioGroup, PDFRef, PDFTextField, type PDFFont, type PDFPage } from 'pdf-lib';
 import type { BankKey, BuiltApplication, Settings } from './application.js';
 
 // Fills a bank's PDF template. Box names say what goes in them (same naming as the card app's templates):
@@ -154,6 +154,7 @@ export async function fillBankPdf(
   pdf.registerFontkit(fontkit);
   const font = await pdf.embedFont(fontBytes(settings.text_bold), { subset: true });
   const pages = pdf.getPages();
+  const plans: Plan[] = [];
   for (const field of form.getFields()) {
     if (!(field instanceof PDFTextField)) continue;
     const t = field.getText();
@@ -179,14 +180,7 @@ export async function fillBankPdf(
         continue;
       }
       if (settings.text_uniform_size) {
-        const size = Math.min(settings.text_uniform_size, fitFontSize(font, t, { width: rect.width, height: 1e6 }, cells, 1e6));
-        const y = rect.y + Math.max(0.8, (rect.height - size * 0.72) / 2);
-        if (cells) {
-          const cell = rect.width / cells;
-          [...t].forEach((ch, i) => page.drawText(ch, { x: rect.x + i * cell + (cell - font.widthOfTextAtSize(ch, size)) / 2, y, size, font }));
-        } else {
-          page.drawText(t, { x: rect.x + 1.5, y, size, font });
-        }
+        plans.push(planUniform(font, t, rect, cells, page, settings.text_uniform_size));
         form.removeField(field);
       } else {
         field.setFontSize(fitFontSize(font, t, rect, cells, settings.text_max_size));
@@ -197,10 +191,70 @@ export async function fillBankPdf(
     }
   }
 
+  drawPlans(font, sameSizePerLine(plans));
+
   // Flatten: answers become part of the page, so every viewer and printer shows them (some print form boxes blank).
   if (settings.flatten) form.flatten();
   dropDeadAnnotations(pdf);
   return { bytes: await pdf.save(), filled };
+}
+
+interface Plan {
+  page: PDFPage;
+  rect: { x: number; y: number; width: number; height: number };
+  lines: string[];
+  cells: number;
+  size: number;
+}
+
+/** Split text into two lines at the space nearest the middle. */
+export function twoLines(text: string): [string, string] | undefined {
+  const spaces = [...text.matchAll(/ /g)].map((m) => m.index!);
+  if (spaces.length === 0) return undefined;
+  const mid = text.length / 2;
+  const at = spaces.reduce((a, b) => (Math.abs(b - mid) < Math.abs(a - mid) ? b : a));
+  return [text.slice(0, at), text.slice(at + 1)];
+}
+
+/**
+ * Uniform size, shrinking only to fit the box width. A long answer in a tall box (≥ 12pt) uses two lines when
+ * that lets it print larger than squeezing it onto one line.
+ */
+function planUniform(font: PDFFont, text: string, rect: Plan['rect'], cells: number, page: PDFPage, uniform: number): Plan {
+  const one = Math.min(uniform, fitFontSize(font, text, { width: rect.width, height: 1e6 }, cells, 1e6));
+  if (!cells && one < uniform && rect.height >= 12) {
+    const split = twoLines(text);
+    if (split) {
+      const two = Math.min(uniform, rect.height / 2.25, ...split.map((l) => fitFontSize(font, l, { width: rect.width, height: 1e6 }, 0, 1e6)));
+      if (two > one) return { page, rect, lines: split, cells, size: Math.floor(two * 2) / 2 };
+    }
+  }
+  return { page, rect, lines: [text], cells, size: one };
+}
+
+/** Answers that share a printed line (same page and baseline) use the same size: the smallest any of them needs. */
+export function sameSizePerLine<T extends { page: unknown; rect: { y: number }; cells: number; size: number }>(plans: T[]): T[] {
+  for (const p of plans) {
+    if (p.cells) continue;
+    const row = plans.filter((q) => !q.cells && q.page === p.page && Math.abs(q.rect.y - p.rect.y) < 1.5);
+    p.size = Math.min(...row.map((q) => q.size));
+  }
+  return plans;
+}
+
+function drawPlans(font: PDFFont, plans: Plan[]) {
+  for (const { page, rect, lines, cells, size } of plans) {
+    if (cells) {
+      const y = rect.y + Math.max(0.8, (rect.height - size * 0.72) / 2);
+      const cell = rect.width / cells;
+      [...lines[0]!].forEach((ch, i) => page.drawText(ch, { x: rect.x + i * cell + (cell - font.widthOfTextAtSize(ch, size)) / 2, y, size, font }));
+    } else if (lines.length === 2) {
+      page.drawText(lines[0]!, { x: rect.x + 1.5, y: rect.y + rect.height / 2 + 0.8, size, font });
+      page.drawText(lines[1]!, { x: rect.x + 1.5, y: rect.y + 1.2, size, font });
+    } else {
+      page.drawText(lines[0]!, { x: rect.x + 1.5, y: rect.y + Math.max(0.8, (rect.height - size * 0.72) / 2), size, font });
+    }
+  }
 }
 
 /**
