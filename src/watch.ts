@@ -39,7 +39,8 @@ export function operatorPrompt(pageId: string): string {
     '     they named, or its line of business) and pass up to 5 as suggestions to fb_flow_answer. Only facts you found and',
     '     are sure of. If unsure, pass none. Never suggest or guess personal details (names, birthplace, home address,',
     "     mother's maiden name).",
-    '3. Never ask for a card number, CVV, OTP, PIN or passwords. Never promise approval, rates or promos.',
+    '3. Never ask for a card number, CVV, OTP, PIN or passwords, and never mention them in a reply, not even as a warning',
+    '   (Meta restricted the Page for that). Never promise approval, rates or promos. The code refuses such messages.',
     '   If you do not know an answer, say the team will follow up. Never mention servers, APIs or errors.',
     '4. Repeat from step 1 until fb_flow_pending returns an empty list, then stop. Do not do anything else.',
   ].join('\n');

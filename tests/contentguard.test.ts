@@ -72,3 +72,17 @@ describe('Community Standards guard', () => {
     await expect(off.post('1', '1/messages', { message: JSON.stringify({ text: 'Hello' }) })).rejects.toThrow(/Messenger sending is off/);
   });
 });
+
+describe('one door to Facebook', () => {
+  it('only graph.ts (plus login/oauth for the token) talks to graph.facebook.com, so every send passes the guard', async () => {
+    const { readdirSync, readFileSync: rf } = await import('node:fs');
+    const offenders = readdirSync('src')
+      .filter((f) => f.endsWith('.ts') && !['graph.ts', 'login.ts', 'oauth.ts'].includes(f))
+      .filter((f) => /graph\.facebook\.com|facebook\.com\/v\d/.test(rf(path.join('src', f), 'utf8')));
+    expect(offenders).toEqual([]);
+  });
+
+  it('login/oauth only read the token endpoints (no posting)', () => {
+    for (const f of ['src/login.ts', 'src/oauth.ts']) expect(readFileSync(f, 'utf8')).not.toMatch(/\/(messages|feed|photos|videos|comments)\b/);
+  });
+});
