@@ -34,6 +34,9 @@
 - Low fixes 2026-10-24: unknown page id refresh cooldown (FB_PAGES_REFRESH_COOLDOWN_SEC), Messenger
   lead page size is config (FB_LEADS_CHATS_PER_PAGE). 78 tests. Auto-resume cron stopped (nothing left without owner decision).
 
+- QA pass 2 (2026-10-24, 84 tests): cut-off answer to a write now maybe-done (no double post),
+  base64 cursors, doctor OK when only Lead Ads perms missing. Live read smoke test of all main tools OK. PR #5.
+
 ## Open (needs owner)
 - GitHub done 2026-10-24: PR #1 merged to main; old cardmaxmarketing-blip repo deleted.
 - Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
