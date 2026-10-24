@@ -42,6 +42,6 @@
 1. Claude Desktop works 2026-10-24: facebook server connected, 25 tools. Note: the Brave-installed
    "Claude" app is the web version (no local server); use the real Desktop app (Start menu).
    Desktop MCP log: LocalAppData Claude\logs\mcp-server-facebook.log.
-2. PR #2 merged 2026-10-24, main CI green. Claude Desktop: facebook server added to its config
+2. PRs #2-#4 merged 2026-10-24, main CI green (#4: Business Pages show as usable in fb_list_pages). Claude Desktop: facebook server added to its config
    2026-10-24 (backup .bak-2026-10-24 beside it); owner must fully quit + reopen Desktop.
 3. Phase 2 options (owner decides): Instagram, Marketing API (ads), lead alerts.
