@@ -32,6 +32,23 @@ describe('Community Standards guard', () => {
       expect(contentProblem(t)).toBeUndefined();
   });
 
+  it('refuses engagement bait but allows a real question', () => {
+    for (const t of [
+      '💬 TAG ang isang kaibigan na naghahanap ng EastWest credit card!',
+      'SHARE MO SA FRIENDS: Sino sa mga kakilala mo ang naghahanap?',
+      'Comment YES kung gusto mo',
+      'Like if you agree',
+      'React kung carded ka na',
+    ])
+      expect(contentProblem(t)).toBeDefined();
+    for (const t of [
+      'Alin sa mga benefits na ito ang pinaka-kailangan mo ngayon?',
+      'Ano ang paborito mong credit card ngayon? I-comment sa ibaba.',
+      'Gusto mo ng card na pang-travel o pang-grocery?',
+    ])
+      expect(contentProblem(t)).toBeUndefined();
+  });
+
   it('reads Messenger JSON text and button titles', () => {
     expect(() => assertSafeContent({ message: JSON.stringify({ text: 'ok', quick_replies: [{ title: 'Send OTP' }] }) })).toThrow(/Community Standards/);
     expect(() => assertSafeContent({ message: JSON.stringify({ text: 'Hello' }) })).not.toThrow();

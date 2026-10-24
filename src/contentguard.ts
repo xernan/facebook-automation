@@ -15,6 +15,11 @@ const RULES: { re: RegExp; why: string }[] = [
   { re: /\b(guarantee[ds]?|garantisado|siguradong\s+approv\w*|sure\s+approv\w*|100\s*%\s*approv\w*|instant\s+approv\w*|auto\s*approv\w*)/i, why: 'promises approval (banks decide)' },
   { re: /\b(processing|application|upfront|advance|reservation)\s+fee\b/i, why: 'mentions an upfront fee' },
   { re: /\b(no\s+income|walang\s+income|kahit\s+walang\s+trabaho)\b/i, why: 'implies skipping bank requirements' },
+  // Engagement bait (Meta demotes it): tag/share/vote/react prompts. A real question ("Alin ang gusto mo?") is fine.
+  { re: /\b(i-?tag|tag)\s+(mo\s+)?(ang\s+)?(a|isang|your|mga)?\s*(friends?|kaibigan|kakilala|barkada)/i, why: 'asks people to tag friends (engagement bait)' },
+  { re: /\b(i-?share|share)\s+(mo\s+)?(this\s+|ito\s+|na\s+)?(sa|with|to)\s+(your\s+|mga\s+)?(friends?|kaibigan|kakilala)/i, why: 'asks people to share (engagement bait)' },
+  { re: /\b(i-?comment|comment|type)\s+["“']?(yes|oo|amen|done|interested|1)\b/i, why: 'asks for a fixed comment (engagement bait)' },
+  { re: /\b(like|react|i-?like)\s+(this\s+)?(if|kung)\b/i, why: 'asks for likes or reactions (engagement bait)' },
 ];
 
 /** The reason this text breaks a rule, or undefined when it is fine to send. */
