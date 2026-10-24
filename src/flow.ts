@@ -31,10 +31,13 @@ export const flowSchema = z
             /** This answer is the civil status: "married"/"kasal" turns on the only_if_married questions. */
             sets_married: z.boolean().optional(),
             /** Check the answer's shape; on a bad answer send invalid_reply and ask again. */
-            validate: z.enum(['mobile', 'email', 'tin', 'sss_gsis', 'date', 'number']).optional(),
+            validate: z.enum(['mobile', 'email', 'tin', 'sss_gsis', 'date', 'number', 'yes_no']).optional(),
+            /** A clear "yes" adds this flag to the lead (e.g. pending_application), so the client sees it. */
+            flag_if_yes: z.string().regex(/^[a-z_]+$/).optional(),
             invalid_reply: msg.optional(),
           })
           .refine((s) => !s.validate || s.invalid_reply, { message: 'invalid_reply is required with validate' })
+          .refine((s) => !s.flag_if_yes || s.validate === 'yes_no', { message: 'flag_if_yes needs validate "yes_no"' })
           .strict(),
       )
       .min(1),
@@ -64,6 +67,8 @@ export interface Person {
   answers: Record<string, string>;
   banks: string[];
   married: boolean;
+  /** Things the client should check, e.g. pending_application. */
+  flags?: string[];
   consent_at?: string;
   cooldown_until?: string;
   id_image_url?: string;
@@ -126,6 +131,8 @@ export function validAnswer(kind: NonNullable<Flow['steps'][number]['validate']>
       return /^(0?[1-9]|1[0-2])[/-](0?[1-9]|[12]\d|3[01])[/-](\d{2}|\d{4})$/.test(text.trim());
     case 'number':
       return /\d/.test(text);
+    case 'yes_no':
+      return parseYesNo(text) !== undefined;
   }
 }
 
@@ -145,7 +152,7 @@ function goToStep(flow: Flow, p: Person, from: number): string {
 
 /** Feed one message (or several joined) from the person into the script. Pure: no I/O. */
 export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, cooldownDays: number): Advance {
-  const p: Person = { ...prev, answers: { ...prev.answers }, banks: [...prev.banks], updated_at: now.toISOString() };
+  const p: Person = { ...prev, answers: { ...prev.answers }, banks: [...prev.banks], flags: prev.flags && [...prev.flags], updated_at: now.toISOString() };
   const text = input.text.trim();
   const ask = (reply: string): Advance => ({ person: p, reply });
 
@@ -203,6 +210,7 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
       if (step.validate && !validAnswer(step.validate, text)) return ask(`${step.invalid_reply}\n\n${step.prompt}`);
       p.answers[step.key] = text;
       if (step.sets_married) p.married = MARRIED.test(text);
+      if (step.flag_if_yes && parseYesNo(text) === 'yes') p.flags = [...new Set([...(p.flags ?? []), step.flag_if_yes])];
       return ask(goToStep(flow, p, p.step + 1));
     }
 

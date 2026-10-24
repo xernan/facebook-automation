@@ -110,6 +110,7 @@ export class FlowStore {
       consent_at: person.consent_at,
       banks: person.banks,
       married: person.married,
+      flags: person.flags ?? [],
       answers: person.answers,
       id_image_file: idImage,
     };

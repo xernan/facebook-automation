@@ -354,3 +354,41 @@ describe('validAnswer', () => {
     expect(() => flowSchema.parse({ ...flow, steps: [{ key: 'a', prompt: 'x', validate: 'email' }] })).toThrow();
   });
 });
+
+describe('pending-application question (EastWest returns: duplicate / with pending app)', () => {
+  const f = flowSchema.parse({
+    ...flow,
+    steps: [
+      { key: 'pending_application', prompt: 'Pending app?', validate: 'yes_no', invalid_reply: 'Oo o Hindi lang po.', flag_if_yes: 'pending_application' },
+      ...flow.steps,
+    ],
+  });
+  const go = (...answers: string[]) => {
+    let r = advance(f, newPerson(NOW), { text: 'hi' }, NOW, 180);
+    for (const a of answers) r = advance(f, r.person, { text: a }, NOW, 180);
+    return r;
+  };
+
+  it('yes: continues and flags the lead', () => {
+    const r = go('oo', 'meron', 'BDO', 'oo meron sa BPI');
+    expect(r.person.stage).toBe('steps');
+    expect(r.person.flags).toEqual(['pending_application']);
+    expect(r.reply).toBe(flow.steps[0]!.prompt);
+  });
+
+  it('no: continues without a flag', () => {
+    const r = go('oo', 'meron', 'BDO', 'wala');
+    expect(r.person.flags ?? []).toEqual([]);
+    expect(r.person.stage).toBe('steps');
+  });
+
+  it('unclear: asked again, nothing saved', () => {
+    const r = go('oo', 'meron', 'BDO', 'siguro?');
+    expect(r.person.answers.pending_application).toBeUndefined();
+    expect(r.reply).toBe('Oo o Hindi lang po.\n\nPending app?');
+  });
+
+  it('flag_if_yes without yes_no is refused', () => {
+    expect(() => flowSchema.parse({ ...flow, steps: [{ key: 'a', prompt: 'x', flag_if_yes: 'a' }] })).toThrow();
+  });
+});
