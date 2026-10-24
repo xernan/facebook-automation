@@ -1,0 +1,87 @@
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createDashboard, safeFile } from '../src/dashboard.js';
+
+const servers: { close: () => void }[] = [];
+afterEach(() => servers.splice(0).forEach((s) => s.close()));
+
+async function start() {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dash-'));
+  const folder = '2026-10-25 Juan Dela Cruz';
+  mkdirSync(path.join(dir, 'applicants', folder), { recursive: true });
+  writeFileSync(
+    path.join(dir, 'applicants', folder, 'details.json'),
+    JSON.stringify({ completed_at: '2026-10-25T13:00:00Z', data: { full_name: 'Juan Dela Cruz', mobile: '0917' }, missing: ['TIN'], defaults: [], printed: false }),
+  );
+  writeFileSync(path.join(dir, 'applicants', folder, 'EastWest.pdf'), '%PDF-1.4 test');
+  // Port 0 first to learn a free port, then the dashboard checks Host against it.
+  const probe = createDashboard({ flowDir: dir, templatesDir: dir, port: 0 });
+  await new Promise<void>((r) => probe.server.listen(0, '127.0.0.1', r));
+  const port = (probe.server.address() as AddressInfo).port;
+  probe.server.close();
+  const d = createDashboard({ flowDir: dir, templatesDir: dir, port, token: 'tok' });
+  await new Promise<void>((r) => d.server.listen(port, '127.0.0.1', r));
+  servers.push(d.server);
+  const base = `http://127.0.0.1:${port}`;
+  return { dir, folder, base };
+}
+
+describe('dashboard', () => {
+  it('lists applicants with their missing items and files', async () => {
+    const { base } = await start();
+    const s = await (await fetch(`${base}/api/state`)).json();
+    expect(s.applicants).toHaveLength(1);
+    expect(s.applicants[0].name).toBe('Juan Dela Cruz');
+    expect(s.applicants[0].missing_list).toEqual(['TIN']);
+    expect(s.applicants[0].files).toEqual(['EastWest.pdf']);
+  });
+
+  it('serves files only from inside an applicant folder', async () => {
+    const { base, folder } = await start();
+    expect((await fetch(`${base}/file?folder=${encodeURIComponent(folder)}&name=EastWest.pdf`)).status).toBe(200);
+    expect((await fetch(`${base}/file?folder=..&name=.env`)).status).toBe(404);
+    expect((await fetch(`${base}/file?folder=${encodeURIComponent(folder)}&name=details.json`)).status).toBe(404);
+  });
+
+  it('changes need the page token (another website cannot post here)', async () => {
+    const { base, dir } = await start();
+    const body = JSON.stringify({ agent_name: 'X' });
+    expect((await fetch(`${base}/api/settings`, { method: 'POST', body })).status).toBe(403);
+    expect((await fetch(`${base}/api/settings`, { method: 'POST', body, headers: { 'x-token': 'bad' } })).status).toBe(403);
+    const ok = await fetch(`${base}/api/settings`, { method: 'POST', body, headers: { 'x-token': 'tok' } });
+    expect(ok.status).toBe(200);
+    expect(JSON.parse(readFileSync(path.join(dir, 'settings.json'), 'utf8')).agent_name).toBe('X');
+  });
+
+  it('refuses other Host names (DNS rebinding)', async () => {
+    const { base } = await start();
+    const http = await import('node:http');
+    const url = new URL(base);
+    const status = await new Promise<number>((resolve) =>
+      http.get({ host: url.hostname, port: url.port, path: '/api/state', headers: { host: 'evil.example.com' } }, (r) => resolve(r.statusCode!)),
+    );
+    expect(status).toBe(403);
+  });
+
+  it('marks printed and rejects bad settings', async () => {
+    const { base, dir, folder } = await start();
+    const r = await fetch(`${base}/api/printed`, { method: 'POST', body: JSON.stringify({ folder, printed: true }), headers: { 'x-token': 'tok' } });
+    expect(r.status).toBe(200);
+    expect(JSON.parse(readFileSync(path.join(dir, 'applicants', folder, 'details.json'), 'utf8')).printed).toBe(true);
+    const bad = await fetch(`${base}/api/settings`, { method: 'POST', body: JSON.stringify({ text_uniform_size: 99 }), headers: { 'x-token': 'tok' } });
+    expect(bad.status).toBe(400);
+  });
+
+  it('safeFile stays inside applicants/<folder>/', () => {
+    const d = '/data';
+    expect(safeFile(d, 'A', 'x.pdf')).toBe(path.resolve(d, 'applicants', 'A', 'x.pdf'));
+    expect(safeFile(d, 'A', '../B/x.pdf')).toBeUndefined();
+    expect(safeFile(d, '..', 'state.json')).toBeUndefined();
+    expect(safeFile(d, 'A/sub', 'x.pdf')).toBeUndefined();
+    expect(safeFile(d, 'A', '..\\B\\x.pdf')).toBeUndefined();
+    expect(safeFile(d, 'A\\..\\B', 'x.pdf')).toBeUndefined();
+  });
+});

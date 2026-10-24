@@ -49,6 +49,7 @@ export const configSchema = z.object({
   FB_WATCH_INTERVAL_SEC: intIn(30, 10, 600),
   FB_WATCH_CLAUDE_TIMEOUT_MIN: intIn(5, 1, 30),
   FB_WATCH_CLAUDE_BIN: z.string().optional(),
+  FB_DASHBOARD_PORT: intIn(8790, 1024, 65535),
 });
 
 export type RawConfig = z.infer<typeof configSchema>;

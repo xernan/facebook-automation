@@ -2,7 +2,9 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import ExcelJS from 'exceljs';
 import { BANKS, buildApplication, settingsSchema, type Details, type Lead, type Settings } from './application.js';
+import { PDFDocument } from 'pdf-lib';
 import { fillBankPdf } from './pdf.js';
+import { printPdf } from './printer.js';
 
 // Finished applications on this computer only (personal data; never shown to the client):
 //   <flowDir>/applicants/<YYYY-MM-DD> <Name>/  bank PDFs, ID photos, details.json, MISSING.txt
@@ -67,9 +69,29 @@ export async function finalizeLead(
     await fs.writeFile(path.join(folder, file), out.bytes);
     pdfs.push(file);
   }
+  // ID photos: copies, plus one printable PDF with every photo (one per page, fitted with a margin).
+  const idPdf = await PDFDocument.create();
   for (const [i, photo] of (lead.id_photos ?? []).entries()) {
     const src = path.join(flowDir, photo);
-    await fs.copyFile(src, path.join(folder, `ID-${i + 1}${path.extname(photo)}`)).catch(() => app.missing.push(`ID photo ${i + 1} file missing`));
+    try {
+      const bytes = await fs.readFile(src);
+      await fs.writeFile(path.join(folder, `ID-${i + 1}${path.extname(photo)}`), bytes);
+      const ext = path.extname(photo).toLowerCase();
+      const img = ext === '.png' ? await idPdf.embedPng(bytes) : ext === '.jpg' || ext === '.jpeg' ? await idPdf.embedJpg(bytes) : undefined;
+      if (!img) {
+        app.missing.push(`ID photo ${i + 1} is not JPG/PNG: print it from the folder`);
+        continue;
+      }
+      const page = idPdf.addPage([612, 792]);
+      const scale = Math.min(540 / img.width, 720 / img.height, 1.5);
+      page.drawImage(img, { x: (612 - img.width * scale) / 2, y: 792 - 36 - img.height * scale, width: img.width * scale, height: img.height * scale });
+    } catch {
+      app.missing.push(`ID photo ${i + 1} file missing`);
+    }
+  }
+  if (idPdf.getPageCount() > 0) {
+    await fs.writeFile(path.join(folder, 'ID photos.pdf'), await idPdf.save());
+    pdfs.push('ID photos.pdf');
   }
   const summary = {
     psid: lead.psid,
@@ -95,6 +117,20 @@ export async function finalizeLead(
     await writeClientsXlsx(flowDir);
   } catch (err) {
     warning = err instanceof Error ? err.message : String(err);
+  }
+  // Auto-print (owner setting): bank forms first, then the ID sheet. The PC must be on.
+  if (settings.auto_print && settings.printer && pdfs.length > 0) {
+    try {
+      for (const f of [...pdfs].sort((a, b) => Number(a.startsWith('ID')) - Number(b.startsWith('ID')))) {
+        await printPdf(path.join(folder, f), settings.printer);
+        await new Promise((r) => setTimeout(r, 4000));
+      }
+      summary.printed = true;
+      await fs.writeFile(path.join(folder, 'details.json'), JSON.stringify({ ...summary, printed_at: new Date().toISOString() }, null, 2), 'utf8');
+      await writeClientsXlsx(flowDir).catch(() => undefined);
+    } catch (err) {
+      warning = `Auto-print failed: ${err instanceof Error ? err.message : String(err)}`;
+    }
   }
   return { folder: path.relative(flowDir, folder), pdfs, missing: app.missing, defaults: app.defaults, ...(warning ? { warning } : {}) };
 }
