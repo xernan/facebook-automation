@@ -37,6 +37,12 @@
 - QA pass 2 (2026-10-24, 84 tests): cut-off answer to a write now maybe-done (no double post),
   base64 cursors, doctor OK when only Lead Ads perms missing. Live read smoke test of all main tools OK. PR #5.
 
+- Messenger application flow (2026-10-24, staging, not live yet): fb_flow_pending/answer/status/reset +
+  `npm run watch` (polls, wakes headless Claude with flow tools only). Owner texts in git-ignored flow.json.
+  Qualifier is locked owner logic (no card -> 180-day cooldown; all 4 excluded banks -> stop). No existing-card
+  details collected, no signature (owner decision). 121 tests. Next: owner tests the flow in chat, then set
+  FB_FLOW_PAGE_ID + FB_FLOW_DIR in .env (owner), restart Claude, run the watcher at logon.
+
 ## Open (needs owner)
 - GitHub done 2026-10-24: PR #1 merged to main; old cardmaxmarketing-blip repo deleted.
 - Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
