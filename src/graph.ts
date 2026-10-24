@@ -261,6 +261,10 @@ export class GraphClient {
   }
 
   async post(pageId: string, path: string, params?: Params, form?: FormData) {
+    // Messenger stays off until the owner turns it on (FB_MESSENGER_LIVE=true): no message, bot or by hand, before that.
+    if (/\/messages$/.test(path) && !this.cfg.FB_MESSENGER_LIVE) {
+      throw new Error('Messenger sending is off (owner rule: not live until our wording is checked against Meta standards). Set FB_MESSENGER_LIVE=true in .env only with the owner OK.');
+    }
     // Community Standards guard: nothing that reads like phishing or a credit scam reaches Facebook.
     assertSafeContent(params as Record<string, unknown> | undefined);
     if (form) assertSafeContent(Object.fromEntries([...form.entries()].filter(([, v]) => typeof v === 'string')));

@@ -59,6 +59,7 @@ async function main() {
   const pageId = ctx.cfg.FB_FLOW_PAGE_ID;
   if (!pageId) throw new Error('Set FB_FLOW_PAGE_ID in .env (the Page this watcher answers for).');
   if (!ctx.cfg.FB_WRITE_ENABLED) throw new Error('FB_WRITE_ENABLED must be true for the watcher to reply.');
+  if (!ctx.cfg.FB_MESSENGER_LIVE) throw new Error('Messenger is not live (FB_MESSENGER_LIVE is off). Owner rule: not live until our wording is checked against Meta standards.');
 
   const mcpConfig = path.join(tmpdir(), 'facebook-automation-watch-mcp.json');
   writeFileSync(

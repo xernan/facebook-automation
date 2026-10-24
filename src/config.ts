@@ -20,6 +20,8 @@ export const configSchema = z.object({
   FB_APP_ID: z.string().regex(/^\d+$/).optional(),
   FB_GRAPH_VERSION: z.string().regex(/^v\d{2,3}\.0$/).default('v26.0'),
   FB_WRITE_ENABLED: boolFlag(false),
+  /** Messenger replies (bot and fb_send_message). Off until the owner OKs our wording against Meta standards. */
+  FB_MESSENGER_LIVE: boolFlag(false),
   FB_READ_RATE_PER_MIN: intIn(120, 1, 600),
   FB_WRITE_RATE_PER_MIN: intIn(10, 1, 60),
   FB_HTTP_TIMEOUT_MS: intIn(15000, 1000, 60000),

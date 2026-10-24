@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { assertSafeContent, contentProblem } from '../src/contentguard.js';
 import { loadFlow } from '../src/flowstore.js';
 import { GraphClient } from '../src/graph.js';
+import { testConfig } from './helpers.js';
 
 describe('Community Standards guard', () => {
   it('refuses the greeting that got the Page restricted, and other phishing/scam wording', () => {
@@ -52,7 +53,19 @@ describe('Community Standards guard', () => {
   });
 
   it('graph.post refuses before any network call', async () => {
-    const g = Object.create(GraphClient.prototype) as GraphClient;
+    const fetchFn = async () => {
+      throw new Error('network must not be called');
+    };
+    const g = new GraphClient(testConfig(), fetchFn as any);
     await expect(g.post('1', '1/messages', { message: JSON.stringify({ text: 'Give me your CVV' }) })).rejects.toThrow(/Not sent/);
+    await expect(g.post('1', '1/feed', { message: 'Guaranteed approval' })).rejects.toThrow(/Not sent/);
+  });
+
+  it('Messenger is off unless the owner turns it on (default), even for a clean message', async () => {
+    const fetchFn = async () => {
+      throw new Error('network must not be called');
+    };
+    const off = new GraphClient(testConfig({ FB_MESSENGER_LIVE: '' }), fetchFn as any);
+    await expect(off.post('1', '1/messages', { message: JSON.stringify({ text: 'Hello' }) })).rejects.toThrow(/Messenger sending is off/);
   });
 });
