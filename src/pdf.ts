@@ -1,4 +1,8 @@
-import { PDFCheckBox, PDFDocument, PDFDropdown, PDFRadioGroup, PDFTextField } from 'pdf-lib';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import fontkit from '@pdf-lib/fontkit';
+import { PDFCheckBox, PDFDocument, PDFDropdown, PDFRadioGroup, PDFTextField, type PDFFont } from 'pdf-lib';
 import type { BankKey, BuiltApplication, Settings } from './application.js';
 
 // Fills a bank's PDF template. Box names say what goes in them (same naming as the card app's templates):
@@ -48,6 +52,25 @@ export function combText(text: string, boxes: number): string {
 }
 
 const DATE_KEYS = new Set(['birthday', 'date_hired']);
+
+// Answers print in a narrow, thick letter (Archivo Narrow, SIL Open Font License: fonts/OFL.txt) so they are easy
+// to read on paper and long names/addresses still fit their boxes.
+const FONT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'fonts');
+const fontCache = new Map<string, Uint8Array>();
+function fontBytes(bold: boolean): Uint8Array {
+  const file = bold ? 'ArchivoNarrow-Bold.ttf' : 'ArchivoNarrow-Regular.ttf';
+  if (!fontCache.has(file)) fontCache.set(file, readFileSync(path.join(FONT_DIR, file)));
+  return fontCache.get(file)!;
+}
+
+const MIN_SIZE = 4;
+/** As large as the box allows (80% of its height, text fits its width), up to `largest`. */
+export function fitFontSize(font: PDFFont, text: string, box: { width: number; height: number }, cells: number, largest: number): number {
+  const room = cells ? box.width / cells - 1 : box.width - 4;
+  const textWidth = cells ? Math.max(...[...text].map((ch) => font.widthOfTextAtSize(ch, 1))) : font.widthOfTextAtSize(text, 1);
+  const size = Math.min(largest, box.height * 0.8, textWidth > 0 ? room / textWidth : largest);
+  return Math.max(MIN_SIZE, Math.floor(size * 2) / 2);
+}
 
 export async function fillBankPdf(
   bank: BankKey,
@@ -119,6 +142,21 @@ export async function fillBankPdf(
       }
     } catch {
       // A box the template cannot take (font, size) stays blank; the rest still fill.
+    }
+  }
+  // Style every filled answer: bold (setting) and as big as its box allows, up to the max size (setting).
+  pdf.registerFontkit(fontkit);
+  const font = await pdf.embedFont(fontBytes(settings.text_bold), { subset: true });
+  for (const field of form.getFields()) {
+    if (!(field instanceof PDFTextField)) continue;
+    const t = field.getText();
+    if (!t) continue;
+    try {
+      const rect = field.acroField.getWidgets()[0]!.getRectangle();
+      field.setFontSize(fitFontSize(font, t, rect, field.isCombed() ? (field.getMaxLength() ?? 0) : 0, settings.text_max_size));
+      field.updateAppearances(font);
+    } catch {
+      // Keeps the template's own look for a box that cannot be restyled.
     }
   }
   return { bytes: await pdf.save(), filled };

@@ -55,6 +55,9 @@ export const settingsSchema = z
     /** Card choice box per bank, e.g. metrobank: "cashbackvisa" (the option name in the PDF). */
     card_choice: z.partialRecord(z.enum(BANKS), z.string().regex(/^[a-z0-9]+$/)).default({}),
     auto_print: z.boolean().default(false),
+    /** How answers look on paper: bold, and as big as each box allows up to this size (pt). */
+    text_bold: z.boolean().default(true),
+    text_max_size: z.number().min(6).max(20).default(14),
     printer: z.string().max(200).default(''),
   })
   .strict();
