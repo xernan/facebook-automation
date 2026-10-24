@@ -31,16 +31,15 @@
   write timeout (key stays failed), same idempotency key reused for other action (now refused),
   comment leads only first 100 per post (now pages), cursors >500 chars broke page 2 (live repro).
   Live negative paths OK: unknown page, other page's post, retired metric.
+- Low fixes 2026-10-24: unknown page id refresh cooldown (FB_PAGES_REFRESH_COOLDOWN_SEC), Messenger
+  lead page size is config (FB_LEADS_CHATS_PER_PAGE). 78 tests. Auto-resume cron every ~3h (session-only).
 
 ## Open (needs owner)
-- Low, not fixed: unknown page_id triggers a full page-list refresh each call; messenger leads
-  page size fixed at 25 (Meta cap with nested messages).
 - GitHub done 2026-10-24: PR #1 merged to main; old cardmaxmarketing-blip repo deleted.
 - Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
-- Start a NEW Claude chat so the facebook MCP tools load (this session started before .env existed).
 
 ## Next
-1. Owner setup -> doctor -> read-only smoke test -> writes on test Page.
-2. Merge PR #2 (staging -> main, CI green). Claude Desktop: facebook server added to its config
+1. Owner: confirm facebook server shows in Claude Desktop (Settings > Developer).
+2. PR #2 merged 2026-10-24, main CI green. Claude Desktop: facebook server added to its config
    2026-10-24 (backup .bak-2026-10-24 beside it); owner must fully quit + reopen Desktop.
 3. Phase 2 options (owner decides): Instagram, Marketing API (ads), lead alerts.
