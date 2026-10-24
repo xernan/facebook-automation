@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { advance, newPerson, parseYesNo, type Person } from '../src/flow.js';
+import { advance, flowSchema, newPerson, parseYesNo, validAnswer, type Person } from '../src/flow.js';
 import { FlowStore, loadFlow } from '../src/flowstore.js';
 import { callTool, tools } from '../src/tools.js';
 import { param, testCtx, type Call } from './helpers.js';
@@ -91,24 +91,39 @@ describe('advance (script)', () => {
   });
 
   it('single applicant skips spouse; ID must be a photo; completes', () => {
-    let r = walk('yes', 'oo', 'BDO', 'Juan Cruz, single', '09171234567');
+    let r = walk('yes', 'oo', 'BDO', 'Juan Cruz', 'single', '09171234567');
     expect(r.person.stage).toBe('id_photo');
     r = run(r.person, 'eto po ID number ko 123');
     expect(r.reply).toBe(flow.id_photo.need_image_reply);
     r = run(r.person, '', 'https://scontent.fbcdn.net/x.jpg');
     expect(r.completed).toBe(true);
     expect(r.person.stage).toBe('done');
-    expect(r.person.answers).toEqual({ personal: 'Juan Cruz, single', contact: '09171234567' });
+    expect(r.person.answers).toEqual({ full_name: 'Juan Cruz', civil_status: 'single', mobile: '09171234567' });
   });
 
   it('married applicant gets the spouse question', () => {
-    const r = walk('yes', 'oo', 'BDO', 'Juan Cruz, married', '09171234567');
+    const r = walk('yes', 'oo', 'BDO', 'Juan Cruz', 'married', '09171234567');
     expect(r.person.stage).toBe('steps');
-    expect(r.reply).toBe(flow.steps[2]!.prompt);
+    expect(r.reply).toBe(flow.steps[3]!.prompt);
+  });
+
+  it('only the civil status answer decides married (a name with "kasal" does not)', () => {
+    const r = walk('yes', 'oo', 'BDO', 'Kasal Bakeshop owner', 'single', '09171234567');
+    expect(r.person.married).toBe(false);
+    expect(r.person.stage).toBe('id_photo');
+  });
+
+  it('one question per message; a bad mobile number is asked again', () => {
+    const r = walk('yes', 'oo', 'BDO', 'Juan Cruz', 'single', 'wala akong number');
+    expect(r.person.stage).toBe('steps');
+    expect(r.person.answers.mobile).toBeUndefined();
+    expect(r.reply).toBe(`${flow.steps[2]!.invalid_reply}
+
+${flow.steps[2]!.prompt}`);
   });
 
   it('after done, the script stays quiet (Claude answers)', () => {
-    const r = walk('yes', 'oo', 'BDO', 'single', '0917', { image: 'https://x.fbcdn.net/a.jpg' });
+    const r = walk('yes', 'oo', 'BDO', 'Juan', 'single', '09171234567', { image: 'https://x.fbcdn.net/a.jpg' });
     expect(run(r.person, 'salamat').reply).toBeUndefined();
   });
 });
@@ -250,9 +265,10 @@ describe('flow tools', () => {
       m_2: { text: 'yes' },
       m_3: { text: 'oo' },
       m_4: { text: 'BDO' },
-      m_5: { text: 'Juan, single' },
-      m_6: { text: '09171234567' },
-      m_7: { image: 'https://evil.example.com/id.jpg' },
+      m_5: { text: 'Juan' },
+      m_6: { text: 'single' },
+      m_7: { text: '09171234567' },
+      m_8: { image: 'https://evil.example.com/id.jpg' },
     };
     const { ctx, dir } = setup(msgs);
     let r: any;
@@ -261,7 +277,7 @@ describe('flow tools', () => {
     expect(r.lead_saved).toMatch(/^lead-999-/);
     const lead = JSON.parse(readFileSync(path.join(dir, r.lead_saved), 'utf8'));
     expect(lead.banks).toEqual(['BDO']);
-    expect(lead.answers.contact).toBe('09171234567');
+    expect(lead.answers.mobile).toBe('09171234567');
     expect(lead.consent_at).toBeTruthy();
     expect(lead.id_image_file).toBeUndefined();
     expect(existsSync(path.join(dir, 'valid_ids'))).toBe(false);
@@ -313,5 +329,28 @@ describe('watcher prompt', () => {
     expect(p).toContain('page_id 123');
     expect(p).toMatch(/Never ask for a card number, CVV, OTP, PIN/);
     expect(p).toMatch(/Never promise approval/);
+  });
+});
+
+describe('validAnswer', () => {
+  it.each([
+    ['mobile', '0917 123 4567', true],
+    ['mobile', '+63 917-123-4567', true],
+    ['mobile', '12345', false],
+    ['email', 'juan@gmail.com', true],
+    ['email', 'juan at gmail', false],
+    ['tin', '123-456-789', true],
+    ['tin', '123-456-789-000', true],
+    ['tin', '1234', false],
+    ['sss_gsis', '34-1234567-8', true],
+    ['sss_gsis', '123', false],
+    ['date', '01/15/2020', true],
+    ['date', '13/40/20', false],
+    ['number', '5 years', true],
+    ['number', 'matagal na', false],
+  ] as const)('%s "%s" -> %s', (kind, text, ok) => expect(validAnswer(kind, text)).toBe(ok));
+
+  it('a flow step with validate but no invalid_reply is refused', () => {
+    expect(() => flowSchema.parse({ ...flow, steps: [{ key: 'a', prompt: 'x', validate: 'email' }] })).toThrow();
   });
 });

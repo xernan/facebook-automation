@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { extractBanks } from './leads.js';
+import { extractBanks, extractEmails, extractPhones } from './leads.js';
 
 // Messenger application flow: a fixed script the Page follows with each person, one state per person.
 // The qualifier rules (no card -> reject with cooldown, all excluded banks -> stop) are decided here in
@@ -28,7 +28,13 @@ export const flowSchema = z
             key: z.string().regex(/^[a-z_]+$/),
             prompt: msg,
             only_if_married: z.boolean().optional(),
+            /** This answer is the civil status: "married"/"kasal" turns on the only_if_married questions. */
+            sets_married: z.boolean().optional(),
+            /** Check the answer's shape; on a bad answer send invalid_reply and ask again. */
+            validate: z.enum(['mobile', 'email', 'tin', 'sss_gsis', 'date', 'number']).optional(),
+            invalid_reply: msg.optional(),
           })
+          .refine((s) => !s.validate || s.invalid_reply, { message: 'invalid_reply is required with validate' })
           .strict(),
       )
       .min(1),
@@ -103,6 +109,26 @@ export function parseYesNo(text: string): 'yes' | 'no' | undefined {
 
 const MARRIED = /\b(married|kasal|may\s+asawa)\b/i;
 
+const digits = (t: string) => t.replace(/\D/g, '');
+
+/** Shape checks for one-question answers. Lenient on spacing and dashes, strict on length. */
+export function validAnswer(kind: NonNullable<Flow['steps'][number]['validate']>, text: string): boolean {
+  switch (kind) {
+    case 'mobile':
+      return extractPhones(text).length === 1;
+    case 'email':
+      return extractEmails(text).length === 1;
+    case 'tin': // 9 digits, or 12 with branch code
+      return /^\d{9}(\d{3})?$/.test(digits(text));
+    case 'sss_gsis': // SSS 10 digits, GSIS 11
+      return /^\d{10,11}$/.test(digits(text));
+    case 'date': // mm/dd/yy or mm/dd/yyyy
+      return /^(0?[1-9]|1[0-2])[/-](0?[1-9]|[12]\d|3[01])[/-](\d{2}|\d{4})$/.test(text.trim());
+    case 'number':
+      return /\d/.test(text);
+  }
+}
+
 /** Moves `p` to the next question that applies from step `from` and returns its prompt (or the ID photo prompt). */
 function goToStep(flow: Flow, p: Person, from: number): string {
   let i = from;
@@ -174,8 +200,9 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
       const step = flow.steps[p.step];
       if (!step) return ask(goToStep(flow, p, p.step)); // flow file changed under this person
       if (!text) return ask(step.prompt);
+      if (step.validate && !validAnswer(step.validate, text)) return ask(`${step.invalid_reply}\n\n${step.prompt}`);
       p.answers[step.key] = text;
-      if (MARRIED.test(text)) p.married = true;
+      if (step.sets_married) p.married = MARRIED.test(text);
       return ask(goToStep(flow, p, p.step + 1));
     }
 

@@ -11,13 +11,35 @@
   "banks": {
     "prompt": "Which banks are your credit cards from? (e.g. BDO, BPI, Metrobank, RCBC, EastWest)",
     "unknown_reply": "Please type the bank names of your credit cards (e.g. BDO, BPI, Metrobank).",
-    "exclude_if_all": ["BPI", "Metrobank", "RCBC", "EastWest"],
+    "exclude_if_all": [
+      "BPI",
+      "Metrobank",
+      "RCBC",
+      "EastWest"
+    ],
     "excluded_reply": "Thank you, and congrats on all your credit cards!"
   },
   "steps": [
-    { "key": "personal", "prompt": "1) Full name (First, Middle, Last)\n2) Name to appear on card\n3) Birthday (mm/dd/yy) and place of birth\n4) Gender and civil status" },
-    { "key": "contact", "prompt": "1) Mobile number\n2) Email address\n3) Home phone (if any)" },
-    { "key": "spouse", "prompt": "Spouse: name, birthday, mobile number and occupation", "only_if_married": true }
+    {
+      "key": "full_name",
+      "prompt": "What is your full name? (First, Middle, Last)"
+    },
+    {
+      "key": "civil_status",
+      "prompt": "Civil status? (Single / Married / Separated / Widowed)",
+      "sets_married": true
+    },
+    {
+      "key": "mobile",
+      "prompt": "Mobile number?",
+      "validate": "mobile",
+      "invalid_reply": "That does not look like a PH mobile number (e.g. 0917 123 4567)."
+    },
+    {
+      "key": "spouse_name",
+      "prompt": "Spouse's full name?",
+      "only_if_married": true
+    }
   ],
   "id_photo": {
     "prompt": "Last step: please send a clear photo of one valid government ID.",
