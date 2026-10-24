@@ -15,6 +15,12 @@ const RULES: { re: RegExp; why: string }[] = [
   { re: /\b(guarantee[ds]?|garantisado|siguradong\s+approv\w*|sure\s+approv\w*|100\s*%\s*approv\w*|instant\s+approv\w*|auto\s*approv\w*)/i, why: 'promises approval (banks decide)' },
   { re: /\b(processing|application|upfront|advance|reservation)\s+fee\b/i, why: 'mentions an upfront fee' },
   { re: /\b(no\s+income|walang\s+income|kahit\s+walang\s+trabaho)\b/i, why: 'implies skipping bank requirements' },
+  // More scam-ad wording (Fraud, Scams and Deceptive Practices): fast/easy/pre-approval claims, skipping checks.
+  { re: /\b(pre-?approved|approved\s+(na\s+)?agad|easy\s+approv\w*|fast\s+approv\w*|madaling\s+ma-?approve)/i, why: 'promises approval (banks decide)' },
+  { re: /\b(no|walang)\s+(requirements?|credit\s+check)\b|\bkahit\s+(may\s+)?(bad\s+(credit|record)|blacklisted|delinquent)/i, why: 'implies skipping bank requirements' },
+  // Phishing-like asks (Cybersecurity): card or bank details, or a photo of the card itself.
+  { re: /\b(card|bank|account|billing)\s+details\b/i, why: 'mentions card or bank details (reads like phishing)' },
+  { re: /\b(photo|picture|pic|litrato|larawan)\s+(of\s+|ng\s+)?(your\s+|yung\s+|ang\s+)?(credit\s+)?card\b/i, why: 'asks for a photo of a card (reads like phishing)' },
   // Engagement bait (Meta demotes it): tag/share/vote/react prompts. A real question ("Alin ang gusto mo?") is fine.
   { re: /\b(i-?tag|tag)\s+(mo\s+)?(ang\s+)?(a|isang|your|mga)?\s*(friends?|kaibigan|kakilala|barkada)/i, why: 'asks people to tag friends (engagement bait)' },
   { re: /\b(i-?share|share)\s+(mo\s+)?(this\s+|ito\s+|na\s+)?(sa|with|to)\s+(your\s+|mga\s+)?(friends?|kaibigan|kakilala)/i, why: 'asks people to share (engagement bait)' },

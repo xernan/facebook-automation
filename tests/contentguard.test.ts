@@ -18,6 +18,15 @@ describe('Community Standards guard', () => {
     expect(contentProblem("Mother's maiden name?")).toBeDefined();
   });
 
+  it('refuses fast/easy/pre-approval claims, skipping checks, and card-detail or card-photo asks', () => {
+    for (const t of ['You are pre-approved!', 'Approved agad sa amin', 'Easy approval for all', 'Fast approval cards', 'Madaling ma-approve',
+      'No requirements needed', 'Walang credit check', 'Kahit may bad record pwede', 'Kahit blacklisted ok', 'Send your card details',
+      'PM your bank details', 'Send a photo of your credit card', 'Pakisend ang picture ng card mo'])
+      expect(contentProblem(t), t).toBeDefined();
+    for (const t of ['Your application has been approved', 'Annual fee vs NAFFL', 'Get these ready: 1 valid ID', 'Pakisend ang photo ng valid ID mo.', 'No annual fee for life'])
+      expect(contentProblem(t), t).toBeUndefined();
+  });
+
   it('allows the normal flow wording', () => {
     for (const t of [
       'Hi! Salamat sa pag-message sa CARD MAX. Tutulungan ka naming mag-apply ng credit card, libre.',
