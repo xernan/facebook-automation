@@ -100,7 +100,9 @@ export interface Lead {
 export interface BuiltApplication {
   /** Banks to make a PDF for: the ones the person has no card with. */
   banks: BankKey[];
-  /** Values by PDF key (first_name, civil_status, ...). */
+  /** The Default Form: what the owner sees and can edit in the dashboard. Single source for the PDFs. */
+  form: AppForm;
+  /** Values by PDF key (first_name, civil_status, ...), built from the form. */
   data: Record<string, string>;
   /** Bank-only boxes per bank: stem -> true (tick) or text. */
   bankOnly: Record<BankKey, Record<string, string | true>>;
@@ -129,121 +131,161 @@ export function ageOn(birthday: string, on: Date): number {
 
 const CIVIL: Record<string, string> = { single: 'Single', married: 'Married', separated: 'Separated', widowed: 'Widowed', widow: 'Widowed', kasal: 'Married' };
 
-export function buildApplication(lead: Lead, details: Details, now: Date): BuiltApplication {
-  const a = lead.answers;
-  const missing: string[] = [];
-  const defaults: string[] = [];
-  const data: Record<string, string> = {};
-  const put = (key: string, value: string | number | undefined, label?: string) => {
-    if (value === undefined || value === '') {
-      if (label) missing.push(label);
-      return;
-    }
-    data[key] = String(value);
+// ---- the Default Form ---------------------------------------------------------------------------------------
+const s = (max = 300) => z.string().max(max).optional();
+const formAddr = z
+  .object({ street: s(), barangay: s(100), city: s(100), province: s(100), zip: s(10), zip_sure: z.boolean().optional() })
+  .strict();
+
+/** Same sections as the card app's Default Form (Personal, Address, Employment, References, Other card). */
+export const formSchema = z
+  .object({
+    first_name: s(80),
+    middle_name: s(80),
+    last_name: s(80),
+    suffix: s(10),
+    name_on_card: s(40),
+    birthday: s(10),
+    gender: s(10),
+    nationality: s(40),
+    birth_town: s(120),
+    civil_status: s(20),
+    email: s(120),
+    mobile: s(30),
+    home_phone: s(30),
+    mother_maiden_name: s(120),
+    mother_name_parts: nameParts.optional(),
+    spouse_name: s(120),
+    spouse_name_parts: nameParts.optional(),
+    home: formAddr.optional(),
+    home_ownership: s(30),
+    years_of_stay: s(10),
+    employer: s(150),
+    position: s(100),
+    department: s(100),
+    industry: s(100),
+    employment_type: s(30),
+    company: formAddr.optional(),
+    employer_phone: s(40),
+    length_of_service: s(30),
+    total_years_working: s(10),
+    date_hired: s(10),
+    gross_income: s(30),
+    tin_number: s(20),
+    gsis_sss_number: s(20),
+    other_card_company: s(60),
+    other_card_number: s(30),
+    ref_name: s(120),
+    ref_relationship: s(60),
+    ref_mobile: s(30),
+  })
+  .strict();
+export type AppForm = z.infer<typeof formSchema>;
+
+const has = (v: string | undefined): v is string => v !== undefined && v.trim() !== '';
+const join = (...parts: (string | undefined)[]) => parts.filter(has).join(', ');
+
+/** PDF data from the form: the form's own values plus the combined ones some banks print. */
+export function formToData(f: AppForm): Record<string, string> {
+  const d: Record<string, string> = {};
+  const put = (k: string, v: string | number | undefined) => {
+    if (v !== undefined && String(v).trim() !== '') d[k] = String(v).trim();
   };
-
-  // Names, birthday, sex: from the ID only.
-  put('first_name', details.first_name, 'First name (ID)');
-  put('middle_name', details.middle_name);
-  put('last_name', details.last_name, 'Last name (ID)');
-  put('suffix', details.suffix);
-  const full = [details.first_name, details.middle_name, details.last_name, details.suffix].filter(Boolean).join(' ');
-  put('full_name', full || undefined);
-  put('name_on_card', [details.first_name, details.middle_name?.[0] ? `${details.middle_name[0]}.` : '', details.last_name].filter(Boolean).join(' ').toUpperCase() || undefined);
-  put('birthday', details.birthday, 'Birthday (ID)');
-  put('gender', details.gender, 'Gender (ID)');
-  put('nationality', details.nationality ?? undefined, 'Nationality (ID)');
-  if (details.nationality && norm(details.nationality) !== 'filipino') put('nationality_other', details.nationality);
-
-  put('birth_town', a.place_of_birth, 'Place of birth');
-  const civil = CIVIL[norm(a.civil_status ?? '')];
-  put('civil_status', civil, 'Civil status');
-  put('email', a.email, 'Email');
-  put('mobile', a.mobile, 'Mobile number');
-  put('mother_maiden_name', a.mothers_maiden_name, "Mother's maiden name");
-
-  // Home address: their answer split by Claude, or the ID address when they gave none.
-  const h = details.home;
-  put('street', h?.street, 'Home street');
-  put('barangay', h?.barangay, 'Home barangay');
-  put('city_province', [h?.city, h?.province].filter(Boolean).join(', ') || undefined, 'Home city/province');
-  if (h?.city && !h.province) missing.push('Home province');
-  put('zipcode', h?.zip, 'Home zip code');
-  if (h?.zip && h.zip_sure === false) missing.push('Home zip code (check: city has several)');
-  put('home_address', [h?.street, h?.barangay, h?.city, h?.province].filter(Boolean).join(', ') || undefined);
-  if (details.home_from_id) defaults.push('Home address taken from the ID');
-  data.permanent_same_as_present = 'yes';
-  put('permanent_address', data.home_address);
-  put('permanent_zip_code', data.zipcode);
-
-  // Owner rules: ownership and years of stay from age (birthday on the ID).
-  const age = details.birthday ? ageOn(details.birthday, now) : undefined;
-  if (age !== undefined) {
-    const withParents = age <= 25;
-    put('home_ownership', withParents ? 'Living with parents' : 'Owned');
-    put('years_of_stay', withParents ? age : Math.max(age - 21, 0));
-    put('permanent_length_of_stay', data.years_of_stay);
-    put('total_years_working', Math.max(age - 21, 0));
-    defaults.push('Home ownership, years of stay and total years working computed from age');
-  } else {
-    missing.push('Home ownership / years of stay / total years working (need birthday from ID)');
-  }
-
-  // Work.
-  put('employer', a.employer_name, 'Employer');
-  put('position', a.position, 'Position');
-  put('department', details.department, 'Department');
-  put('industry', details.industry, 'Nature of business');
-  put('employment_type', details.employment_type, 'Employment type');
-  if (details.employment_type) put('employment_status', details.employment_type === 'Self-employed' ? undefined : 'Employed');
-  const c = details.company;
-  put('company_street', c?.street, 'Office street/building');
-  put('company_barangay', c?.barangay, 'Office barangay');
-  put('company_city_province', [c?.city, c?.province].filter(Boolean).join(', ') || undefined, 'Office city/province');
-  if (c?.city && !c.province) missing.push('Office province');
-  if (!c?.zip) missing.push('Office zip code');
-  else if (c.zip_sure === false) missing.push('Office zip code (check: city has several)');
-  put('company_address', [c?.street, c?.barangay, c?.city, c?.province].filter(Boolean).join(', ') || undefined);
-  put('employer_phone', details.employer_phone, 'Office phone (not found)');
-  const yrs = yearsFrom(a.years_with_employer);
-  put('length_of_service', yrs === undefined ? undefined : `${yrs} ${yrs === 1 ? 'year' : 'years'}`, 'Years with employer');
-  if (yrs !== undefined) {
-    // Owner rule: year = completion year - years with employer; month = the month they finished applying.
-    const done = new Date(lead.completed_at);
-    put('date_hired', `${done.getFullYear() - yrs}-${String(done.getMonth() + 1).padStart(2, '0')}-01`);
-    defaults.push('Date hired = completion month, year minus years with employer');
-  }
-
-  // Not asked on purpose (owner): income and government numbers. Never invented.
-  put('gross_income', undefined, 'Gross annual income');
-  put('tin_number', details.tin, 'TIN');
-  missing.push('SSS/GSIS number');
-
-  // Existing card: issuer from their answer; number is never asked (owner rule: "Refuse to give").
-  put('other_card_company', lead.banks[0]);
-  data.other_card_number = 'Refuse to give';
-
-  if (lead.married) put('spouse_name', a.spouse_name, 'Spouse name');
+  for (const k of [
+    'first_name', 'middle_name', 'last_name', 'suffix', 'name_on_card', 'birthday', 'gender', 'nationality', 'birth_town',
+    'civil_status', 'email', 'mobile', 'home_phone', 'mother_maiden_name', 'home_ownership', 'years_of_stay', 'employer',
+    'position', 'department', 'industry', 'employment_type', 'employer_phone', 'length_of_service', 'total_years_working',
+    'date_hired', 'gross_income', 'tin_number', 'gsis_sss_number', 'other_card_company', 'other_card_number', 'ref_name',
+    'ref_relationship', 'ref_mobile',
+  ] as const) put(k, f[k]);
+  put('full_name', [f.first_name, f.middle_name, f.last_name, f.suffix].filter(has).join(' '));
+  if (f.nationality && norm(f.nationality) !== 'filipino') put('nationality_other', f.nationality);
+  const h = f.home ?? {};
+  put('street', h.street);
+  put('barangay', h.barangay);
+  put('city_province', join(h.city, h.province));
+  put('zipcode', h.zip);
+  put('home_address', join(h.street, h.barangay, h.city, h.province));
+  d.permanent_same_as_present = 'yes';
+  put('permanent_address', d.home_address);
+  put('permanent_zip_code', d.zipcode);
+  put('permanent_length_of_stay', d.years_of_stay);
+  const c = f.company ?? {};
+  put('company_street', c.street);
+  put('company_barangay', c.barangay);
+  put('company_city_province', join(c.city, c.province));
+  put('company_address', join(c.street, c.barangay, c.city, c.province));
+  if (f.employment_type) put('employment_status', f.employment_type === 'Self-employed' ? undefined : 'Employed');
+  if (f.civil_status === 'Married') put('spouse_name', f.spouse_name);
   for (const [key, given] of [
-    ['mother_maiden_name', details.mother_name_parts],
-    ['spouse_name', details.spouse_name_parts],
+    ['mother_maiden_name', f.mother_name_parts],
+    ['spouse_name', f.spouse_name_parts],
   ] as const) {
-    const parts = given ?? (data[key] ? splitName(data[key]!) : undefined);
-    if (!parts || !data[key]) continue;
+    if (!d[key]) continue;
+    const parts = given ?? splitName(d[key]!);
+    if (!parts) continue;
     put(`${key}_first`, parts.first);
     put(`${key}_middle`, parts.middle);
     put(`${key}_last`, parts.last);
   }
-  put('ref_name', a.reference_name);
-  put('ref_mobile', a.reference_mobile);
+  return d;
+}
 
-  // Banks: a PDF only where they have no card yet (a pending application still gets one, owner rule).
-  const has = new Set(lead.banks.map(norm));
-  const banks = BANKS.filter((b) => !has.has(norm(BANK_NAME[b])));
+/** What is still missing on the form (shown to the owner and followed up), same idea as the card app's checks. */
+export function formMissing(f: AppForm): string[] {
+  const m: string[] = [];
+  const need = (v: string | undefined, label: string) => {
+    if (!has(v)) m.push(label);
+  };
+  need(f.first_name, 'First name (ID)');
+  need(f.last_name, 'Last name (ID)');
+  need(f.birthday, 'Birthday (ID)');
+  need(f.gender, 'Gender (ID)');
+  need(f.nationality, 'Nationality (ID)');
+  need(f.birth_town, 'Place of birth');
+  need(f.civil_status, 'Civil status');
+  need(f.email, 'Email');
+  need(f.mobile, 'Mobile number');
+  need(f.mother_maiden_name, "Mother's maiden name");
+  const h = f.home ?? {};
+  need(h.street, 'Home street');
+  need(h.barangay, 'Home barangay');
+  if (!has(h.city) && !has(h.province)) m.push('Home city/province');
+  else if (!has(h.province)) m.push('Home province');
+  need(h.zip, 'Home zip code');
+  if (has(h.zip) && h.zip_sure === false) m.push('Home zip code (check: city has several)');
+  if (!has(f.home_ownership) || !has(f.years_of_stay) || !has(f.total_years_working)) {
+    m.push('Home ownership / years of stay / total years working (need birthday from ID)');
+  }
+  need(f.employer, 'Employer');
+  need(f.position, 'Position');
+  need(f.department, 'Department');
+  need(f.industry, 'Nature of business');
+  need(f.employment_type, 'Employment type');
+  const c = f.company ?? {};
+  need(c.street, 'Office street/building');
+  need(c.barangay, 'Office barangay');
+  if (!has(c.city) && !has(c.province)) m.push('Office city/province');
+  else if (!has(c.province)) m.push('Office province');
+  if (!has(c.zip)) m.push('Office zip code');
+  else if (c.zip_sure === false) m.push('Office zip code (check: city has several)');
+  need(f.employer_phone, 'Office phone (not found)');
+  need(f.length_of_service, 'Years with employer');
+  need(f.gross_income, 'Gross annual income');
+  need(f.tin_number, 'TIN');
+  need(f.gsis_sss_number, 'SSS/GSIS number');
+  if (f.civil_status === 'Married') need(f.spouse_name, 'Spouse name');
+  // Never on the form: only the applicant can sign or answer these, on paper.
+  m.push('Signature (client signs the printed form)');
+  m.push('Bank declarations: relatives at the bank / ties to public officials (applicant answers on the form)');
+  return m;
+}
 
-  const bizZip: Record<string, string> = c?.zip ? { business_zip_code: c.zip } : {};
+/** Bank-only boxes: owner defaults plus the ID types Claude saw. */
+export function bankOnlyFor(lead: Lead, f: AppForm, idNumber?: string): BuiltApplication['bankOnly'] {
+  const bizZip: Record<string, string> = f.company?.zip ? { business_zip_code: f.company.zip } : {};
   const idTypes = new Set((lead.id_review ?? []).filter((r) => r.clear).map((r) => r.type));
-  const bankOnly: BuiltApplication['bankOnly'] = {
+  return {
     metrobank: {
       'education__checkbox__college': true,
       'source_of_funds__checkbox__others': true,
@@ -256,7 +298,7 @@ export function buildApplication(lead: Lead, details: Details, now: Date): Built
       ...(idTypes.has('umid') ? { 'id_type__checkbox__umid': true } : {}),
       ...(idTypes.has('tin') ? { 'id_type__checkbox__tin': true } : {}),
       ...(idTypes.has('sss_old') || idTypes.has('sss_new') ? { 'id_type__checkbox__sss': true } : {}),
-      ...(details.id_number ? { government_id_number: details.id_number } : {}),
+      ...(idNumber ? { government_id_number: idNumber } : {}),
     },
     eastwest: {
       'education__checkbox__college': true,
@@ -277,11 +319,82 @@ export function buildApplication(lead: Lead, details: Details, now: Date): Built
       ...(['tin', 'sss_old', 'sss_new'].some((t) => idTypes.has(t as IdSeen['type'])) ? { 'type_of_id__checkbox__tinsssgsisid': true } : {}),
     },
   };
-  defaults.push('Education = College (owner default)', 'Source of funds = Salary, card delivery = home, statement = personal email');
-  missing.push('Signature (client signs the printed form)');
-  // Yes/no declarations only the applicant can answer (relatives at the bank, ties to public officials, existing
-  // client of the bank). Never ticked for them.
-  missing.push('Bank declarations: relatives at the bank / ties to public officials (applicant answers on the form)');
+}
 
-  return { banks, data, bankOnly, missing, defaults };
+/** The first Default Form from the Messenger answers, the ID and the owner's rules. Never invents personal facts. */
+export function formFromLead(lead: Lead, details: Details, now: Date): { form: AppForm; defaults: string[] } {
+  const a = lead.answers;
+  const defaults: string[] = [];
+  const f: AppForm = {
+    first_name: details.first_name,
+    middle_name: details.middle_name,
+    last_name: details.last_name,
+    suffix: details.suffix,
+    name_on_card: [details.first_name, details.middle_name?.[0] ? `${details.middle_name[0]}.` : '', details.last_name].filter(Boolean).join(' ').toUpperCase() || undefined,
+    birthday: details.birthday,
+    gender: details.gender,
+    nationality: details.nationality,
+    birth_town: a.place_of_birth,
+    civil_status: CIVIL[norm(a.civil_status ?? '')],
+    email: a.email,
+    mobile: a.mobile,
+    mother_maiden_name: a.mothers_maiden_name,
+    mother_name_parts: details.mother_name_parts,
+    spouse_name: lead.married ? a.spouse_name : undefined,
+    spouse_name_parts: details.spouse_name_parts,
+    home: details.home && { street: details.home.street, barangay: details.home.barangay, city: details.home.city, province: details.home.province, zip: details.home.zip, zip_sure: details.home.zip_sure },
+    employer: a.employer_name,
+    position: a.position,
+    department: details.department,
+    industry: details.industry,
+    employment_type: details.employment_type,
+    company: details.company && { street: details.company.street, barangay: details.company.barangay, city: details.company.city, province: details.company.province, zip: details.company.zip, zip_sure: details.company.zip_sure },
+    employer_phone: details.employer_phone,
+    tin_number: details.tin,
+    other_card_company: lead.banks[0],
+    // Owner rule: the existing card number is never asked.
+    other_card_number: 'Refuse to give',
+    ref_name: a.reference_name,
+    ref_relationship: a.reference_relationship,
+    ref_mobile: a.reference_mobile,
+  };
+  if (details.home_from_id) defaults.push('Home address taken from the ID');
+
+  // Owner rules: ownership, years of stay and total years working from age (birthday on the ID).
+  const age = details.birthday ? ageOn(details.birthday, now) : undefined;
+  if (age !== undefined) {
+    const withParents = age <= 25;
+    f.home_ownership = withParents ? 'Living with parents' : 'Owned';
+    f.years_of_stay = String(withParents ? age : Math.max(age - 21, 0));
+    f.total_years_working = String(Math.max(age - 21, 0));
+    defaults.push('Home ownership, years of stay and total years working computed from age');
+  }
+  const yrs = yearsFrom(a.years_with_employer);
+  if (yrs !== undefined) {
+    f.length_of_service = `${yrs} ${yrs === 1 ? 'year' : 'years'}`;
+    // Owner rule: year = completion year - years with employer; month = the month they finished applying.
+    const done = new Date(lead.completed_at);
+    f.date_hired = `${done.getFullYear() - yrs}-${String(done.getMonth() + 1).padStart(2, '0')}-01`;
+    defaults.push('Date hired = completion month, year minus years with employer');
+  }
+  defaults.push('Education = College (owner default)', 'Source of funds = Salary, card delivery = home, statement = personal email');
+  return { form: f, defaults };
+}
+
+/** Banks to make a PDF for: a PDF only where they have no card yet (a pending application still gets one). */
+export function banksFor(lead: Lead): BankKey[] {
+  const owned = new Set(lead.banks.map(norm));
+  return BANKS.filter((b) => !owned.has(norm(BANK_NAME[b])));
+}
+
+export function buildApplication(lead: Lead, details: Details, now: Date): BuiltApplication {
+  const { form, defaults } = formFromLead(lead, details, now);
+  return {
+    banks: banksFor(lead),
+    form,
+    data: formToData(form),
+    bankOnly: bankOnlyFor(lead, form, details.id_number),
+    missing: formMissing(form),
+    defaults,
+  };
 }

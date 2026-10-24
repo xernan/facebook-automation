@@ -4,7 +4,7 @@ import path from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { ageOn, buildApplication, splitName, yearsFrom, type Lead } from '../src/application.js';
-import { finalizeLead, folderName, listApplicants, saveSettings } from '../src/leadout.js';
+import { finalizeLead, folderName, listApplicants, saveForm, saveSettings } from '../src/leadout.js';
 import { combText, formatPdfDate, pdfDigits } from '../src/pdf.js';
 
 const NOW = new Date('2026-10-25T13:00:00Z');
@@ -101,7 +101,7 @@ describe('owner rules in buildApplication', () => {
 
   it('spouse only when married; education default is listed', () => {
     expect(buildApplication(lead({ answers: { ...lead().answers, spouse_name: 'Ana' } }), details, NOW).data.spouse_name).toBeUndefined();
-    const m = buildApplication(lead({ married: true, answers: { ...lead().answers, spouse_name: 'Ana' } }), details, NOW);
+    const m = buildApplication(lead({ married: true, answers: { ...lead().answers, civil_status: 'married', spouse_name: 'Ana' } }), details, NOW);
     expect(m.data.spouse_name).toBe('Ana');
     expect(m.defaults.join()).toMatch(/Education = College/);
   });
@@ -227,6 +227,32 @@ describe('finalizeLead', () => {
     const doc = await getDocument({ data: new Uint8Array(out.bytes) }).promise;
     const text = (await (await doc.getPage(1)).getTextContent()).items.map((i: any) => i.str).join(' ');
     expect(text.replace(/\s+/g, ' ')).toContain(long);
+  });
+
+  it('editing the Default Form saves it, rechecks missing items and remakes the PDFs from it', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'form-'));
+    const tpl = mkdtempSync(path.join(tmpdir(), 'tpl-'));
+    const bytes = await template();
+    for (const b of ['metrobank', 'eastwest', 'chinabank']) writeFileSync(path.join(tpl, `${b}.pdf`), bytes);
+    writeFileSync(path.join(dir, 'lead-999-x.json'), JSON.stringify(lead({ banks: ['BDO'] })));
+    await saveSettings(dir, { agent_name: '', agent_code: '', card_choice: {}, auto_print: false, printer: '', text_bold: true, text_max_size: 14, text_uniform_size: 0, flatten: false });
+    const r = await finalizeLead(dir, tpl, 'lead-999-x.json', details, NOW);
+    const folder = path.basename(r.folder);
+    const before = JSON.parse(readFileSync(path.join(dir, r.folder, 'details.json'), 'utf8'));
+    expect(before.form.first_name).toBe('Juan');
+    expect(before.missing).toContain('TIN');
+
+    const out = await saveForm(dir, tpl, folder, { ...before.form, first_name: 'Pedro', tin_number: '123-456-789', mother_maiden_name: 'Rosa Cruz' });
+    expect(out.missing).not.toContain('TIN');
+    const after = JSON.parse(readFileSync(path.join(dir, r.folder, 'details.json'), 'utf8'));
+    expect(after.form.first_name).toBe('Pedro');
+    expect(after.data.full_name).toBe('Pedro Dela Cruz');
+    expect(after.printed).toBe(false);
+    const f = (await PDFDocument.load(readFileSync(path.join(dir, r.folder, 'Metrobank.pdf')))).getForm();
+    expect(f.getTextField('first_name').getText()).toBe('Pedro');
+    expect(f.getTextField('tin_number').getText()).toBe('123-456-789');
+    expect(f.getTextField('mother_maiden_name').getText()).toBe('Rosa Cruz');
+    await expect(saveForm(dir, tpl, folder, { ...before.form, not_a_field: 'x' } as any)).rejects.toThrow();
   });
 
   it('folder names are safe on Windows', () => {

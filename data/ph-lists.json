@@ -1,0 +1,103 @@
+{
+ "locations": [
+  {
+   "province": "Metro Manila",
+   "town": "Quezon City",
+   "zip": "1100",
+   "areaCode": "02"
+  },
+  {
+   "province": "Metro Manila",
+   "town": "Makati City",
+   "zip": "1200",
+   "areaCode": "02"
+  },
+  {
+   "province": "Metro Manila",
+   "town": "Manila City",
+   "zip": "1000",
+   "areaCode": "02"
+  },
+  {
+   "province": "Metro Manila",
+   "town": "Pasig City",
+   "zip": "1600",
+   "areaCode": "02"
+  },
+  {
+   "province": "Metro Manila",
+   "town": "Taguig City",
+   "zip": "1630",
+   "areaCode": "02"
+  },
+  {
+   "province": "Metro Manila",
+   "town": "Caloocan City",
+   "zip": "1400",
+   "areaCode": "02"
+  },
+  {
+   "province": "Cebu",
+   "town": "Cebu City",
+   "zip": "6000",
+   "areaCode": "032"
+  },
+  {
+   "province": "Cebu",
+   "town": "Mandaue City",
+   "zip": "6014",
+   "areaCode": "032"
+  },
+  {
+   "province": "Davao del Sur",
+   "town": "Davao City",
+   "zip": "8000",
+   "areaCode": "082"
+  },
+  {
+   "province": "Benguet",
+   "town": "Baguio City",
+   "zip": "2600",
+   "areaCode": "074"
+  },
+  {
+   "province": "Iloilo",
+   "town": "Iloilo City",
+   "zip": "5000",
+   "areaCode": "033"
+  },
+  {
+   "province": "Misamis Oriental",
+   "town": "Cagayan de Oro City",
+   "zip": "9000",
+   "areaCode": "088"
+  },
+  {
+   "province": "Negros Occidental",
+   "town": "Bacolod City",
+   "zip": "6100",
+   "areaCode": "034"
+  },
+  {
+   "province": "Pampanga",
+   "town": "Angeles City",
+   "zip": "2009",
+   "areaCode": "045"
+  }
+ ],
+ "industries": [
+  "Retail / Trade",
+  "BPO / Call Center",
+  "Government",
+  "Healthcare",
+  "Manufacturing",
+  "Construction",
+  "IT / Software",
+  "Education",
+  "Food Service",
+  "Banking / Finance",
+  "Real Estate",
+  "Transportation / Logistics",
+  "Other"
+ ]
+}

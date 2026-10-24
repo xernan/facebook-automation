@@ -8,7 +8,7 @@ import { settingsSchema } from './application.js';
 import { ROOT_DIR } from './context.js';
 import { loadConfig } from './config.js';
 import { FlowStore } from './flowstore.js';
-import { listApplicants, loadSettings, saveSettings, writeClientsXlsx } from './leadout.js';
+import { listApplicants, loadSettings, saveForm, saveSettings, writeClientsXlsx } from './leadout.js';
 import { findAcrobat, listPrinters, printPdf } from './printer.js';
 import dotenv from 'dotenv';
 
@@ -85,49 +85,20 @@ function page(token: string): string {
 header{background:#0f1b2d;color:#fff;padding:12px 20px;display:flex;gap:16px;align-items:center}header b{font-size:16px}
 nav button{background:none;border:0;color:#cfd8e3;font:inherit;padding:6px 10px;cursor:pointer;border-radius:6px}nav button.on{background:#25344d;color:#fff}
 main{padding:16px 20px;max-width:1200px;margin:auto}.card{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
-table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600;font-size:12px}
+.card h3{margin:0 0 6px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600;font-size:12px}
 tr.row{cursor:pointer}tr.row:hover{background:#f0f4fa}.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600}
 .ok{background:#e3f4e8;color:var(--ok)}.warn{background:#fff1dc;color:var(--warn)}.muted{color:var(--muted)}
 button.btn{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:7px 12px;font:inherit;cursor:pointer}button.btn.sec{background:#e8edf3;color:var(--ink)}
 .row2{display:flex;gap:12px;flex-wrap:wrap;align-items:center}label{display:block;font-size:12px;color:var(--muted);margin:8px 0 3px}
-input,select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;min-width:220px}ul{margin:6px 0;padding-left:18px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}#msg{position:fixed;bottom:16px;right:16px;background:#14181f;color:#fff;padding:10px 14px;border-radius:8px;display:none}
+input,select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;min-width:0;width:100%}ul{margin:6px 0;padding-left:18px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px 14px}
+.missing{border-color:var(--bad);background:#fff5f4}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}#msg{position:fixed;bottom:16px;right:16px;background:#14181f;color:#fff;padding:10px 14px;border-radius:8px;display:none;max-width:420px}
 .stats{display:flex;gap:10px;flex-wrap:wrap}.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:120px}.stat b{font-size:20px;display:block}
 </style></head><body>
 <header><b>CARD MAX</b><nav><button data-v="list" class="on">Applicants</button><button data-v="settings">Settings</button></nav><span class="muted" style="margin-left:auto;color:#9fb0c6">This PC only</span></header>
 <main id="app">Loading…</main><div id="msg"></div>
-<script>
-const TOKEN=${JSON.stringify(token)};let S=null,view='list',open=null;
-const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const msg=t=>{const m=$('#msg');m.textContent=t;m.style.display='block';setTimeout(()=>m.style.display='none',3500)};
-async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'content-type':'application/json','x-token':TOKEN},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Something went wrong');return j}
-async function load(){S=await (await fetch('/api/state')).json();render()}
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{view=b.dataset.v;open=null;document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));render()});
-const file=(f,n)=>'/file?folder='+encodeURIComponent(f)+'&name='+encodeURIComponent(n);
-function render(){const a=$('#app');if(view==='settings')return renderSettings(a);if(open)return renderOne(a);
-const rows=S.applicants;
-a.innerHTML='<div class="stats"><div class="stat"><b>'+rows.length+'</b>Applicants</div><div class="stat"><b>'+rows.filter(r=>r.printed).length+'</b>Printed</div><div class="stat"><b>'+(S.flow.waiting||0)+'</b>In chat now</div></div><br>'+
-'<div class="card"><table><tr><th>Completed</th><th>Name</th><th>Mobile</th><th>PDFs</th><th>Flags</th><th>To check</th><th>Printed</th></tr>'+
-(rows.length?rows.map((r,i)=>'<tr class="row" data-i="'+i+'"><td>'+esc(r.completed_at.slice(0,16).replace('T',' '))+'</td><td><b>'+esc(r.name||'(no name yet)')+'</b></td><td>'+esc(r.mobile)+'</td><td>'+esc(r.banks_with_pdf)+'</td><td>'+(r.flags?'<span class="pill warn">'+esc(r.flags)+'</span>':'')+'</td><td>'+r.missing_list.length+' item(s)</td><td>'+(r.printed?'<span class="pill ok">Yes</span>':'<span class="pill warn">No</span>')+'</td></tr>').join(''):'<tr><td colspan="7" class="muted">No applicants yet. Finished Messenger applications show up here.</td></tr>')+'</table></div>';
-a.querySelectorAll('tr.row').forEach(t=>t.onclick=()=>{open=rows[+t.dataset.i];render()})}
-function renderOne(a){const r=open;a.innerHTML='<p><button class="btn sec" id="back">← All applicants</button></p><div class="card"><div class="row2"><h2 style="margin:0">'+esc(r.name||'(no name yet)')+'</h2><span class="muted">'+esc(r.mobile)+' · '+esc(r.email)+'</span><span style="margin-left:auto" class="row2"><button class="btn" id="pall">Print all</button><button class="btn sec" id="mark">'+(r.printed?'Mark not printed':'Mark printed')+'</button></span></div>'+
-'<p class="muted">Has cards: '+esc(r.existing_cards)+(r.flags?' · <span class="pill warn">'+esc(r.flags)+'</span>':'')+'</p></div>'+
-'<div class="grid"><div class="card"><b>Files</b><ul>'+r.files.map(f=>'<li><a href="'+file(r.folder,f)+'" target="_blank">'+esc(f)+'</a>'+(f.toLowerCase().endsWith('.pdf')?' <button class="btn sec" data-p="'+esc(f)+'">Print</button>':'')+'</li>').join('')+'</ul></div>'+
-'<div class="card"><b>To check before submitting</b><ul>'+r.missing_list.map(m=>'<li>'+esc(m)+'</li>').join('')+'</ul><b>Defaults used</b><ul>'+r.defaults_list.map(m=>'<li class="muted">'+esc(m)+'</li>').join('')+'</ul></div></div>';
-$('#back').onclick=()=>{open=null;render()};
-$('#pall').onclick=async()=>{try{await post('/api/print',{folder:r.folder});msg('Sent to the printer');load()}catch(e){msg(e.message)}};
-$('#mark').onclick=async()=>{await post('/api/printed',{folder:r.folder,printed:!r.printed});r.printed=!r.printed;msg('Saved');load()};
-a.querySelectorAll('[data-p]').forEach(b=>b.onclick=async()=>{try{await post('/api/print',{folder:r.folder,name:b.dataset.p});msg('Sent to the printer')}catch(e){msg(e.message)}})}
-function renderSettings(a){const s=S.settings,o=S.cardOptions;const sel=(id,opts,val)=>'<select id="'+id+'"><option value="">(none)</option>'+opts.map(x=>'<option'+(x===val?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>';
-a.innerHTML='<div class="card"><h3 style="margin-top:0">Agent</h3><label>Agent name</label><input id="agent_name" value="'+esc(s.agent_name)+'"><label>Agent code</label><input id="agent_code" value="'+esc(s.agent_code)+'"></div>'+
-'<div class="card"><h3 style="margin-top:0">Card to apply for (per bank)</h3><div class="row2"><div><label>Metrobank</label>'+sel('cc_metrobank',o.metrobank||[],s.card_choice.metrobank)+'</div><div><label>EastWest</label>'+sel('cc_eastwest',o.eastwest||[],s.card_choice.eastwest)+'</div><div><label>China Bank</label>'+sel('cc_chinabank',o.chinabank||[],s.card_choice.chinabank)+'</div></div></div>'+
-'<div class="card"><h3 style="margin-top:0">Printing</h3><label>Printer</label>'+sel('printer',S.printers,s.printer)+'<label><input type="checkbox" id="auto_print" style="min-width:0"'+(s.auto_print?' checked':'')+'> Print new complete applications automatically (PC must be on)</label>'+(S.acrobat?'':'<p class="pill warn">Adobe Acrobat not found: printing will not work</p>')+'</div>'+
-'<div class="card"><h3 style="margin-top:0">Text on the forms</h3><div class="row2"><div><label>Answer size (pt, 0 = fit each box)</label><input id="text_uniform_size" type="number" step="0.5" min="0" max="20" value="'+s.text_uniform_size+'"></div><div><label><input type="checkbox" id="text_bold" style="min-width:0"'+(s.text_bold?' checked':'')+'> Bold</label></div></div></div>'+
-'<button class="btn" id="save">Save settings</button>';
-$('#save').onclick=async()=>{const v=id=>$('#'+id).value;const body={...s,agent_name:v('agent_name'),agent_code:v('agent_code'),printer:v('printer'),auto_print:$('#auto_print').checked,text_bold:$('#text_bold').checked,text_uniform_size:Number(v('text_uniform_size')),card_choice:Object.fromEntries(['metrobank','eastwest','chinabank'].map(b=>[b,v('cc_'+b)]).filter(([,x])=>x))};
-try{await post('/api/settings',body);msg('Settings saved');load()}catch(e){msg(e.message)}}}
-load();setInterval(()=>{if(view==='list'&&!open)load()},15000);
-</script></body></html>`;
+<script>window.TOKEN=${JSON.stringify(token)};</script><script src="/app.js"></script></body></html>`;
 }
 
 async function readJson(req: http.IncomingMessage): Promise<any> {
@@ -152,6 +123,23 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
       if (!hosts.has(req.headers.host ?? '')) return send(403, { error: 'Forbidden' });
       const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
       if (req.method === 'GET' && url.pathname === '/') return send(200, page(token), 'text/html; charset=utf-8');
+      if (req.method === 'GET' && url.pathname === '/app.js') {
+        return send(200, await fs.readFile(path.join(ROOT_DIR, 'public', 'dashboard.js')), 'text/javascript; charset=utf-8');
+      }
+      if (req.method === 'GET' && url.pathname === '/api/address') {
+        const [address, lists] = await Promise.all([
+          fs.readFile(path.join(ROOT_DIR, 'data', 'ph-address.json'), 'utf8'),
+          fs.readFile(path.join(ROOT_DIR, 'data', 'ph-lists.json'), 'utf8'),
+        ]);
+        return send(200, `{"address":${address},"lists":${lists}}`);
+      }
+      if (req.method === 'GET' && url.pathname === '/api/form') {
+        const file = safeFile(opts.flowDir, url.searchParams.get('folder') ?? '', 'details.json');
+        if (!file) return send(404, { error: 'Unknown applicant.' });
+        const d = JSON.parse(await fs.readFile(file, 'utf8'));
+        if (!d.form) return send(400, { error: 'This applicant was saved before the Default Form existed.' });
+        return send(200, { form: d.form, missing: d.missing ?? [] });
+      }
       if (req.method === 'GET' && url.pathname === '/api/state') {
         const rows = await listApplicants(opts.flowDir);
         const applicants = [];
@@ -183,6 +171,11 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
         if (url.pathname === '/api/settings') {
           await saveSettings(opts.flowDir, settingsSchema.parse(body));
           return send(200, { ok: true });
+        }
+        if (url.pathname === '/api/form') {
+          const folder = String(body.folder ?? '');
+          if (!safeFile(opts.flowDir, folder, 'details.json')) return send(404, { error: 'Unknown applicant.' });
+          return send(200, await saveForm(opts.flowDir, opts.templatesDir, folder, body.form));
         }
         if (url.pathname === '/api/printed') {
           await setPrinted(opts.flowDir, String(body.folder ?? ''), body.printed === true);

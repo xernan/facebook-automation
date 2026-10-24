@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import ExcelJS from 'exceljs';
-import { BANKS, buildApplication, settingsSchema, type Details, type Lead, type Settings } from './application.js';
+import { BANKS, buildApplication, formMissing, formSchema, formToData, settingsSchema, type AppForm, type BuiltApplication, type Details, type Lead, type Settings } from './application.js';
 import { PDFDocument } from 'pdf-lib';
 import { fillBankPdf } from './pdf.js';
 import { printPdf } from './printer.js';
@@ -54,21 +54,7 @@ export async function finalizeLead(
   const folder = path.join(flowDir, 'applicants', folderName(lead.completed_at, name, lead.psid));
   await fs.mkdir(folder, { recursive: true });
 
-  const pdfs: string[] = [];
-  for (const bank of app.banks) {
-    const tpl = path.join(templatesDir, `${bank}.pdf`);
-    let bytes: Uint8Array;
-    try {
-      bytes = await fs.readFile(tpl);
-    } catch {
-      app.missing.push(`${BANK_LABEL[bank]} PDF template not found`);
-      continue;
-    }
-    const out = await fillBankPdf(bank, bytes, app, settings);
-    const file = `${BANK_LABEL[bank]}.pdf`;
-    await fs.writeFile(path.join(folder, file), out.bytes);
-    pdfs.push(file);
-  }
+  const pdfs = await writeBankPdfs(folder, templatesDir, app.banks, app, settings, app.missing);
   // ID photos: copies, plus one printable PDF with every photo (one per page, fitted with a margin).
   const idPdf = await PDFDocument.create();
   for (const [i, photo] of (lead.id_photos ?? []).entries()) {
@@ -100,6 +86,9 @@ export async function finalizeLead(
     existing_cards: lead.banks,
     flags: lead.flags ?? [],
     banks_with_pdf: app.banks.map((b) => BANK_LABEL[b]),
+    banks: app.banks,
+    form: app.form,
+    bank_only: app.bankOnly,
     data: app.data,
     missing: app.missing,
     defaults: app.defaults,
@@ -107,11 +96,7 @@ export async function finalizeLead(
     printed: false,
   };
   await fs.writeFile(path.join(folder, 'details.json'), JSON.stringify(summary, null, 2), 'utf8');
-  await fs.writeFile(
-    path.join(folder, 'MISSING.txt'),
-    `Missing / check before submitting:\n${app.missing.map((m) => `- ${m}`).join('\n')}\n\nDefaults (not from the applicant):\n${app.defaults.map((d) => `- ${d}`).join('\n')}\n`,
-    'utf8',
-  );
+  await fs.writeFile(path.join(folder, 'MISSING.txt'), missingText(app.missing, app.defaults), 'utf8');
   let warning: string | undefined;
   try {
     await writeClientsXlsx(flowDir);
@@ -133,6 +118,64 @@ export async function finalizeLead(
     }
   }
   return { folder: path.relative(flowDir, folder), pdfs, missing: app.missing, defaults: app.defaults, ...(warning ? { warning } : {}) };
+}
+
+function missingText(missing: string[], defaults: string[]): string {
+  const list = (xs: string[]) => xs.map((x) => `- ${x}`).join('\n');
+  return `Missing / check before submitting:\n${list(missing)}\n\nDefaults (not from the applicant):\n${list(defaults)}\n`;
+}
+
+/** Fills one PDF per bank from the built data. Missing templates are added to `missing`. */
+async function writeBankPdfs(
+  folder: string,
+  templatesDir: string,
+  banks: BuiltApplication['banks'],
+  app: Pick<BuiltApplication, 'banks' | 'data' | 'bankOnly' | 'missing' | 'defaults'>,
+  settings: Settings,
+  missing: string[],
+): Promise<string[]> {
+  const pdfs: string[] = [];
+  for (const bank of banks) {
+    let bytes: Uint8Array;
+    try {
+      bytes = await fs.readFile(path.join(templatesDir, `${bank}.pdf`));
+    } catch {
+      missing.push(`${BANK_LABEL[bank]} PDF template not found`);
+      continue;
+    }
+    const out = await fillBankPdf(bank, bytes, { ...app, form: {} } as BuiltApplication, settings);
+    const file = `${BANK_LABEL[bank]}.pdf`;
+    await fs.writeFile(path.join(folder, file), out.bytes);
+    pdfs.push(file);
+  }
+  return pdfs;
+}
+
+/**
+ * The owner edited the Default Form in the dashboard: save it, recheck what is missing and make the bank PDFs
+ * again. Bank choice, defaults and ID-based boxes stay as they were.
+ */
+export async function saveForm(flowDir: string, templatesDir: string, folderName: string, form: AppForm): Promise<{ missing: string[]; pdfs: string[] }> {
+  const dir = path.join(flowDir, 'applicants', folderName);
+  const file = path.join(dir, 'details.json');
+  const d = JSON.parse(await fs.readFile(file, 'utf8'));
+  if (!d.banks || !d.bank_only) throw new Error('This applicant was saved before the form existed; finalize it again.');
+  const clean = formSchema.parse(form);
+  const data = formToData(clean);
+  const missing = formMissing(clean);
+  const settings = await loadSettings(flowDir);
+  // Office zip follows the form for the bank-only zip boxes.
+  const bankOnly = structuredClone(d.bank_only);
+  for (const b of Object.keys(bankOnly)) {
+    if (clean.company?.zip) bankOnly[b].business_zip_code = clean.company.zip;
+    else delete bankOnly[b].business_zip_code;
+  }
+  const pdfs = await writeBankPdfs(dir, templatesDir, d.banks, { banks: d.banks, data, bankOnly, missing, defaults: d.defaults ?? [] }, settings, missing);
+  const next = { ...d, form: clean, data, bank_only: bankOnly, missing, edited_at: new Date().toISOString(), printed: false };
+  await fs.writeFile(file, JSON.stringify(next, null, 2), 'utf8');
+  await fs.writeFile(path.join(dir, 'MISSING.txt'), missingText(missing, d.defaults ?? []), 'utf8');
+  await writeClientsXlsx(flowDir).catch(() => undefined);
+  return { missing, pdfs };
 }
 
 export interface ApplicantRow {
