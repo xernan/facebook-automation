@@ -1,3 +1,4 @@
+import { contentProblem } from './contentguard.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync, promises as fs, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -32,6 +33,16 @@ export function loadFlow(file: string): Flow {
   if (!parsed.success) {
     throw new Error(`Invalid flow file: ${[...new Set(parsed.error.issues.map((i) => i.path.join('.')))].join(', ')}`);
   }
+  // Every text the bot can send must pass the Community Standards guard, so a bad wording never goes live.
+  const bad: string[] = [];
+  const walk = (v: unknown, at: string) => {
+    if (typeof v === 'string') {
+      const why = contentProblem(v);
+      if (why) bad.push(`${at} (${why})`);
+    } else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, at ? `${at}.${k}` : k);
+  };
+  walk(parsed.data, '');
+  if (bad.length) throw new Error(`Flow text breaks Meta rules, reword it: ${bad.join('; ')}`);
   return parsed.data;
 }
 

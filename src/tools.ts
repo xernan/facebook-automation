@@ -296,19 +296,16 @@ export const tools: ToolDef[] = [
       recipient_psid: id.optional(),
       comment_id: id.optional(),
       text: text(2000),
-      message_tag: z
-        .enum(['HUMAN_AGENT', 'ACCOUNT_UPDATE', 'CONFIRMED_EVENT_UPDATE', 'POST_PURCHASE_UPDATE'])
-        .optional()
-        .describe('Only for allowed cases outside the 24-hour window. Never for promotions.'),
       idempotency_key: idemKey,
     },
-    handler: ({ page_id, recipient_psid, comment_id, text: body, message_tag }, ctx) => {
+    // Replies only (inside the 24-hour window). No message tags: messaging outside the window is how Pages get
+    // restricted, and a bot may not use the human-agent tag.
+    handler: ({ page_id, recipient_psid, comment_id, text: body }, ctx) => {
       if (!!recipient_psid === !!comment_id) throw new Error('Give exactly one of recipient_psid or comment_id.');
       const params: Params = {
         recipient: JSON.stringify(recipient_psid ? { id: recipient_psid } : { comment_id }),
         message: JSON.stringify({ text: body }),
-        messaging_type: message_tag ? 'MESSAGE_TAG' : 'RESPONSE',
-        tag: message_tag,
+        messaging_type: 'RESPONSE',
       };
       return ctx.graph.post(page_id, `${page_id}/messages`, params);
     },

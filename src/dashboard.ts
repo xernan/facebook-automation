@@ -116,6 +116,12 @@ async function readJson(req: http.IncomingMessage): Promise<any> {
 export function createDashboard(opts: { flowDir: string; templatesDir: string; port: number; token?: string }) {
   const token = opts.token ?? randomBytes(24).toString('hex');
   const hosts = new Set([`localhost:${opts.port}`, `127.0.0.1:${opts.port}`]);
+  // Listing printers starts PowerShell (1-2 s); the page refreshes every 15 s, so keep the list for a minute.
+  let printerCache: { at: number; list: Promise<string[]> } | undefined;
+  const printers = () => {
+    if (!printerCache || Date.now() - printerCache.at > 60_000) printerCache = { at: Date.now(), list: listPrinters().catch(() => []) };
+    return printerCache.list;
+  };
   const server = http.createServer(async (req, res) => {
     const send = (code: number, body: unknown, type = 'application/json') => {
       res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' });
@@ -163,7 +169,7 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
           stats: applicationStats(rows, { quota: settings.weekly_quota, startDay: settings.week_start_day }),
           flow: { waiting },
           settings,
-          printers: await listPrinters().catch(() => []),
+          printers: await printers(),
           cardOptions: await cardOptions(opts.templatesDir),
           acrobat: !!findAcrobat(),
           phonebook: await loadPhonebook(opts.flowDir).catch(() => []),

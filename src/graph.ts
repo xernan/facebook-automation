@@ -1,3 +1,4 @@
+import { assertSafeContent } from './contentguard.js';
 import { createHmac } from 'node:crypto';
 import type { Config } from './config.js';
 import { RateLimiter } from './ratelimit.js';
@@ -260,6 +261,9 @@ export class GraphClient {
   }
 
   async post(pageId: string, path: string, params?: Params, form?: FormData) {
+    // Community Standards guard: nothing that reads like phishing or a credit scam reaches Facebook.
+    assertSafeContent(params as Record<string, unknown> | undefined);
+    if (form) assertSafeContent(Object.fromEntries([...form.entries()].filter(([, v]) => typeof v === 'string')));
     return this.request('POST', path, await this.pageToken(pageId), params, form);
   }
 
