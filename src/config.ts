@@ -40,6 +40,7 @@ export const configSchema = z.object({
   // Messenger application flow + watcher
   FB_FLOW_FILE: z.string().default('flow.json'),
   FB_FLOW_DIR: z.string().default('exports/flow'),
+  FB_PDF_TEMPLATES_DIR: z.string().default('pdf-templates'),
   FB_FLOW_PAGE_ID: z.string().regex(/^\d+$/).optional(),
   FB_FLOW_COOLDOWN_DAYS: intIn(180, 1, 730),
   FB_FLOW_REPLY_WINDOW_HOURS: intIn(23, 1, 24),
@@ -51,7 +52,7 @@ export const configSchema = z.object({
 });
 
 export type RawConfig = z.infer<typeof configSchema>;
-export type Config = RawConfig & { mediaDir: string; exportDir: string; flowFile: string; flowDir: string };
+export type Config = RawConfig & { mediaDir: string; exportDir: string; flowFile: string; flowDir: string; templatesDir: string };
 
 export function loadConfig(env: NodeJS.ProcessEnv, rootDir: string, { requireToken = true } = {}): Config {
   // Blank values in .env mean "not set".
@@ -75,5 +76,6 @@ export function loadConfig(env: NodeJS.ProcessEnv, rootDir: string, { requireTok
     exportDir: path.resolve(rootDir, c.FB_EXPORT_DIR),
     flowFile: path.resolve(rootDir, c.FB_FLOW_FILE),
     flowDir: path.resolve(rootDir, c.FB_FLOW_DIR),
+    templatesDir: path.resolve(rootDir, c.FB_PDF_TEMPLATES_DIR),
   };
 }

@@ -15,3 +15,5 @@ media/*
 
 # Owner flow texts (brand names) stay local; flow.example.json shows the shape
 flow.json
+# Bank PDF templates (bank material) stay local
+pdf-templates/

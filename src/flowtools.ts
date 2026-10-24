@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 import { advance, cleanSuggestions, currentPrompt, ID_TYPES, idVerdict, newPerson, nextStepIf, type IdSeen, type Person } from './flow.js';
+import { detailsSchema } from './application.js';
 import { FlowStore, loadFlow, type FlowState } from './flowstore.js';
+import { finalizeLead } from './leadout.js';
 import type { Ctx, ToolDef } from './tools.js';
 
 // Tools that run the Messenger application flow. Claude is the operator: fb_flow_pending shows who
@@ -299,6 +301,21 @@ export const flowTools: ToolDef[] = [
         return deliver(ctx, s, state, page_id, who, person, flow.done_reply, undefined, [], { id_ok: true, lead_saved: leadFile });
       });
     },
+  },
+  {
+    name: 'fb_lead_finalize',
+    description:
+      'After an application completes (lead_saved), make the bank PDFs, copy the IDs into the applicant folder and update ' +
+      'CLIENTS.xlsx. Pass what you READ on the ID photos (names, birthday, sex, nationality, ID number, TIN only if printed on ' +
+      'an ID) and what you split or looked up (home and office address parts, zip codes, office phone with its source, nature ' +
+      'of business, department, employment type). Leave out anything you are not sure of: it is listed as missing. Never invent ' +
+      'income, TIN, SSS or other personal facts. Returns the missing list to follow up.',
+    write: false,
+    input: {
+      lead_file: z.string().regex(/^lead-\d+-[\w-]+\.json$/, 'Use lead_saved exactly as returned'),
+      details: detailsSchema,
+    },
+    handler: ({ lead_file, details }, ctx) => finalizeLead(ctx.cfg.flowDir, ctx.cfg.templatesDir, lead_file, details),
   },
   {
     name: 'fb_flow_status',
