@@ -133,3 +133,14 @@ describe('messenger leads page size', () => {
     expect(calls.at(-1)!.url.searchParams.get('limit')).toBe('7');
   });
 });
+
+describe('fb_list_pages for Business Pages', () => {
+  it('says a Page found by direct lookup is usable, instead of showing no tasks', async () => {
+    const { ctx } = testCtx({ FB_EXTRA_PAGE_IDS: '222' }, (c) =>
+      c.url.pathname.endsWith('/222') ? { json: { id: '222', name: 'Biz', access_token: 'EAAbizpagetoken1234567890abcdef' } } : { json: {} },
+    );
+    const pages: any = await callTool(tool('fb_list_pages'), {}, ctx);
+    const biz = pages.find((p: any) => p.id === '222');
+    expect(biz.access).toMatch(/Business/);
+  });
+});
