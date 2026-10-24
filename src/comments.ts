@@ -4,6 +4,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { contentProblem } from './contentguard.js';
 import type { Ctx, ToolDef } from './tools.js';
+import { botMayAnswer, loadTestMode } from './testmode.js';
 
 // Comment replies as the Page. Claude writes each reply (a real answer, not a template); the code enforces the
 // safety limits so the Page never looks like a spam bot to Meta:
@@ -68,11 +69,12 @@ export async function findPendingComments(ctx: Ctx, pageId: string, now = new Da
     fields: `id,message,created_time,comments.limit(50).filter(toplevel).order(reverse_chronological){id,from,message,created_time,is_hidden}`,
     limit: '25',
   });
+  const tm = await loadTestMode(ctx.cfg.flowDir);
   const out: PendingComment[] = [];
   for (const p of posts.data ?? []) {
     if (new Date(p.created_time).getTime() < now.getTime() - ctx.cfg.FB_COMMENT_POST_DAYS * 86_400_000) continue;
     for (const c of p.comments?.data ?? []) {
-      if (s.handled[c.id] || c.is_hidden || c.from?.id === pageId) continue;
+      if (s.handled[c.id] || c.is_hidden || c.from?.id === pageId || !botMayAnswer(tm, c.from?.id)) continue;
       const at = new Date(c.created_time).getTime();
       if (at < since || !c.message) continue;
       out.push({

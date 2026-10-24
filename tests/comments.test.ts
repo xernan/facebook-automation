@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -12,6 +12,7 @@ const ago = (sec: number) => new Date(now.getTime() - sec * 1000).toISOString();
 
 function setup(env: Record<string, string> = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'cm-'));
+  writeFileSync(path.join(dir, 'test-mode.json'), JSON.stringify({ on: false, ids: [] })); // live behavior
   const posts: any[] = [];
   const graph = {
     gets: [] as string[],
@@ -109,5 +110,16 @@ describe('comment replies', () => {
     expect(p).toMatch(/English/);
     expect(p).toMatch(/Sound human/);
     expect(p).toMatch(/never promise approval/);
+  });
+
+  it('test mode (default ON, empty list) answers nobody; listed testers only', async () => {
+    const { ctx, dir } = setup();
+    await primeState(dir);
+    const { saveTestMode } = await import('../src/testmode.js');
+    writeFileSync(path.join(dir, 'test-mode.json'), 'broken');
+    expect((await findPendingComments(ctx, PAGE_ID, now)).comments).toEqual([]);
+    await saveTestMode(dir, { on: true, ids: ['900'] });
+    expect((await findPendingComments(ctx, PAGE_ID, now)).comments.map((c) => c.comment_id)).toEqual(['11']);
+    await expect(saveTestMode(dir, { on: true, ids: ['abc'] })).rejects.toThrow();
   });
 });

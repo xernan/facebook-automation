@@ -15,6 +15,7 @@ import { applicationStats } from './stats.js';
 import { contentProblem } from './contentguard.js';
 import { GraphClient } from './graph.js';
 import { postStats, proofDraft, setOutcome } from './marketing.js';
+import { loadTestMode, saveTestMode } from './testmode.js';
 import dotenv from 'dotenv';
 
 // Local dashboard (this PC only, 127.0.0.1): applicants, their PDFs/IDs and missing items, print, and settings.
@@ -188,6 +189,7 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
           cardOptions: await cardOptions(opts.templatesDir),
           acrobat: !!findAcrobat(),
           phonebook: await loadPhonebook(opts.flowDir).catch(() => []),
+          testMode: await loadTestMode(opts.flowDir),
         });
       }
       if (req.method === 'GET' && url.pathname === '/api/marketing') {
@@ -232,6 +234,9 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
           await setOutcome(file, { result: body.result, card: body.card, proof_ok: body.proof_ok === true });
           await writeClientsXlsx(opts.flowDir).catch(() => undefined);
           return send(200, { ok: true });
+        }
+        if (url.pathname === '/api/testmode') {
+          return send(200, await saveTestMode(opts.flowDir, { on: body.on !== false, ids: Array.isArray(body.ids) ? body.ids.map(String) : [] }));
         }
         if (url.pathname === '/api/check') {
           const text = String(body.text ?? '').slice(0, 5000);

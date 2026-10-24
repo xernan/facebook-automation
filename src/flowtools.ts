@@ -6,6 +6,7 @@ import { detailsSchema } from './application.js';
 import { FlowStore, loadFlow, type FlowState } from './flowstore.js';
 import { finalizeLead } from './leadout.js';
 import type { Ctx, ToolDef } from './tools.js';
+import { botMayAnswer, loadTestMode } from './testmode.js';
 
 // Tools that run the Messenger application flow. Claude is the operator: fb_flow_pending shows who
 // wrote, Claude decides whether each message answers the current question (the script replies) or is
@@ -58,11 +59,12 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
     limit: ctx.cfg.FB_LEADS_CHATS_PER_PAGE,
   });
   const flow = loadFlow(ctx.cfg.flowFile);
+  const tm = await loadTestMode(ctx.cfg.flowDir);
   const out = [];
   for (const conv of res.data ?? []) {
     if (new Date(conv.updated_time).getTime() < start) continue;
     const person = (conv.participants?.data ?? []).find((p: any) => p.id !== page_id);
-    if (!person) continue;
+    if (!person || !botMayAnswer(tm, person.id)) continue; // test mode: only the listed testers
     const msgs: InMsg[] = (conv.messages?.data ?? [])
       .filter((m: any) => m.from?.id === person.id)
       .map(toInMsg)
@@ -97,6 +99,7 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
 }
 
 async function send(ctx: Ctx, page_id: string, to: string, text: string, choices?: string[]) {
+  if (!botMayAnswer(await loadTestMode(ctx.cfg.flowDir), to)) throw new Error('Test mode is on and this person is not a tester.');
   const message = choices?.length
     ? { text, quick_replies: choices.map((c) => ({ content_type: 'text', title: c, payload: c })) }
     : { text };

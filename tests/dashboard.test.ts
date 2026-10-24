@@ -72,6 +72,16 @@ describe('dashboard', () => {
     expect((await chk('Alin ang mas gusto mo: miles o cashback?')).problem).toBeNull();
   });
 
+  it('test mode is on by default, changes need the token, bad ids are refused', async () => {
+    const { base } = await start();
+    expect((await (await fetch(`${base}/api/state`)).json()).testMode).toEqual({ on: true, ids: [] });
+    const body = (b: unknown) => ({ method: 'POST', body: JSON.stringify(b), headers: { 'x-token': 'tok' } });
+    expect((await fetch(`${base}/api/testmode`, { method: 'POST', body: JSON.stringify({ on: false }) })).status).toBe(403);
+    expect((await fetch(`${base}/api/testmode`, body({ on: true, ids: ['12345', 'x'] }))).status).toBe(400);
+    expect((await fetch(`${base}/api/testmode`, body({ on: true, ids: ['12345', '12345'] }))).status).toBe(200);
+    expect((await (await fetch(`${base}/api/state`)).json()).testMode).toEqual({ on: true, ids: ['12345'] });
+  });
+
   it('serves files only from inside an applicant folder', async () => {
     const { base, folder } = await start();
     expect((await fetch(`${base}/file?folder=${encodeURIComponent(folder)}&name=EastWest.pdf`)).status).toBe(200);

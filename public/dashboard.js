@@ -511,6 +511,11 @@ function renderSettings(a) {
     `<div class="card"><h3>Weekly quota</h3><div class="row2"><div><label>Complete applications per week</label><input id="weekly_quota" type="number" min="1" max="1000" step="1" value="${s.weekly_quota}"></div>` +
     `<div><label>Week starts on</label><select id="week_start_day">${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => `<option value="${i}"${i === s.week_start_day ? ' selected' : ''}>${d}</option>`).join('')}</select></div></div></div>` +
     '<button class="btn" id="save">Save settings</button>' +
+    `<div class="card" style="margin-top:14px"><h3>Test mode</h3><p class="muted">While test mode is on, the bots (Messenger and comment replies) answer only the people listed below. Turn it off only for the launch.</p>` +
+    `<label><input type="checkbox" id="tm_on" style="min-width:0"${S.testMode.on ? ' checked' : ''}> Test mode on</label>` +
+    `<label for="tm_ids">Tester ids (one per line)</label><textarea id="tm_ids" rows="3" style="width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px">${esc(S.testMode.ids.join('
+'))}</textarea>` +
+    `<p><button class="btn" id="tm_save">Save test mode</button> ${S.testMode.on ? '<span class="pill warn">On: only testers get replies</span>' : '<span class="pill ok">Off: everyone gets replies</span>'}</p></div>` +
     `<div class="card" style="margin-top:14px"><h3>Office numbers directory</h3><p class="muted">Real numbers only: found online (with the link) or typed by you in a Default Form. Used for the next client from the same company and city.</p>` +
     (S.phonebook.length
       ? `<table><tr><th>Company</th><th>City</th><th>Number</th><th>Source</th><th></th></tr>${S.phonebook
@@ -532,6 +537,19 @@ function renderSettings(a) {
         }
       }),
   );
+  $('#tm_save').onclick = async () => {
+    const on = $('#tm_on').checked;
+    const ids = $('#tm_ids').value.split(/\s+/).filter(Boolean);
+    if (ids.some((x) => !/^\d{1,25}$/.test(x))) return msg('Tester ids are numbers only.');
+    if (!on && !confirm('Turn test mode off? Everyone who messages or comments will get automated replies.')) return;
+    try {
+      await post('/api/testmode', { on, ids });
+      msg('Test mode saved');
+      load();
+    } catch (e) {
+      msg(e.message);
+    }
+  };
   $('#save').onclick = async () => {
     const v = (id) => $('#' + id).value;
     const body = {

@@ -136,6 +136,7 @@ const tool = (name: string) => tools.find((t) => t.name === name)!;
 
 function setup(messages: Record<string, { text?: string; from?: string; image?: string; time?: string }>, opts: { failSend?: 'error' | 'uncertain' } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'flow-'));
+  writeFileSync(path.join(dir, 'test-mode.json'), JSON.stringify({ on: false, ids: [] })); // live behavior
   const env = { FB_WRITE_ENABLED: 'true', FB_FLOW_FILE: EXAMPLE, FB_FLOW_DIR: dir };
   const sent: string[] = [];
   const msg = (mid: string) => {
@@ -193,6 +194,16 @@ describe('flow tools', () => {
     expect(out[0].messages.map((m: any) => m.id)).toEqual(['m_1', 'm_3']);
     expect(out[0].stage).toBe('new');
     expect(out[0].can_reply).toBe(true);
+  });
+
+  it('test mode: only listed testers are answered; nobody when the list is empty', async () => {
+    const { ctx, dir, sent } = setup({ m_1: { text: 'hi' } });
+    writeFileSync(path.join(dir, 'test-mode.json'), JSON.stringify({ on: true, ids: [] }));
+    expect(await callTool(tool('fb_flow_pending'), { page_id: '111' }, ctx)).toEqual([]);
+    await expect(answer(ctx, ['m_1'])).rejects.toThrow();
+    expect(sent).toHaveLength(0);
+    writeFileSync(path.join(dir, 'test-mode.json'), JSON.stringify({ on: true, ids: [PSID + '00000'] }));
+    expect(await callTool(tool('fb_flow_pending'), { page_id: '111' }, ctx)).toEqual([]);
   });
 
   it('ignores messages older than the first run (never replies to old chats)', async () => {
@@ -567,6 +578,7 @@ describe('buttons, optional groups and suggestions', () => {
 describe('flow tools: buttons are sent as Messenger quick replies', () => {
   it('sends quick_replies with the consent question', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'flowqr-'));
+    writeFileSync(path.join(dir, 'test-mode.json'), JSON.stringify({ on: false, ids: [] }));
     const flowFile = path.join(dir, 'flow.json');
     writeFileSync(flowFile, JSON.stringify({ ...flow, consent: { ...flow.consent, choices: ['Oo', 'Hindi'] } }));
     const bodies: any[] = [];
