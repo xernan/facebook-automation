@@ -28,6 +28,8 @@ export function operatorPrompt(pageId: string): string {
     '   - lead_saved: call fb_lead_finalize with what you read on the IDs and found in public info (split addresses + zip,',
     '     office phone with its source, nature of business, department, employment type). Leave out what you are not sure of.',
     '     Never invent income, TIN, SSS or other personal facts.',
+    '     If the result lists a missing HOME or OFFICE address part (street/house no., barangay, city, province), ask the',
+    '     applicant for exactly that part in one short message (only within the 24-hour window), then finalize again.',
     '   - next_question.wants_suggestions: you may WebSearch public facts for it (e.g. the branch address of the employer',
     '     they named, or its line of business) and pass up to 5 as suggestions to fb_flow_answer. Only facts you found and',
     '     are sure of. If unsure, pass none. Never suggest or guess personal details (names, birthplace, home address,',

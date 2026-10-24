@@ -139,7 +139,11 @@ export async function fillBankPdf(
         if (!t) continue;
         const max = field.getMaxLength();
         if (max && field.isCombed()) t = combText(t, max);
-        else if (max && t.length > max) t = t.slice(0, max);
+        else if (max && t.length > max) {
+          // With one uniform size the text is drawn on the page, so a long address is never cut: lift the box limit.
+          if (settings.text_uniform_size) field.setMaxLength(undefined);
+          else t = t.slice(0, max);
+        }
         field.setText(t);
         filled++;
       }

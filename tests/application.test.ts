@@ -88,6 +88,17 @@ describe('owner rules in buildApplication', () => {
     expect(b.missing.join()).toMatch(/zip code \(check/);
   });
 
+  it('every missing address part is listed so it gets followed up', () => {
+    const b = buildApplication(lead(), { ...details, home: { street: '1 A St', city: 'Marilao', zip: '3019' }, company: { street: 'ATC', city: 'Muntinlupa' } }, NOW);
+    expect(b.missing).toEqual(expect.arrayContaining(['Home barangay', 'Home province', 'Office barangay', 'Office province', 'Office zip code']));
+    const full = buildApplication(
+      lead(),
+      { ...details, home: { street: '1 A St', barangay: 'Poblacion', city: 'Marilao', province: 'Bulacan', zip: '3019' }, company: { street: 'ATC', barangay: 'Ayala Alabang', city: 'Muntinlupa', province: 'Metro Manila', zip: '1780' } },
+      NOW,
+    );
+    expect(full.missing.filter((m) => /Home|Office (street|barangay|city|province|zip)/.test(m))).toEqual([]);
+  });
+
   it('spouse only when married; education default is listed', () => {
     expect(buildApplication(lead({ answers: { ...lead().answers, spouse_name: 'Ana' } }), details, NOW).data.spouse_name).toBeUndefined();
     const m = buildApplication(lead({ married: true, answers: { ...lead().answers, spouse_name: 'Ana' } }), details, NOW);
@@ -199,6 +210,23 @@ describe('finalizeLead', () => {
     expect(pdf.getForm().getFields()).toHaveLength(0);
     // No dangling widget references left on the page (Acrobat will not print those).
     expect(pdf.getPages()[0]!.node.Annots()).toBeUndefined();
+  });
+
+  it('a long address is printed in full even when the bank box has a character limit', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 200]);
+    const f = pdf.getForm().createTextField('street');
+    f.setMaxLength(20);
+    f.addToPage(page, { x: 20, y: 100, width: 500, height: 20 });
+    const long = 'Blk 12 Lot 34 Unit 5678 Qwertyuiop Tower, 1234 Asdfghjkl Highway';
+    const app = { banks: ['metrobank' as const], data: { street: long }, bankOnly: { metrobank: {}, eastwest: {}, chinabank: {} }, missing: [], defaults: [] };
+    const { fillBankPdf } = await import('../src/pdf.js');
+    const { settingsSchema } = await import('../src/application.js');
+    const out = await fillBankPdf('metrobank', await pdf.save(), app, settingsSchema.parse({}));
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const doc = await getDocument({ data: new Uint8Array(out.bytes) }).promise;
+    const text = (await (await doc.getPage(1)).getTextContent()).items.map((i: any) => i.str).join(' ');
+    expect(text.replace(/\s+/g, ' ')).toContain(long);
   });
 
   it('folder names are safe on Windows', () => {

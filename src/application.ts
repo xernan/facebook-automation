@@ -167,6 +167,7 @@ export function buildApplication(lead: Lead, details: Details, now: Date): Built
   put('street', h?.street, 'Home street');
   put('barangay', h?.barangay, 'Home barangay');
   put('city_province', [h?.city, h?.province].filter(Boolean).join(', ') || undefined, 'Home city/province');
+  if (h?.city && !h.province) missing.push('Home province');
   put('zipcode', h?.zip, 'Home zip code');
   if (h?.zip && h.zip_sure === false) missing.push('Home zip code (check: city has several)');
   put('home_address', [h?.street, h?.barangay, h?.city, h?.province].filter(Boolean).join(', ') || undefined);
@@ -197,8 +198,11 @@ export function buildApplication(lead: Lead, details: Details, now: Date): Built
   if (details.employment_type) put('employment_status', details.employment_type === 'Self-employed' ? undefined : 'Employed');
   const c = details.company;
   put('company_street', c?.street, 'Office street/building');
-  put('company_barangay', c?.barangay);
+  put('company_barangay', c?.barangay, 'Office barangay');
   put('company_city_province', [c?.city, c?.province].filter(Boolean).join(', ') || undefined, 'Office city/province');
+  if (c?.city && !c.province) missing.push('Office province');
+  if (!c?.zip) missing.push('Office zip code');
+  else if (c.zip_sure === false) missing.push('Office zip code (check: city has several)');
   put('company_address', [c?.street, c?.barangay, c?.city, c?.province].filter(Boolean).join(', ') || undefined);
   put('employer_phone', details.employer_phone, 'Office phone (not found)');
   const yrs = yearsFrom(a.years_with_employer);
