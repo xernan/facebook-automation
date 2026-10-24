@@ -139,7 +139,7 @@ describe('finalizeLead', () => {
     const bytes = await template();
     for (const b of ['metrobank', 'eastwest', 'chinabank']) writeFileSync(path.join(tpl, `${b}.pdf`), bytes);
     writeFileSync(path.join(dir, 'lead-999-x.json'), JSON.stringify(lead({ banks: ['BDO'] })));
-    await saveSettings(dir, { agent_name: 'A', agent_code: 'T-1', card_choice: { metrobank: 'cashbackvisa' }, auto_print: false, printer: '', text_bold: true, text_max_size: 14, flatten: false });
+    await saveSettings(dir, { agent_name: 'A', agent_code: 'T-1', card_choice: { metrobank: 'cashbackvisa' }, auto_print: false, printer: '', text_bold: true, text_max_size: 14, text_uniform_size: 0, flatten: false });
 
     const r = await finalizeLead(dir, tpl, 'lead-999-x.json', details, NOW);
     expect(r.pdfs).toEqual(['Metrobank.pdf', 'EastWest.pdf', 'China Bank.pdf']);

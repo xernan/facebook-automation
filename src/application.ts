@@ -58,6 +58,8 @@ export const settingsSchema = z
     /** How answers look on paper: bold, and as big as each box allows up to this size (pt). */
     text_bold: z.boolean().default(true),
     text_max_size: z.number().min(6).max(20).default(14),
+    /** One size for every answer (pt); 0 = fit each box instead. Default 11.5 = the "Store Manager" size the owner chose. */
+    text_uniform_size: z.number().min(0).max(20).default(11.5),
     /** Print-safe: answers become part of the page (on by default; off only to inspect the boxes). */
     flatten: z.boolean().default(true),
     printer: z.string().max(200).default(''),

@@ -144,21 +144,41 @@ export async function fillBankPdf(
       // A box the template cannot take (font, size) stays blank; the rest still fill.
     }
   }
-  // Style every filled answer: bold (setting) and as big as its box allows, up to the max size (setting).
+  // Style every filled answer in the narrow bold font.
+  //  - uniform size (text_uniform_size): every answer the same size, drawn on the page sitting on its box's line;
+  //    it only shrinks when it would run past the box's width. May rise above a short box.
+  //  - otherwise: as big as each box allows, up to text_max_size.
   pdf.registerFontkit(fontkit);
   const font = await pdf.embedFont(fontBytes(settings.text_bold), { subset: true });
+  const pages = pdf.getPages();
   for (const field of form.getFields()) {
     if (!(field instanceof PDFTextField)) continue;
     const t = field.getText();
     if (!t) continue;
     try {
-      const rect = field.acroField.getWidgets()[0]!.getRectangle();
-      field.setFontSize(fitFontSize(font, t, rect, field.isCombed() ? (field.getMaxLength() ?? 0) : 0, settings.text_max_size));
-      field.updateAppearances(font);
+      const widget = field.acroField.getWidgets()[0]!;
+      const rect = widget.getRectangle();
+      const cells = field.isCombed() ? (field.getMaxLength() ?? 0) : 0;
+      if (settings.text_uniform_size) {
+        const page = pages.find((pg) => pg.ref === widget.P()) ?? pages[0]!;
+        const size = Math.min(settings.text_uniform_size, fitFontSize(font, t, { width: rect.width, height: 1e6 }, cells, 1e6));
+        const y = rect.y + Math.max(0.8, (rect.height - size * 0.72) / 2);
+        if (cells) {
+          const cell = rect.width / cells;
+          [...t].forEach((ch, i) => page.drawText(ch, { x: rect.x + i * cell + (cell - font.widthOfTextAtSize(ch, size)) / 2, y, size, font }));
+        } else {
+          page.drawText(t, { x: rect.x + 1.5, y, size, font });
+        }
+        form.removeField(field);
+      } else {
+        field.setFontSize(fitFontSize(font, t, rect, cells, settings.text_max_size));
+        field.updateAppearances(font);
+      }
     } catch {
       // Keeps the template's own look for a box that cannot be restyled.
     }
   }
+
   // Flatten: answers become part of the page, so every viewer and printer shows them (some print form boxes blank).
   if (settings.flatten) form.flatten();
   return { bytes: await pdf.save(), filled };
