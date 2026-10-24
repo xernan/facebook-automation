@@ -6,6 +6,7 @@ import path from 'node:path';
 import { ROOT_DIR, createContext } from './context.js';
 import { findPending, flowTools } from './flowtools.js';
 import { GraphError } from './graph.js';
+import { ClaudeBrake, isMessagingBlocked, pendingKey, takeLock } from './watchguard.js';
 
 // Watcher: checks the Page's Messenger without AI (every FB_WATCH_ACTIVE_INTERVAL_SEC while someone is chatting,
 // else every FB_WATCH_INTERVAL_SEC; slower on its own when Meta says we are calling too often). Plain answers the
@@ -88,26 +89,50 @@ async function main() {
     });
 
   const answer = flowTools.find((t) => t.name === 'fb_flow_answer')!.handler;
+  const brake = new ClaudeBrake();
+  const release = takeLock(ctx.cfg.flowDir);
+  process.on('exit', release);
+  // On Ctrl+C free the lock, then stop the default way. (A hard kill leaves it; the next start sees the pid is gone.)
+  for (const sig of ['SIGINT', 'SIGTERM'] as const)
+    process.once(sig, () => {
+      release();
+      process.kill(process.pid, sig);
+    });
   let lastChat = 0;
   let backoff = 0; // extra seconds after Meta's "too many calls"
+  let blockedUntil = 0; // Meta restricted the Page from messaging: no replies (and no Claude runs) until then
+  const BLOCK_RECHECK_MS = 6 * 3_600_000;
   log(`watching every ${ctx.cfg.FB_WATCH_ACTIVE_INTERVAL_SEC}s while chatting, ${ctx.cfg.FB_WATCH_INTERVAL_SEC}s when quiet`);
   for (;;) {
     try {
       const pending = await findPending(ctx, pageId);
       if (pending.some((p) => p.messages.length > 0)) lastChat = Date.now();
-      // Fast lane: the script answers plain replies itself, in about a second.
-      for (const p of pending.filter((x) => x.script_can_answer && x.can_reply)) {
-        try {
-          await answer({ page_id: pageId, psid: p.psid, message_ids: p.messages.map((m) => m.id), kind: 'answer' }, ctx);
-        } catch (err) {
-          log(`fast reply failed, Claude will handle it: ${ctx.graph.scrub(err instanceof Error ? err.message : String(err))}`);
+      const fast = pending.filter((x) => x.outbox_pending || (x.script_can_answer && x.can_reply));
+      if (Date.now() >= blockedUntil) {
+        // Fast lane: the script answers plain replies (and resends a waiting reply) itself, in about a second.
+        for (const p of fast) {
+          try {
+            await answer({ page_id: pageId, psid: p.psid, message_ids: p.messages.length ? p.messages.map((m) => m.id) : ['m_resend'], kind: 'answer' }, ctx);
+          } catch (err) {
+            if (isMessagingBlocked(err)) {
+              blockedUntil = Date.now() + BLOCK_RECHECK_MS;
+              log(`Meta has restricted this Page from messaging; replies paused, next try in 6 hours. ${ctx.graph.scrub(String((err as Error).message))}`);
+              break;
+            }
+            log(`fast reply failed, Claude will handle it: ${ctx.graph.scrub(err instanceof Error ? err.message : String(err))}`);
+          }
         }
       }
-      const rest = pending.filter((p) => p.outbox_pending || (p.can_reply && p.messages.length > 0 && !p.script_can_answer));
-      if (rest.length > 0) {
+      // Whatever the fast lane did not finish goes to Claude (never while Meta blocks messaging).
+      const waiting = (list: typeof pending) => list.filter((p) => p.outbox_pending || (p.can_reply && p.messages.length > 0));
+      const rest = Date.now() < blockedUntil || waiting(pending).length === 0 ? [] : waiting(fast.length ? await findPending(ctx, pageId) : pending);
+      const key = pendingKey(rest);
+      if (rest.length > 0 && brake.canRun(key)) {
         log(`${rest.length} chat(s) need Claude; waking Claude`);
         const code = await runClaude();
-        log(`Claude finished (exit ${code})`);
+        const after = pendingKey(waiting(await findPending(ctx, pageId)));
+        const wait = brake.done(key, code === 0, after);
+        log(`Claude finished (exit ${code})${wait ? `; same chats still waiting, next Claude try in ${wait}s` : ''}`);
       }
       backoff = Math.max(0, backoff - 5);
     } catch (err) {
