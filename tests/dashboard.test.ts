@@ -72,6 +72,11 @@ describe('dashboard', () => {
     expect((await chk('Alin ang mas gusto mo: miles o cashback?')).problem).toBeNull();
   });
 
+  it('the dashboard page script has no syntax errors', async () => {
+    const { Script } = await import('node:vm');
+    expect(() => new Script(readFileSync('public/dashboard.js', 'utf8'))).not.toThrow();
+  });
+
   it('test mode is on by default, changes need the token, bad ids are refused', async () => {
     const { base } = await start();
     expect((await (await fetch(`${base}/api/state`)).json()).testMode).toEqual({ on: true, ids: [] });

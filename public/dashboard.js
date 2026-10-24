@@ -513,8 +513,7 @@ function renderSettings(a) {
     '<button class="btn" id="save">Save settings</button>' +
     `<div class="card" style="margin-top:14px"><h3>Test mode</h3><p class="muted">While test mode is on, the bots (Messenger and comment replies) answer only the people listed below. Turn it off only for the launch.</p>` +
     `<label><input type="checkbox" id="tm_on" style="min-width:0"${S.testMode.on ? ' checked' : ''}> Test mode on</label>` +
-    `<label for="tm_ids">Tester ids (one per line)</label><textarea id="tm_ids" rows="3" style="width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px">${esc(S.testMode.ids.join('
-'))}</textarea>` +
+    `<label for="tm_ids">Tester ids (one per line)</label><textarea id="tm_ids" rows="3" style="width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px">${esc(S.testMode.ids.join(String.fromCharCode(10)))}</textarea>` +
     `<p><button class="btn" id="tm_save">Save test mode</button> ${S.testMode.on ? '<span class="pill warn">On: only testers get replies</span>' : '<span class="pill ok">Off: everyone gets replies</span>'}</p></div>` +
     `<div class="card" style="margin-top:14px"><h3>Office numbers directory</h3><p class="muted">Real numbers only: found online (with the link) or typed by you in a Default Form. Used for the next client from the same company and city.</p>` +
     (S.phonebook.length
