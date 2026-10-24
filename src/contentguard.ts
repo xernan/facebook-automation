@@ -20,6 +20,9 @@ const RULES: { re: RegExp; why: string }[] = [
   { re: /\b(i-?share|share)\s+(mo\s+)?(this\s+|ito\s+|na\s+)?(sa|with|to)\s+(your\s+|mga\s+)?(friends?|kaibigan|kakilala)/i, why: 'asks people to share (engagement bait)' },
   { re: /\b(i-?comment|comment|type)\s+["“']?(yes|oo|amen|done|interested|1)\b/i, why: 'asks for a fixed comment (engagement bait)' },
   { re: /\b(like|react|i-?like)\s+(this\s+)?(if|kung)\b/i, why: 'asks for likes or reactions (engagement bait)' },
+  { re: /\bi-?share\s+(mo\s+)?(ito|this|na)\b/i, why: 'asks people to share (engagement bait)' },
+  // Vote baiting: "comment the letter/number" polls. Ask a real question instead ("Alin, at bakit?").
+  { re: /\b(i-?comment|comment)\s+(ang\s+|your\s+)?(letter|number|numero|sagot\s+mong\s+letter)\b/i, why: 'asks people to vote in the comments (engagement bait)' },
 ];
 
 /** The reason this text breaks a rule, or undefined when it is fine to send. */

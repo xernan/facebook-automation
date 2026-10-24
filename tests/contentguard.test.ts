@@ -39,6 +39,8 @@ describe('Community Standards guard', () => {
       'Comment YES kung gusto mo',
       'Like if you agree',
       'React kung carded ka na',
+      'I-share mo ito para protektado rin ang pamilya mo',
+      'Comment ang letter mo! 👇',
     ])
       expect(contentProblem(t)).toBeDefined();
     for (const t of [
