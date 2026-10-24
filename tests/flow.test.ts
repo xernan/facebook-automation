@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } fro
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { advance, cleanSuggestions, flowSchema, idVerdict, newPerson, parseYesNo, validAnswer, type IdSeen, type Person } from '../src/flow.js';
+import { advance, cleanSuggestions, flowSchema, idVerdict, newPerson, parseYesNo, scriptCanAnswer, validAnswer, type IdSeen, type Person } from '../src/flow.js';
 import { FlowStore, loadFlow } from '../src/flowstore.js';
 import { callTool, tools } from '../src/tools.js';
 import { param, testCtx, type Call } from './helpers.js';
@@ -608,4 +608,50 @@ describe('idVerdict (owner ID rules)', () => {
     ['blurry passport', [id('passport', { clear: false })], t.unclear_reply],
     ['nothing', [], t.need_image_reply],
   ] as const)('%s -> asks again', (_n, ids, reply) => expect(idVerdict(flow, [...ids])).toEqual({ ok: false, reply }));
+});
+
+describe('fast lane (script answers without Claude)', () => {
+  const f = flowSchema.parse({
+    ...flow,
+    consent: { ...flow.consent, choices: ['Oo', 'Hindi'] },
+    steps: [
+      { key: 'civil_status', prompt: 'Civil status?', sets_married: true, choices: ['Single', 'Married'] },
+      { key: 'mobile', prompt: 'Mobile?', validate: 'mobile', invalid_reply: 'Bad.' },
+      { key: 'place_of_birth', prompt: 'Saan ka pinanganak?' },
+      { key: 'tin', prompt: 'TIN?', optional_group: 'tin', validate: 'tin', invalid_reply: 'Bad TIN.' },
+    ],
+  });
+  const at = (stage: Person['stage'], step = 0): Person => ({ ...newPerson(NOW), stage, step });
+  const can = (p: Person, text: string, image_url?: string) => scriptCanAnswer(f, p, { text, image_url });
+
+  it('greetings, clear yes/no and bank names are answered right away', () => {
+    expect(can(at('new'), 'hi')).toBe(true);
+    expect(can(at('new'), 'Good evening po')).toBe(true);
+    expect(can(at('consent'), 'Oo')).toBe(true);
+    expect(can(at('carded'), 'meron')).toBe(true);
+    expect(can(at('banks'), 'BDO at BPI')).toBe(true);
+  });
+
+  it('questions, unclear replies and images go to Claude', () => {
+    expect(can(at('new'), 'magkano po fee')).toBe(false);
+    expect(can(at('new'), 'hi, legit ba kayo?')).toBe(false);
+    expect(can(at('new'), 'hi I want to ask about the process for my mom')).toBe(false);
+    expect(can(at('consent'), 'ewan ko')).toBe(false);
+    expect(can(at('consent'), 'oo pero paano?')).toBe(false);
+    expect(can(at('banks'), 'yung sa mall')).toBe(false);
+    expect(can(at('id_photo'), '', 'https://scontent.xx.fbcdn.net/x.jpg')).toBe(false);
+    expect(can(at('id_photo'), 'ok')).toBe(false);
+    expect(can(at('done'), 'thanks')).toBe(false);
+  });
+
+  it('steps: tapped buttons, valid numbers and plain short answers; bad numbers and questions go to Claude', () => {
+    expect(can(at('steps', 0), 'Married')).toBe(true);
+    expect(can(at('steps', 1), '0917 123 4567')).toBe(true);
+    expect(can(at('steps', 1), 'wala akong cp')).toBe(false);
+    expect(can(at('steps', 2), 'Marilao, Bulacan')).toBe(true);
+    expect(can(at('steps', 2), 'bakit kailangan')).toBe(false);
+    expect(can(at('steps', 3), 'Skip')).toBe(true);
+    expect(can(at('steps', 3), '123-456-789')).toBe(true);
+    expect(can(at('steps', 3), '12')).toBe(false);
+  });
 });

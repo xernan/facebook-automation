@@ -373,6 +373,43 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
   }
 }
 
+// Words that make a message a question for Claude, even without a "?".
+const QUESTION_WORDS = new Set(['magkano', 'paano', 'pano', 'bakit', 'kailan', 'ano', 'anong', 'saan', 'sino', 'pwede', 'puwede', 'gaano', 'ilan', 'how', 'what', 'why', 'when', 'where', 'who', 'can', 'fee', 'bayad', 'scam', 'legit', 'requirements']);
+const GREETING_WORDS = new Set(['hi', 'hello', 'helo', 'hey', 'good', 'gud', 'morning', 'afternoon', 'evening', 'eve', 'po', 'sir', 'maam', 'ma', 'am', 'interested', 'apply', 'credit', 'card', 'cards', 'info', 'pm', 'pa', 'yes', 'oo', 'kumusta', 'musta']);
+
+/**
+ * True when the script alone can answer these messages right away, without waking Claude: a greeting to start,
+ * a clear yes/no, bank names, a tapped button, a valid number/email/TIN, or a plain answer to a free-text question.
+ * Anything that may be a question, an image, or a reply at the ID step goes to Claude.
+ */
+export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean {
+  const text = input.text.trim();
+  if (input.image_url || !text || text.includes('?')) return false;
+  const w = words(text);
+  if (w.some((x) => QUESTION_WORDS.has(x))) return false;
+  switch (p.stage) {
+    case 'new':
+      return w.length > 0 && w.length <= 5 && w.every((x) => GREETING_WORDS.has(x));
+    case 'consent':
+    case 'carded':
+      return !!parseYesNo(text);
+    case 'banks':
+      return extractBanks(text).length > 0;
+    case 'steps': {
+      const step = flow.steps[p.step];
+      if (!step) return false;
+      const tapped = [...(step.choices ?? []), ...(step.optional_group ? [flow.skip_choice] : []), ...(p.suggestions?.length ? [flow.other_choice] : [])];
+      if (tapped.some((c) => c.toLowerCase() === text.toLowerCase())) return true;
+      if (p.suggestions?.length && /^\d+$/.test(text)) return true;
+      if (step.validate) return validAnswer(step.validate, text);
+      // Free text (names, places, addresses): short plain answers only.
+      return w.length <= 25;
+    }
+    default:
+      return false;
+  }
+}
+
 /** The step a person would be asked next if `input` answered the current one (for Claude to prepare suggestions). */
 export function nextStepIf(flow: Flow, p: Person, input: Incoming, now: Date, cooldownDays: number): Step | undefined {
   const r = advance(flow, p, input, now, cooldownDays);

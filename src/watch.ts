@@ -4,10 +4,13 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ROOT_DIR, createContext } from './context.js';
-import { findPending } from './flowtools.js';
+import { findPending, flowTools } from './flowtools.js';
+import { GraphError } from './graph.js';
 
-// Watcher: checks the Page's Messenger every FB_WATCH_INTERVAL_SEC without AI. When someone wrote,
-// it wakes Claude (headless) with only the flow and messaging tools, and Claude handles the chats.
+// Watcher: checks the Page's Messenger without AI (every FB_WATCH_ACTIVE_INTERVAL_SEC while someone is chatting,
+// else every FB_WATCH_INTERVAL_SEC; slower on its own when Meta says we are calling too often). Plain answers the
+// script can handle (greeting, yes/no, buttons, valid numbers, short answers) are answered right away by the code.
+// Anything else wakes Claude (headless) with only the flow and messaging tools.
 // Logs go to stderr and never include names, messages or tokens.
 
 const ALLOWED = [...['fb_flow_pending', 'fb_flow_answer', 'fb_flow_id_images', 'fb_flow_id_review', 'fb_lead_finalize', 'fb_send_message', 'fb_get_messages'].map((t) => `mcp__facebook__${t}`), 'WebSearch'];
@@ -84,20 +87,38 @@ async function main() {
       });
     });
 
-  log(`watching every ${ctx.cfg.FB_WATCH_INTERVAL_SEC}s`);
+  const answer = flowTools.find((t) => t.name === 'fb_flow_answer')!.handler;
+  let lastChat = 0;
+  let backoff = 0; // extra seconds after Meta's "too many calls"
+  log(`watching every ${ctx.cfg.FB_WATCH_ACTIVE_INTERVAL_SEC}s while chatting, ${ctx.cfg.FB_WATCH_INTERVAL_SEC}s when quiet`);
   for (;;) {
     try {
       const pending = await findPending(ctx, pageId);
-      const people = pending.filter((p) => p.outbox_pending || (p.can_reply && p.messages.length > 0)).length;
-      if (people > 0) {
-        log(`${people} chat(s) waiting; waking Claude`);
+      if (pending.some((p) => p.messages.length > 0)) lastChat = Date.now();
+      // Fast lane: the script answers plain replies itself, in about a second.
+      for (const p of pending.filter((x) => x.script_can_answer && x.can_reply)) {
+        try {
+          await answer({ page_id: pageId, psid: p.psid, message_ids: p.messages.map((m) => m.id), kind: 'answer' }, ctx);
+        } catch (err) {
+          log(`fast reply failed, Claude will handle it: ${ctx.graph.scrub(err instanceof Error ? err.message : String(err))}`);
+        }
+      }
+      const rest = pending.filter((p) => p.outbox_pending || (p.can_reply && p.messages.length > 0 && !p.script_can_answer));
+      if (rest.length > 0) {
+        log(`${rest.length} chat(s) need Claude; waking Claude`);
         const code = await runClaude();
         log(`Claude finished (exit ${code})`);
       }
+      backoff = Math.max(0, backoff - 5);
     } catch (err) {
-      log(ctx.graph.scrub(err instanceof Error ? err.message : String(err)));
+      if (err instanceof GraphError && [4, 17, 32, 613, 80001].includes(err.code ?? -1)) {
+        backoff = Math.min(backoff ? backoff * 2 : 30, 600);
+        log(`Meta says too many calls; slowing down by ${backoff}s`);
+      } else log(ctx.graph.scrub(err instanceof Error ? err.message : String(err)));
     }
-    await new Promise((r) => setTimeout(r, ctx.cfg.FB_WATCH_INTERVAL_SEC * 1000));
+    const active = Date.now() - lastChat < ctx.cfg.FB_WATCH_ACTIVE_MINUTES * 60_000;
+    const wait = (active ? ctx.cfg.FB_WATCH_ACTIVE_INTERVAL_SEC : ctx.cfg.FB_WATCH_INTERVAL_SEC) + backoff;
+    await new Promise((r) => setTimeout(r, wait * 1000));
   }
 }
 

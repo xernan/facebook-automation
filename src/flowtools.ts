@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
-import { advance, cleanSuggestions, currentPrompt, ID_TYPES, idVerdict, newPerson, nextStepIf, type IdSeen, type Person } from './flow.js';
+import { advance, cleanSuggestions, currentPrompt, ID_TYPES, idVerdict, newPerson, nextStepIf, scriptCanAnswer, type IdSeen, type Person } from './flow.js';
 import { detailsSchema } from './application.js';
 import { FlowStore, loadFlow, type FlowState } from './flowstore.js';
 import { finalizeLead } from './leadout.js';
@@ -86,6 +86,8 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
       // address). Never suggest personal details (names, birthplace, home address, mother's maiden name).
       next_question: next ? { key: next.key, prompt: next.prompt, wants_suggestions: !!next.suggest } : undefined,
       answers_so_far: cur.answers,
+      // The watcher answers these itself in a second (no Claude): plain answers whose next question needs no search.
+      script_can_answer: !p?.outbox && msgs.length > 0 && !next?.suggest && scriptCanAnswer(flow, cur, joined),
     });
   }
   return out;
