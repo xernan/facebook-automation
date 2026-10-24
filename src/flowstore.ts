@@ -101,7 +101,7 @@ export class FlowStore {
   }
 
   /** Saves a finished application as its own file. Returns the file name. */
-  async saveLead(psid: string, person: Person, idImage: string | undefined, now: Date): Promise<string> {
+  async saveLead(psid: string, person: Person, now: Date): Promise<string> {
     const stamp = now.toISOString().replace(/[:.]/g, '-');
     const name = `lead-${psid}-${stamp}.json`;
     await fs.mkdir(this.dir, { recursive: true });
@@ -113,7 +113,8 @@ export class FlowStore {
       married: person.married,
       flags: person.flags ?? [],
       answers: person.answers,
-      id_image_file: idImage,
+      id_photos: person.id_files ?? [],
+      id_review: person.id_review ?? [],
     };
     await fs.writeFile(path.join(this.dir, name), JSON.stringify(lead, null, 2), 'utf8');
     return name;

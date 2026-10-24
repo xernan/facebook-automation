@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { advance, cleanSuggestions, currentPrompt, newPerson, nextStepIf, type Person } from './flow.js';
+import { promises as fsp } from 'node:fs';
+import path from 'node:path';
+import { advance, cleanSuggestions, currentPrompt, ID_TYPES, idVerdict, newPerson, nextStepIf, type IdSeen, type Person } from './flow.js';
 import { FlowStore, loadFlow, type FlowState } from './flowstore.js';
 import type { Ctx, ToolDef } from './tools.js';
 
@@ -98,6 +100,52 @@ async function send(ctx: Ctx, page_id: string, to: string, text: string, choices
   });
 }
 
+/**
+ * Saves the reply in the person's outbox, sends it, then marks the messages handled. If sending fails the
+ * outbox stays and the next fb_flow_answer resends it; a maybe-sent reply is never sent twice.
+ */
+async function deliver(
+  ctx: Ctx,
+  s: FlowStore,
+  state: FlowState,
+  page_id: string,
+  who: string,
+  person: Person,
+  text: string,
+  choices: string[] | undefined,
+  ids: string[],
+  extra: Record<string, unknown> = {},
+) {
+  person.outbox = { text, for_messages: ids, choices };
+  state.people[who] = person;
+  await s.save(state);
+  try {
+    await send(ctx, page_id, who, text, choices);
+  } catch (err: any) {
+    if (!err?.uncertain) throw err;
+    delete person.outbox;
+    markHandled(state, ids);
+    await s.save(state);
+    return { reply: text, stage: person.stage, ...extra, note: 'Send may not have gone through. Check the chat with fb_get_messages.' };
+  }
+  delete person.outbox;
+  markHandled(state, ids);
+  await s.save(state);
+  return { reply: text, buttons: choices, stage: person.stage, ...extra };
+}
+
+const idSeen = z
+  .object({
+    type: z.enum(ID_TYPES),
+    side: z.enum(['front', 'back', 'both']),
+    clear: z.boolean().describe('Readable, whole (no cut edges), nothing covering it'),
+    has_signature: z.boolean(),
+    name: z.string().max(120).optional(),
+    birthday: z.string().max(20).optional().describe('As printed, e.g. 1990-05-31'),
+    sex: z.string().max(10).optional(),
+  })
+  .strict();
+
 export const flowTools: ToolDef[] = [
   {
     name: 'fb_flow_pending',
@@ -176,13 +224,20 @@ export const flowTools: ToolDef[] = [
         const r = advance(flow, person, input, now, ctx.cfg.FB_FLOW_COOLDOWN_DAYS, cleanSuggestions(suggestions));
         const next: Person = r.person;
 
-        let leadFile: string | undefined;
-        if (r.completed) {
-          const img = r.person.id_image_url
-            ? await s.saveIdImage(who, r.person.id_image_url, now, ctx.cfg.FB_FLOW_MAX_IMAGE_MB * 1024 * 1024, ctx.cfg.FB_HTTP_TIMEOUT_MS)
-            : undefined;
-          delete next.id_image_url; // CDN links expire; the saved file is the record.
-          leadFile = await s.saveLead(who, next, img, now);
+        if (r.received_id_image) {
+          const file = await s.saveIdImage(who, r.received_id_image, now, ctx.cfg.FB_FLOW_MAX_IMAGE_MB * 1024 * 1024, ctx.cfg.FB_HTTP_TIMEOUT_MS);
+          if (!file) return deliver(ctx, s, state, page_id, who, next, flow.id_photo.unclear_reply, undefined, ids);
+          next.id_files = [...(next.id_files ?? []), file];
+          markHandled(state, ids);
+          state.people[who] = next;
+          await s.save(state);
+          return {
+            reply: null,
+            stage: next.stage,
+            needs_id_review: true,
+            id_photos: next.id_files.length,
+            note: 'Look at every ID photo with fb_flow_id_images, then call fb_flow_id_review.',
+          };
         }
 
         if (!r.reply) {
@@ -191,25 +246,57 @@ export const flowTools: ToolDef[] = [
           await s.save(state);
           return { reply: null, stage: next.stage };
         }
-
-        // Save the reply before sending: if sending fails, the next call resends it instead of re-running the script.
-        next.outbox = { text: r.reply, for_messages: ids, choices: r.choices };
-        state.people[who] = next;
-        await s.save(state);
-        try {
-          await send(ctx, page_id, who, r.reply, r.choices);
-        } catch (err: any) {
-          // Meta may have delivered it before the connection broke: never send twice.
-          if (!err?.uncertain) throw err;
-          delete next.outbox;
-          markHandled(state, ids);
-          await s.save(state);
-          return { reply: r.reply, stage: next.stage, lead_saved: leadFile, note: 'Send may not have gone through. Check the chat with fb_get_messages.' };
-        }
-        delete next.outbox;
-        markHandled(state, ids);
-        await s.save(state);
-        return { reply: r.reply, buttons: r.choices, stage: next.stage, lead_saved: leadFile };
+        return deliver(ctx, s, state, page_id, who, next, r.reply, r.choices, ids);
+      });
+    },
+  },
+  {
+    name: 'fb_flow_id_images',
+    description:
+      'The ID photos one applicant sent, as images, in order. Read each one (type, side, clear, signature, name, birthday, sex) ' +
+      'and pass what you see to fb_flow_id_review. Personal data: never paste it anywhere public.',
+    write: false,
+    input: { psid },
+    handler: async ({ psid: who }, ctx) => {
+      const state = await store(ctx).load(new Date());
+      const files = state.people[who]?.id_files ?? [];
+      if (files.length === 0) return { note: 'No ID photos yet.' };
+      const root = path.resolve(ctx.cfg.flowDir) + path.sep;
+      const content = [];
+      for (const [i, f] of files.entries()) {
+        const full = path.resolve(ctx.cfg.flowDir, f);
+        if (!full.startsWith(root)) continue;
+        const mimeType = f.endsWith('.png') ? 'image/png' : f.endsWith('.webp') ? 'image/webp' : 'image/jpeg';
+        content.push({ type: 'text', text: `Photo ${i}` }, { type: 'image', data: (await fsp.readFile(full)).toString('base64'), mimeType });
+      }
+      return { __content: content };
+    },
+  },
+  {
+    name: 'fb_flow_id_review',
+    description:
+      'After looking at the ID photos (fb_flow_id_images), report what each photo shows, one entry per photo in the same order. ' +
+      'The owner ID rules are applied in code: if the set is enough the application completes and the lead is saved; otherwise ' +
+      'the applicant is told exactly what is missing (clearer photo, back side, second ID, ID with signature, primary ID). ' +
+      'clear=false if blurry, cut off, covered or glaring. Use type "other" for anything not listed. Never guess a field you cannot read.',
+    write: true,
+    input: { page_id: pageId, psid, photos: z.array(idSeen).min(1).max(10) },
+    handler: async ({ page_id, psid: who, photos }, ctx) => {
+      const now = new Date();
+      const s = store(ctx);
+      const flow = loadFlow(ctx.cfg.flowFile);
+      return s.withLock(async () => {
+        const state = await s.load(now);
+        const person = state.people[who];
+        if (!person || person.stage !== 'id_photo') throw new Error('This person is not at the ID photo step.');
+        const n = (person.id_files ?? []).length;
+        if (photos.length !== n) throw new Error(`Give one entry per ID photo: there are ${n}.`);
+        person.id_review = photos as IdSeen[];
+        const v = idVerdict(flow, person.id_review);
+        if (!v.ok) return deliver(ctx, s, state, page_id, who, person, v.reply, undefined, [], { id_ok: false });
+        person.stage = 'done';
+        const leadFile = await s.saveLead(who, person, now);
+        return deliver(ctx, s, state, page_id, who, person, flow.done_reply, undefined, [], { id_ok: true, lead_saved: leadFile });
       });
     },
   },

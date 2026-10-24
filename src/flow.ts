@@ -7,6 +7,22 @@ import { extractBanks, extractEmails, extractPhones } from './leads.js';
 // (FB_FLOW_FILE, git-ignored); flow.example.json shows the shape.
 
 const msg = z.string().trim().min(1).max(2000);
+
+export const ID_TYPES = [
+  'drivers_license',
+  'passport',
+  'umid',
+  'postal',
+  'voters',
+  'sss_old',
+  'prc',
+  'sss_new',
+  'national_id',
+  'philhealth',
+  'tin',
+  'other',
+] as const;
+const idType = z.enum(ID_TYPES);
 /** Messenger quick-reply buttons: at most 13, each title at most 20 characters. */
 const choices = z.array(z.string().trim().min(1).max(20)).min(1).max(13).optional();
 
@@ -52,7 +68,30 @@ export const flowSchema = z
           .strict(),
       )
       .min(1),
-    id_photo: z.object({ prompt: msg, need_image_reply: msg }).strict(),
+    id_photo: z
+      .object({
+        prompt: msg,
+        need_image_reply: msg,
+        /** Sent after Claude reviews the photos and the ID set is not enough yet. */
+        unclear_reply: msg,
+        need_back_reply: msg,
+        need_second_reply: msg,
+        need_signature_reply: msg,
+        need_primary_reply: msg,
+      })
+      .strict(),
+    /**
+     * Which IDs are enough (owner rules). primary: enough alone. pair: needs another ID too (and both sides
+     * when both_sides; the other ID must show a signature when second_needs_signature). secondary: only
+     * counts as the second ID.
+     */
+    id_rules: z
+      .object({
+        primary: z.array(idType).min(1),
+        pair: z.partialRecord(idType, z.object({ both_sides: z.boolean(), second_needs_signature: z.boolean() }).strict()),
+        secondary: z.array(idType),
+      })
+      .strict(),
     done_reply: msg,
     yes_no_reply: msg,
     /** Shown with suggestions: the button that means "none of these, I will type it". */
@@ -88,11 +127,26 @@ export interface Person {
   consent_at?: string;
   cooldown_until?: string;
   id_image_url?: string;
+  /** Saved ID photos (paths inside FB_FLOW_DIR), in the order received. */
+  id_files?: string[];
+  /** Claude's latest reading of each ID photo (same order as id_files). */
+  id_review?: IdSeen[];
   /** Suggestions shown with the current question; a reply "1".."n" picks one. */
   suggestions?: string[];
   updated_at: string;
   /** A reply saved but not sent yet (see fb_flow_answer). */
   outbox?: { text: string; for_messages: string[]; choices?: string[] };
+}
+
+/** What Claude read on one ID photo. */
+export interface IdSeen {
+  type: (typeof ID_TYPES)[number];
+  side: 'front' | 'back' | 'both';
+  clear: boolean;
+  has_signature: boolean;
+  name?: string;
+  birthday?: string;
+  sex?: string;
 }
 
 export interface Incoming {
@@ -108,6 +162,8 @@ export interface Advance {
   choices?: string[];
   /** True when this message completed the application (save the lead). */
   completed?: boolean;
+  /** An ID photo arrived: save it, then Claude reviews it (fb_flow_id_review). */
+  received_id_image?: string;
 }
 
 export const newPerson = (now: Date): Person => ({
@@ -307,10 +363,9 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
     }
 
     case 'id_photo':
+      // The code never decides an ID is fine on its own: Claude reads each photo, then idVerdict() decides.
       if (!input.image_url) return ask(flow.id_photo.need_image_reply);
-      p.id_image_url = input.image_url;
-      p.stage = 'done';
-      return { person: p, reply: flow.done_reply, completed: true };
+      return { person: p, received_id_image: input.image_url };
 
     case 'done':
     case 'excluded':
@@ -341,4 +396,32 @@ export function currentPrompt(flow: Flow, p: Person): string | undefined {
     default:
       return undefined;
   }
+}
+
+export type IdVerdict = { ok: true } | { ok: false; reply: string };
+
+/** Owner ID rules: is this set of ID photos enough? Pure, so the rules are the same every time. */
+export function idVerdict(flow: Flow, seen: IdSeen[]): IdVerdict {
+  const r = flow.id_rules;
+  const t = flow.id_photo;
+  const clear = seen.filter((s) => s.clear);
+  const known = (s: IdSeen) => r.primary.includes(s.type) || s.type in r.pair || r.secondary.includes(s.type);
+
+  if (clear.some((s) => r.primary.includes(s.type))) return { ok: true };
+
+  const pairs = clear.filter((s) => s.type in r.pair);
+  for (const main of pairs) {
+    const rule = r.pair[main.type]!;
+    const sides = new Set(clear.filter((s) => s.type === main.type).map((s) => s.side));
+    const bothSides = sides.has('both') || (sides.has('front') && sides.has('back'));
+    if (rule.both_sides && !bothSides) return { ok: false, reply: t.need_back_reply };
+    const others = clear.filter((s) => s.type !== main.type && known(s));
+    if (others.length === 0) return { ok: false, reply: rule.second_needs_signature ? t.need_signature_reply : t.need_second_reply };
+    if (rule.second_needs_signature && !others.some((s) => s.has_signature)) return { ok: false, reply: t.need_signature_reply };
+    return { ok: true };
+  }
+
+  if (seen.length > 0 && clear.length < seen.length) return { ok: false, reply: t.unclear_reply };
+  if (clear.length > 0) return { ok: false, reply: t.need_primary_reply };
+  return { ok: false, reply: t.need_image_reply };
 }

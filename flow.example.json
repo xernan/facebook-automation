@@ -43,8 +43,41 @@
   ],
   "id_photo": {
     "prompt": "Last step: please send a clear photo of one valid government ID.",
-    "need_image_reply": "Please send the ID as a photo."
+    "need_image_reply": "Please send the ID as a photo.",
+    "unclear_reply": "The photo is not clear. Please send it again: sharp, whole ID, nothing covering it.",
+    "need_back_reply": "Please also send the back of the ID.",
+    "need_second_reply": "This ID needs one more ID (primary or secondary). Please send a photo of another ID.",
+    "need_signature_reply": "Please send one more ID that shows your signature.",
+    "need_primary_reply": "Please send a primary ID (Driver's License, Passport, UMID, Postal, Voter's ID)."
   },
   "done_reply": "Thank you! Your application details are complete. We will update you here.",
-  "yes_no_reply": "Please answer Yes or No."
+  "yes_no_reply": "Please answer Yes or No.",
+  "id_rules": {
+    "primary": [
+      "drivers_license",
+      "passport",
+      "umid",
+      "postal",
+      "voters",
+      "sss_old"
+    ],
+    "pair": {
+      "prc": {
+        "both_sides": true,
+        "second_needs_signature": false
+      },
+      "sss_new": {
+        "both_sides": false,
+        "second_needs_signature": false
+      },
+      "national_id": {
+        "both_sides": true,
+        "second_needs_signature": true
+      }
+    },
+    "secondary": [
+      "philhealth",
+      "tin"
+    ]
+  }
 }

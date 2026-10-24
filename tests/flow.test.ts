@@ -1,8 +1,8 @@
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { advance, cleanSuggestions, flowSchema, newPerson, parseYesNo, validAnswer, type Person } from '../src/flow.js';
+import { describe, expect, it, vi } from 'vitest';
+import { advance, cleanSuggestions, flowSchema, idVerdict, newPerson, parseYesNo, validAnswer, type IdSeen, type Person } from '../src/flow.js';
 import { FlowStore, loadFlow } from '../src/flowstore.js';
 import { callTool, tools } from '../src/tools.js';
 import { param, testCtx, type Call } from './helpers.js';
@@ -90,14 +90,16 @@ describe('advance (script)', () => {
     expect(r.reply).toBe(flow.banks.unknown_reply);
   });
 
-  it('single applicant skips spouse; ID must be a photo; completes', () => {
+  it('single applicant skips spouse; ID must be a photo; a photo waits for Claude review', () => {
     let r = walk('yes', 'oo', 'BDO', 'Juan Cruz', 'single', '09171234567');
     expect(r.person.stage).toBe('id_photo');
     r = run(r.person, 'eto po ID number ko 123');
     expect(r.reply).toBe(flow.id_photo.need_image_reply);
     r = run(r.person, '', 'https://scontent.fbcdn.net/x.jpg');
-    expect(r.completed).toBe(true);
-    expect(r.person.stage).toBe('done');
+    expect(r.received_id_image).toBe('https://scontent.fbcdn.net/x.jpg');
+    expect(r.reply).toBeUndefined();
+    expect(r.completed).toBeUndefined();
+    expect(r.person.stage).toBe('id_photo');
     expect(r.person.answers).toEqual({ full_name: 'Juan Cruz', civil_status: 'single', mobile: '09171234567' });
   });
 
@@ -123,8 +125,8 @@ ${flow.steps[2]!.prompt}`);
   });
 
   it('after done, the script stays quiet (Claude answers)', () => {
-    const r = walk('yes', 'oo', 'BDO', 'Juan', 'single', '09171234567', { image: 'https://x.fbcdn.net/a.jpg' });
-    expect(run(r.person, 'salamat').reply).toBeUndefined();
+    const r = walk('yes', 'oo', 'BDO', 'Juan', 'single', '09171234567');
+    expect(run({ ...r.person, stage: 'done' }, 'salamat').reply).toBeUndefined();
   });
 });
 
@@ -259,7 +261,7 @@ describe('flow tools', () => {
     expect(sent.length + old.sent.length).toBe(0);
   });
 
-  it('full application saves a lead file; ID from a non-Meta host is not downloaded', async () => {
+  it('ID from a non-Meta host is not downloaded: the person is asked to resend', async () => {
     const msgs = {
       m_1: { text: 'hi' },
       m_2: { text: 'yes' },
@@ -273,14 +275,66 @@ describe('flow tools', () => {
     const { ctx, dir } = setup(msgs);
     let r: any;
     for (const mid of Object.keys(msgs)) r = await answer(ctx, [mid]);
-    expect(r.stage).toBe('done');
-    expect(r.lead_saved).toMatch(/^lead-999-/);
-    const lead = JSON.parse(readFileSync(path.join(dir, r.lead_saved), 'utf8'));
-    expect(lead.banks).toEqual(['BDO']);
-    expect(lead.answers.mobile).toBe('09171234567');
-    expect(lead.consent_at).toBeTruthy();
-    expect(lead.id_image_file).toBeUndefined();
+    expect(r.reply).toBe(flow.id_photo.unclear_reply);
+    expect(r.stage).toBe('id_photo');
     expect(existsSync(path.join(dir, 'valid_ids'))).toBe(false);
+  });
+
+  it('ID photo -> Claude sees it -> review decides with the owner rules -> lead saved', async () => {
+    const msgs = {
+      m_1: { text: 'hi' },
+      m_2: { text: 'yes' },
+      m_3: { text: 'oo' },
+      m_4: { text: 'BDO' },
+      m_5: { text: 'Juan' },
+      m_6: { text: 'single' },
+      m_7: { text: '09171234567' },
+      m_8: { image: 'https://scontent.fbcdn.net/prc-front.jpg' },
+      m_9: { image: 'https://scontent.fbcdn.net/prc-back.jpg' },
+    };
+    vi.stubGlobal('fetch', async () => new Response(new Uint8Array(50), { headers: { 'content-type': 'image/jpeg' } }));
+    try {
+      const { ctx, dir, sent } = setup(msgs);
+      let r: any;
+      for (const mid of Object.keys(msgs).slice(0, 8)) r = await answer(ctx, [mid]);
+      expect(r.needs_id_review).toBe(true);
+      expect(r.id_photos).toBe(1);
+
+      const imgs: any = await callTool(tool('fb_flow_id_images'), { psid: PSID }, ctx);
+      expect(imgs.__content.filter((c: any) => c.type === 'image')).toHaveLength(1);
+
+      const review = (photos: any[]) => callTool(tool('fb_flow_id_review'), { page_id: '111', psid: PSID, photos }, ctx) as Promise<any>;
+      const prcFront = { type: 'prc', side: 'front', clear: true, has_signature: true };
+      await expect(review([prcFront, prcFront])).rejects.toThrow(/one entry per ID photo/);
+
+      r = await review([prcFront]);
+      expect(r.id_ok).toBe(false);
+      expect(r.reply).toBe(flow.id_photo.need_back_reply);
+
+      r = await answer(ctx, ['m_9']);
+      expect(r.id_photos).toBe(2);
+      r = await review([prcFront, { type: 'prc', side: 'back', clear: true, has_signature: false }]);
+      expect(r.reply).toBe(flow.id_photo.need_second_reply);
+      expect(r.stage).toBe('id_photo');
+
+      // Not at the ID step any more after completing; a second review is refused.
+      const state = await new FlowStore(dir).load(new Date());
+      state.people[PSID]!.id_files = [...state.people[PSID]!.id_files!, 'valid_ids/x.jpg'];
+      await new FlowStore(dir).save(state);
+      r = await review([prcFront, { type: 'prc', side: 'back', clear: true, has_signature: false }, { type: 'tin', side: 'front', clear: true, has_signature: true }]);
+      expect(r.id_ok).toBe(true);
+      expect(r.stage).toBe('done');
+      expect(r.reply).toBe(flow.done_reply);
+      const lead = JSON.parse(readFileSync(path.join(dir, r.lead_saved), 'utf8'));
+      expect(lead.id_photos).toHaveLength(3);
+      expect(lead.id_review[2].type).toBe('tin');
+      expect(lead.answers.mobile).toBe('09171234567');
+      expect(lead.consent_at).toBeTruthy();
+      await expect(review([prcFront])).rejects.toThrow(/not at the ID photo step/);
+      expect(sent.at(-1)).toBe(flow.done_reply);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('status shows counts only, no personal details', async () => {
@@ -502,4 +556,33 @@ describe('flow tools: buttons are sent as Messenger quick replies', () => {
       { content_type: 'text', title: 'Hindi', payload: 'Hindi' },
     ]);
   });
+});
+
+describe('idVerdict (owner ID rules)', () => {
+  const id = (type: IdSeen['type'], o: Partial<IdSeen> = {}): IdSeen => ({ type, side: 'front', clear: true, has_signature: true, ...o });
+  const t = flow.id_photo;
+  it.each([
+    ['drivers license alone', [id('drivers_license')], true],
+    ['passport alone', [id('passport')], true],
+    ['UMID alone', [id('umid')], true],
+    ['postal alone', [id('postal')], true],
+    ["voter's alone", [id('voters')], true],
+    ['old SSS with birthday alone', [id('sss_old')], true],
+    ['PRC both sides + TIN', [id('prc', { side: 'both' }), id('tin')], true],
+    ['PRC front + back photos + PhilHealth', [id('prc'), id('prc', { side: 'back' }), id('philhealth')], true],
+    ['new SSS + PhilHealth', [id('sss_new'), id('philhealth')], true],
+    ['National ID both sides + TIN with signature', [id('national_id', { side: 'both' }), id('tin')], true],
+  ] as const)('%s -> ok', (_n, ids, ok) => expect(idVerdict(flow, [...ids]).ok).toBe(ok));
+
+  it.each([
+    ['PRC front only', [id('prc')], t.need_back_reply],
+    ['PRC both sides alone', [id('prc', { side: 'both' })], t.need_second_reply],
+    ['new SSS alone', [id('sss_new')], t.need_second_reply],
+    ['National ID both sides alone', [id('national_id', { side: 'both' })], t.need_signature_reply],
+    ['National ID + ID without signature', [id('national_id', { side: 'both' }), id('philhealth', { has_signature: false })], t.need_signature_reply],
+    ['PRC + unknown other ID', [id('prc', { side: 'both' }), id('other')], t.need_second_reply],
+    ['secondary only', [id('tin'), id('philhealth')], t.need_primary_reply],
+    ['blurry passport', [id('passport', { clear: false })], t.unclear_reply],
+    ['nothing', [], t.need_image_reply],
+  ] as const)('%s -> asks again', (_n, ids, reply) => expect(idVerdict(flow, [...ids])).toEqual({ ok: false, reply }));
 });
