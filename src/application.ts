@@ -82,6 +82,10 @@ export const settingsSchema = z
     /** Print-safe: answers become part of the page (on by default; off only to inspect the boxes). */
     flatten: z.boolean().default(true),
     printer: z.string().max(200).default(''),
+    /** Complete applications to reach each week (the owner submits to the banks weekly). */
+    weekly_quota: z.number().int().min(1).max(1000).default(10),
+    /** First day of the submit week: 0 = Sunday, 1 = Monday ... 6 = Saturday. */
+    week_start_day: z.number().int().min(0).max(6).default(1),
   })
   .strict();
 export type Settings = z.infer<typeof settingsSchema>;

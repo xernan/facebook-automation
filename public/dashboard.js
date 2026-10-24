@@ -44,9 +44,19 @@ function render() {
   if (view === 'settings') return renderSettings(a);
   if (view === 'form' && open) return renderForm(a);
   if (open) return renderOne(a);
-  const rows = S.applicants;
+  if (view === 'archive') return renderArchive(a);
+  // Main page: this month's applicants only; earlier months are in Archive.
+  const cm = S.stats.current_month;
+  const mine = new Set(cm.weeks.flatMap((w) => w.folders));
+  const rows = S.applicants.filter((r) => mine.has(r.folder));
+  const w = S.stats.this_week;
+  const pct = Math.min(100, Math.round((w.complete / w.quota) * 100));
   a.innerHTML =
-    `<div class="stats"><div class="stat"><b>${rows.length}</b>Applicants</div><div class="stat"><b>${rows.filter((r) => r.printed).length}</b>Printed</div><div class="stat"><b>${S.flow.waiting || 0}</b>In chat now</div></div><br>` +
+    `<div class="card"><div class="row2"><h3 style="margin:0">This week</h3><span class="muted">${esc(w.start)} to ${esc(w.end)}</span>` +
+    `<span style="margin-left:auto">${w.reached ? '<span class="pill ok">Quota reached</span>' : `<span class="pill warn">${w.remaining} more to reach the quota</span>`}</span></div>` +
+    `<div class="bar"><i class="${w.reached ? 'done' : ''}" style="width:${pct}%"></i></div>` +
+    `<div class="stats"><div class="stat"><b>${w.complete} / ${w.quota}</b>Complete applications</div><div class="stat"><b>${w.ready}</b>Ready (nothing to check)</div><div class="stat"><b>${w.printed}</b>Printed</div><div class="stat"><b>${S.flow.waiting || 0}</b>In chat now</div></div></div>` +
+    weeksTable(cm, 'This month') +
     `<div class="card"><table><tr><th>Completed</th><th>Name</th><th>Mobile</th><th>PDFs</th><th>Flags</th><th>To check</th><th>Printed</th></tr>` +
     (rows.length
       ? rows
@@ -61,6 +71,56 @@ function render() {
     (t) =>
       (t.onclick = () => {
         open = rows[+t.dataset.i];
+        render();
+      }),
+  );
+}
+
+const monthName = (m) => new Date(m + '-01T00:00:00').toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
+
+function weeksTable(m, title) {
+  return (
+    `<div class="card"><h3>${esc(title)} · ${esc(monthName(m.month))}</h3><table><tr><th>Week</th><th>Complete</th><th>Quota</th><th>Ready</th><th>Printed</th></tr>` +
+    m.weeks
+      .slice()
+      .reverse()
+      .map(
+        (w) =>
+          `<tr><td>${esc(w.start)} to ${esc(w.end)}</td><td><b>${w.complete}</b></td><td>${w.reached ? '<span class="pill ok">Reached</span>' : `<span class="pill warn">${w.complete} / ${w.quota}</span>`}</td><td>${w.ready}</td><td>${w.printed}</td></tr>`,
+      )
+      .join('') +
+    `<tr><td><b>Month total</b></td><td><b>${m.complete}</b></td><td></td><td><b>${m.ready}</b></td><td><b>${m.printed}</b></td></tr></table></div>`
+  );
+}
+
+// Archive: every earlier month with its weeks and the applicants in each week.
+function renderArchive(a) {
+  const byFolder = new Map(S.applicants.map((r) => [r.folder, r]));
+  const months = S.stats.archive;
+  a.innerHTML = months.length
+    ? months
+        .map(
+          (m, mi) =>
+            weeksTable(m, 'Archive') +
+            `<div class="card"><table><tr><th>Week</th><th>Name</th><th>Mobile</th><th>PDFs</th><th>Printed</th></tr>${m.weeks
+              .slice()
+              .reverse()
+              .flatMap((w) =>
+                w.folders.map((f) => {
+                  const r = byFolder.get(f);
+                  return r
+                    ? `<tr class="row" data-f="${esc(f)}"><td class="muted">${esc(w.start)}</td><td><b>${esc(r.name || '(no name yet)')}</b></td><td>${esc(r.mobile)}</td><td>${esc(r.banks_with_pdf)}</td><td>${r.printed ? '<span class="pill ok">Yes</span>' : '<span class="pill warn">No</span>'}</td></tr>`
+                    : '';
+                }),
+              )
+              .join('')}</table></div>`,
+        )
+        .join('')
+    : '<div class="card muted">No archived months yet. Each month moves here when the next month starts.</div>';
+  a.querySelectorAll('tr[data-f]').forEach(
+    (t) =>
+      (t.onclick = () => {
+        open = byFolder.get(t.dataset.f);
         render();
       }),
   );
@@ -355,6 +415,8 @@ function renderSettings(a) {
     `<div class="card"><h3>Card to apply for (per bank)</h3><div class="row2"><div><label>Metrobank</label>${sel('cc_metrobank', o.metrobank || [], s.card_choice.metrobank)}</div><div><label>EastWest</label>${sel('cc_eastwest', o.eastwest || [], s.card_choice.eastwest)}</div><div><label>China Bank</label>${sel('cc_chinabank', o.chinabank || [], s.card_choice.chinabank)}</div></div></div>` +
     `<div class="card"><h3>Printing</h3><label>Printer</label>${sel('printer', S.printers, s.printer)}<label><input type="checkbox" id="auto_print" style="min-width:0"${s.auto_print ? ' checked' : ''}> Print new complete applications automatically (PC must be on)</label>${S.acrobat ? '' : '<p class="pill warn">Adobe Acrobat not found: printing will not work</p>'}</div>` +
     `<div class="card"><h3>Text on the forms</h3><div class="row2"><div><label>Answer size (pt, 0 = fit each box)</label><input id="text_uniform_size" type="number" step="0.5" min="0" max="20" value="${s.text_uniform_size}"></div><div><label><input type="checkbox" id="text_bold" style="min-width:0"${s.text_bold ? ' checked' : ''}> Bold</label></div></div></div>` +
+    `<div class="card"><h3>Weekly quota</h3><div class="row2"><div><label>Complete applications per week</label><input id="weekly_quota" type="number" min="1" max="1000" step="1" value="${s.weekly_quota}"></div>` +
+    `<div><label>Week starts on</label><select id="week_start_day">${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => `<option value="${i}"${i === s.week_start_day ? ' selected' : ''}>${d}</option>`).join('')}</select></div></div></div>` +
     '<button class="btn" id="save">Save settings</button>' +
     `<div class="card" style="margin-top:14px"><h3>Office numbers directory</h3><p class="muted">Real numbers only: found online (with the link) or typed by you in a Default Form. Used for the next client from the same company and city.</p>` +
     (S.phonebook.length
@@ -387,8 +449,11 @@ function renderSettings(a) {
       auto_print: $('#auto_print').checked,
       text_bold: $('#text_bold').checked,
       text_uniform_size: Number(v('text_uniform_size')),
+      weekly_quota: Number(v('weekly_quota')),
+      week_start_day: Number(v('week_start_day')),
       card_choice: Object.fromEntries(['metrobank', 'eastwest', 'chinabank'].map((b) => [b, v('cc_' + b)]).filter(([, x]) => x)),
     };
+    if (!Number.isInteger(body.weekly_quota) || body.weekly_quota < 1 || body.weekly_quota > 1000) return msg('Weekly quota must be a whole number from 1 to 1000.');
     try {
       await post('/api/settings', body);
       msg('Settings saved');

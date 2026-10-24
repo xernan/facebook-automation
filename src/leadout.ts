@@ -6,6 +6,7 @@ import { PDFDocument } from 'pdf-lib';
 import { fillBankPdf } from './pdf.js';
 import { printPdf } from './printer.js';
 import { lookupPhone, OWNER_SOURCE, rememberPhone } from './phonebook.js';
+import { applicationStats } from './stats.js';
 
 // Finished applications on this computer only (personal data; never shown to the client):
 //   <flowDir>/applicants/<YYYY-MM-DD> <Name>/  bank PDFs, ID photos, details.json, MISSING.txt
@@ -263,6 +264,26 @@ export async function writeClientsXlsx(flowDir: string): Promise<void> {
     // Text that starts like a formula is stored as plain text (CSV/Excel formula injection).
     const safe = Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === 'string' && /^[=+\-@]/.test(v) ? `'${v}` : v]));
     ws.addRow({ ...safe, completed_at: r.completed_at.slice(0, 16).replace('T', ' '), printed: r.printed ? 'Yes' : 'No' });
+  }
+  // Weekly totals against the quota, newest first (same numbers as the dashboard).
+  const settings = await loadSettings(flowDir).catch(() => settingsSchema.parse({}));
+  const st = applicationStats(rows, { quota: settings.weekly_quota, startDay: settings.week_start_day });
+  const wk = wb.addWorksheet('Weekly');
+  wk.columns = [
+    { header: 'Month', key: 'month', width: 10 },
+    { header: 'Week', key: 'week', width: 26 },
+    { header: 'Complete', key: 'complete', width: 10 },
+    { header: 'Quota', key: 'quota', width: 8 },
+    { header: 'Reached', key: 'reached', width: 9 },
+    { header: 'Ready (nothing to check)', key: 'ready', width: 24 },
+    { header: 'Printed', key: 'printed', width: 9 },
+  ];
+  wk.getRow(1).font = { bold: true };
+  for (const m of [st.current_month, ...st.archive]) {
+    for (const w of m.weeks) {
+      wk.addRow({ month: m.month, week: `${w.start} to ${w.end}`, complete: w.complete, quota: w.quota, reached: w.reached ? 'Yes' : 'No', ready: w.ready, printed: w.printed });
+    }
+    wk.addRow({ month: m.month, week: 'Month total', complete: m.complete, ready: m.ready, printed: m.printed }).font = { bold: true };
   }
   const tmp = path.join(flowDir, `CLIENTS.${process.pid}.tmp.xlsx`);
   await wb.xlsx.writeFile(tmp);

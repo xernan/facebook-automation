@@ -11,6 +11,7 @@ import { FlowStore } from './flowstore.js';
 import { listApplicants, loadSettings, saveForm, saveSettings, writeClientsXlsx } from './leadout.js';
 import { findAcrobat, listPrinters, printPdf } from './printer.js';
 import { forgetPhone, loadPhonebook, lookupPhone } from './phonebook.js';
+import { applicationStats } from './stats.js';
 import dotenv from 'dotenv';
 
 // Local dashboard (this PC only, 127.0.0.1): applicants, their PDFs/IDs and missing items, print, and settings.
@@ -95,9 +96,10 @@ input,select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-ra
 .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px 14px}
 .missing{border-color:var(--bad);background:#fff5f4}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}#msg{position:fixed;bottom:16px;right:16px;background:#14181f;color:#fff;padding:10px 14px;border-radius:8px;display:none;max-width:420px}
+.bar{height:10px;background:#e8edf3;border-radius:999px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--accent)}.bar i.done{background:var(--ok)}
 .stats{display:flex;gap:10px;flex-wrap:wrap}.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:120px}.stat b{font-size:20px;display:block}
 </style></head><body>
-<header><b>CARD MAX</b><nav><button data-v="list" class="on">Applicants</button><button data-v="settings">Settings</button></nav><span class="muted" style="margin-left:auto;color:#9fb0c6">This PC only</span></header>
+<header><b>CARD MAX</b><nav><button data-v="list" class="on">Applicants</button><button data-v="archive">Archive</button><button data-v="settings">Settings</button></nav><span class="muted" style="margin-left:auto;color:#9fb0c6">This PC only</span></header>
 <main id="app">Loading…</main><div id="msg"></div>
 <script>window.TOKEN=${JSON.stringify(token)};</script><script src="/app.js"></script></body></html>`;
 }
@@ -155,10 +157,12 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
         }
         const state = await new FlowStore(opts.flowDir).load(new Date());
         const waiting = Object.values(state.people).filter((p) => !['done', 'declined', 'rejected', 'excluded'].includes(p.stage)).length;
+        const settings = await loadSettings(opts.flowDir);
         return send(200, {
           applicants,
+          stats: applicationStats(rows, { quota: settings.weekly_quota, startDay: settings.week_start_day }),
           flow: { waiting },
-          settings: await loadSettings(opts.flowDir),
+          settings,
           printers: await listPrinters().catch(() => []),
           cardOptions: await cardOptions(opts.templatesDir),
           acrobat: !!findAcrobat(),

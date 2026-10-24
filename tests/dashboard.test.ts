@@ -50,6 +50,9 @@ describe('dashboard', () => {
     expect(s.applicants[0].name).toBe('Juan Dela Cruz');
     expect(s.applicants[0].missing_list).toEqual(['TIN']);
     expect(s.applicants[0].files).toEqual(['EastWest.pdf']);
+    // Weekly stats with the default quota; the 2026-10-25 applicant is in an earlier week or month.
+    expect(s.stats.this_week.quota).toBe(10);
+    expect([s.stats.current_month, ...s.stats.archive].flatMap((m: any) => m.weeks.flatMap((w: any) => w.folders))).toContain('2026-10-25 Juan Dela Cruz');
   });
 
   it('serves files only from inside an applicant folder', async () => {
