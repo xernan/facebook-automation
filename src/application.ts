@@ -275,6 +275,9 @@ export function buildApplication(lead: Lead, details: Details, now: Date): Built
   };
   defaults.push('Education = College (owner default)', 'Source of funds = Salary, card delivery = home, statement = personal email');
   missing.push('Signature (client signs the printed form)');
+  // Yes/no declarations only the applicant can answer (relatives at the bank, ties to public officials, existing
+  // client of the bank). Never ticked for them.
+  missing.push('Bank declarations: relatives at the bank / ties to public officials (applicant answers on the form)');
 
   return { banks, data, bankOnly, missing, defaults };
 }
