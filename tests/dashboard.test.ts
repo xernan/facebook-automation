@@ -30,6 +30,19 @@ async function start() {
 }
 
 describe('dashboard', () => {
+  it('office number lookup from the directory; removing needs the token', async () => {
+    const { base, dir } = await start();
+    const { rememberPhone } = await import('../src/phonebook.js');
+    await rememberPhone(dir, { company: 'Jollibee', city: 'Muntinlupa', phone: '(02) 8123-0000', source: 'https://example.com/x' });
+    expect(await (await fetch(`${base}/api/phone?employer=Jollibee%20Alabang&city=Muntinlupa`)).json()).toEqual({ phone: '(02) 8123-0000', source: 'https://example.com/x' });
+    expect(await (await fetch(`${base}/api/phone?employer=Jollibee&city=Cebu`)).json()).toEqual({});
+    expect((await (await fetch(`${base}/api/state`)).json()).phonebook).toHaveLength(1);
+    const body = JSON.stringify({ company: 'Jollibee', city: 'Muntinlupa' });
+    expect((await fetch(`${base}/api/phonebook/remove`, { method: 'POST', body })).status).toBe(403);
+    expect((await fetch(`${base}/api/phonebook/remove`, { method: 'POST', headers: { 'x-token': 'tok' }, body })).status).toBe(200);
+    expect((await (await fetch(`${base}/api/state`)).json()).phonebook).toHaveLength(0);
+  });
+
   it('lists applicants with their missing items and files', async () => {
     const { base } = await start();
     const s = await (await fetch(`${base}/api/state`)).json();

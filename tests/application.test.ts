@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
-import { ageOn, buildApplication, splitName, yearsFrom, type Lead } from '../src/application.js';
+import { ageOn, buildApplication, formatTin, splitName, yearsFrom, type Lead } from '../src/application.js';
+import { lookupPhone, rememberPhone } from '../src/phonebook.js';
 import { finalizeLead, folderName, listApplicants, saveForm, saveSettings } from '../src/leadout.js';
 import { combText, formatPdfDate, pdfDigits } from '../src/pdf.js';
 
@@ -27,6 +28,18 @@ const lead = (o: Partial<Lead> = {}): Lead => ({
   ...o,
 });
 const details = { first_name: 'Juan', last_name: 'Dela Cruz', birthday: '1990-05-31', gender: 'Male' as const, nationality: 'Filipino' };
+
+describe('TIN', () => {
+  it('from the ID first, else the optional Messenger answer; formatted XXX-XXX-XXX', () => {
+    expect(buildApplication(lead({ answers: { ...lead().answers, tin: '123 456 789' } }), details, NOW).data.tin_number).toBe('123-456-789');
+    expect(buildApplication(lead({ answers: { ...lead().answers, tin: '111222333' } }), { ...details, tin: '999-888-777-000' }, NOW).data.tin_number).toBe('999-888-777-000');
+    // Skipped: blank and in the missing list (never generated).
+    const b = buildApplication(lead(), details, NOW);
+    expect(b.data.tin_number).toBeUndefined();
+    expect(b.missing).toContain('TIN');
+    expect(formatTin('1234')).toBeUndefined();
+  });
+});
 
 describe('owner rules in buildApplication', () => {
   it('PDFs only for banks the person has no card with (Metrobank card -> EastWest + China Bank)', () => {
@@ -253,6 +266,42 @@ describe('finalizeLead', () => {
     expect(f.getTextField('tin_number').getText()).toBe('123-456-789');
     expect(f.getTextField('mother_maiden_name').getText()).toBe('Rosa Cruz');
     await expect(saveForm(dir, tpl, folder, { ...before.form, not_a_field: 'x' } as any)).rejects.toThrow();
+  });
+
+  it('office phone: a number found online is saved to the directory; the next client from that branch gets it', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'ph-'));
+    const tpl = mkdtempSync(path.join(tmpdir(), 'tpl-'));
+    writeFileSync(path.join(dir, 'lead-999-x.json'), JSON.stringify(lead({ banks: ['BDO'] })));
+    const company = { street: 'ATC', city: 'Muntinlupa', province: 'Metro Manila' };
+    await finalizeLead(dir, tpl, 'lead-999-x.json', { ...details, company, employer_phone: '(02) 8123-0000', employer_phone_source: 'https://example.com/jollibee-atc' }, NOW);
+    expect((await lookupPhone(dir, 'Jollibee', 'Muntinlupa'))?.phone).toBe('(02) 8123-0000');
+
+    writeFileSync(path.join(dir, 'lead-888-y.json'), JSON.stringify(lead({ psid: '888', banks: ['BDO'] })));
+    const r = await finalizeLead(dir, tpl, 'lead-888-y.json', { ...details, first_name: 'Ana', company }, NOW);
+    const d = JSON.parse(readFileSync(path.join(dir, r.folder, 'details.json'), 'utf8'));
+    expect(d.data.employer_phone).toBe('(02) 8123-0000');
+    expect(d.office_phone_source).toBe('https://example.com/jollibee-atc');
+    expect(r.defaults.some((x) => /company directory/.test(x))).toBe(true);
+    expect(r.missing).not.toContain('Office phone (not found)');
+
+    // Another city: no number (branches differ), stays missing.
+    writeFileSync(path.join(dir, 'lead-777-z.json'), JSON.stringify(lead({ psid: '777', banks: ['BDO'] })));
+    const r2 = await finalizeLead(dir, tpl, 'lead-777-z.json', { ...details, first_name: 'Ben', company: { ...company, city: 'Cebu City' } }, NOW);
+    expect(r2.missing).toContain('Office phone (not found)');
+  });
+
+  it('a number the owner types in the Default Form is kept for the next client', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'ph2-'));
+    const tpl = mkdtempSync(path.join(tmpdir(), 'tpl-'));
+    writeFileSync(path.join(dir, 'lead-999-x.json'), JSON.stringify(lead({ banks: ['BDO'] })));
+    const r = await finalizeLead(dir, tpl, 'lead-999-x.json', { ...details, company: { street: 'ATC', city: 'Muntinlupa' } }, NOW);
+    const before = JSON.parse(readFileSync(path.join(dir, r.folder, 'details.json'), 'utf8'));
+    await saveForm(dir, tpl, path.basename(r.folder), { ...before.form, employer_phone: '(02) 8777-1234' });
+    expect(await lookupPhone(dir, 'Jollibee', 'Muntinlupa')).toMatchObject({ phone: '(02) 8777-1234', source: 'Entered by owner' });
+    // Saving the same number again keeps the source it already has.
+    await rememberPhone(dir, { company: 'Jollibee', city: 'Muntinlupa', phone: '(02) 8123-0000', source: 'https://example.com/x' });
+    await saveForm(dir, tpl, path.basename(r.folder), { ...before.form, employer_phone: '(02) 8123-0000' });
+    expect((await lookupPhone(dir, 'Jollibee', 'Muntinlupa'))?.source).toBe('https://example.com/x');
   });
 
   it('folder names are safe on Windows', () => {

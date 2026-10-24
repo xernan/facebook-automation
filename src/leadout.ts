@@ -5,6 +5,7 @@ import { BANKS, buildApplication, formMissing, formSchema, formToData, settingsS
 import { PDFDocument } from 'pdf-lib';
 import { fillBankPdf } from './pdf.js';
 import { printPdf } from './printer.js';
+import { lookupPhone, OWNER_SOURCE, rememberPhone } from './phonebook.js';
 
 // Finished applications on this computer only (personal data; never shown to the client):
 //   <flowDir>/applicants/<YYYY-MM-DD> <Name>/  bank PDFs, ID photos, details.json, MISSING.txt
@@ -49,7 +50,23 @@ export async function finalizeLead(
 ): Promise<Finalized> {
   const lead: Lead = JSON.parse(await fs.readFile(path.join(flowDir, leadFile), 'utf8'));
   const settings = await loadSettings(flowDir);
+  // Office landline: a number found online goes into our directory; with none, use the directory's number
+  // for the same company and branch city (only real numbers are ever in it).
+  const employer = lead.answers.employer_name;
+  let phoneSource = details.employer_phone_source as string | undefined;
+  let fromBook = false;
+  if (details.employer_phone && phoneSource && employer && details.company?.city) {
+    await rememberPhone(flowDir, { company: employer, city: details.company.city, phone: details.employer_phone, source: phoneSource }, now).catch(() => undefined);
+  } else if (!details.employer_phone) {
+    const hit = await lookupPhone(flowDir, employer, details.company?.city).catch(() => undefined);
+    if (hit) {
+      details = { ...details, employer_phone: hit.phone };
+      phoneSource = hit.source;
+      fromBook = true;
+    }
+  }
   const app = buildApplication(lead, details, now);
+  if (fromBook) app.defaults.push(`Office phone from our company directory (source: ${phoneSource})`);
   const name = [details.first_name, details.last_name].filter(Boolean).join(' ');
   const folder = path.join(flowDir, 'applicants', folderName(lead.completed_at, name, lead.psid));
   await fs.mkdir(folder, { recursive: true });
@@ -92,7 +109,7 @@ export async function finalizeLead(
     data: app.data,
     missing: app.missing,
     defaults: app.defaults,
-    office_phone_source: details.employer_phone_source,
+    office_phone_source: phoneSource,
     printed: false,
   };
   await fs.writeFile(path.join(folder, 'details.json'), JSON.stringify(summary, null, 2), 'utf8');
@@ -169,6 +186,13 @@ export async function saveForm(flowDir: string, templatesDir: string, folderName
   for (const b of Object.keys(bankOnly)) {
     if (clean.company?.zip) bankOnly[b].business_zip_code = clean.company.zip;
     else delete bankOnly[b].business_zip_code;
+  }
+  // A number the owner typed (or changed) goes into our directory for the next client from that branch.
+  if (clean.employer_phone && clean.employer && clean.company?.city) {
+    const known = await lookupPhone(flowDir, clean.employer, clean.company.city).catch(() => undefined);
+    if (known?.phone !== clean.employer_phone) {
+      await rememberPhone(flowDir, { company: clean.employer, city: clean.company.city, phone: clean.employer_phone, source: OWNER_SOURCE }).catch(() => undefined);
+    }
   }
   const pdfs = await writeBankPdfs(dir, templatesDir, d.banks, { banks: d.banks, data, bankOnly, missing, defaults: d.defaults ?? [] }, settings, missing);
   const next = { ...d, form: clean, data, bank_only: bankOnly, missing, edited_at: new Date().toISOString(), printed: false };

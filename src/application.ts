@@ -322,6 +322,13 @@ export function bankOnlyFor(lead: Lead, f: AppForm, idNumber?: string): BuiltApp
 }
 
 /** The first Default Form from the Messenger answers, the ID and the owner's rules. Never invents personal facts. */
+/** A TIN as the person gave it, written XXX-XXX-XXX (or XXX-XXX-XXX-XXX with the branch code); else undefined. */
+export function formatTin(raw: string): string | undefined {
+  const d = raw.replace(/\D/g, '');
+  if (!/^\d{9}(\d{3})?$/.test(d)) return undefined;
+  return d.match(/\d{3}/g)!.join('-');
+}
+
 export function formFromLead(lead: Lead, details: Details, now: Date): { form: AppForm; defaults: string[] } {
   const a = lead.answers;
   const defaults: string[] = [];
@@ -350,7 +357,8 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
     employment_type: details.employment_type,
     company: details.company && { street: details.company.street, barangay: details.company.barangay, city: details.company.city, province: details.company.province, zip: details.company.zip, zip_sure: details.company.zip_sure },
     employer_phone: details.employer_phone,
-    tin_number: details.tin,
+    // From the ID first; else what they typed in Messenger (optional question, checked as 9 or 12 digits).
+    tin_number: details.tin ? formatTin(details.tin) : a.tin ? formatTin(a.tin) : undefined,
     other_card_company: lead.banks[0],
     // Owner rule: the existing card number is never asked.
     other_card_number: 'Refuse to give',

@@ -518,6 +518,29 @@ describe('buttons, optional groups and suggestions', () => {
     expect(r.person.answers.reference_name).toBeUndefined();
   });
 
+  it('optional TIN: Skip moves on; a wrong TIN is asked again; a good one is saved', () => {
+    const g = flowSchema.parse({
+      ...f,
+      steps: [
+        { key: 'tin', prompt: 'TIN?', optional_group: 'tin', validate: 'tin', invalid_reply: 'Bad TIN.' },
+        { key: 'employer_name', prompt: 'Employer?' },
+      ],
+    });
+    const s = () => {
+      let r = advance(g, newPerson(NOW), { text: 'hi' }, NOW, 180);
+      for (const a of ['oo', 'meron', 'BDO']) r = advance(g, r.person, { text: a }, NOW, 180);
+      return r;
+    };
+    expect(s().choices).toEqual(['Skip']);
+    expect(advance(g, s().person, { text: 'Skip' }, NOW, 180).reply).toBe('Employer?');
+    const bad = advance(g, s().person, { text: '1234' }, NOW, 180);
+    expect(bad.reply).toContain('Bad TIN.');
+    expect(bad.person.answers.tin).toBeUndefined();
+    const ok = advance(g, s().person, { text: '123-456-789' }, NOW, 180);
+    expect(ok.person.answers.tin).toBe('123-456-789');
+    expect(ok.reply).toBe('Employer?');
+  });
+
   it('a real reference name is not mistaken for skip', () => {
     let r = start();
     for (const a of ['Jollibee', 'ATC', 'married', 'Pedro Wala Cruz']) r = advance(f, r.person, { text: a }, NOW, 180);

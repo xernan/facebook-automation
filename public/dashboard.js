@@ -203,7 +203,8 @@ async function renderForm(a) {
     field('c_city', 'Company city / municipality', c.city, { list: 'dl_ccity' }) +
     field('c_barangay', 'Company barangay', c.barangay, { list: 'dl_cbrgy' }) +
     field('c_zip', 'Company zip code', c.zip, { hint: 'Auto-filled from the city.' }) +
-    field('employer_phone', 'Business / office number', f.employer_phone, { hint: 'Area code is set from the company city. Never guess the number.' }) +
+    field('employer_phone', 'Business / office number', f.employer_phone, { hint: 'From our directory or a real public listing. Never guess the number.' }) +
+    `<div><label>&nbsp;</label><button class="btn sec" id="findphone" type="button">Find number</button></div>` +
     `</div></div>` +
     `<div class="card"><h3>References</h3><div class="fgrid">` +
     field('ref_name', 'Reference full name', f.ref_name) +
@@ -249,7 +250,21 @@ async function renderForm(a) {
     // Area code only: the number itself must come from a real source.
     const ph = $('#employer_phone');
     if (info.areaCode && !ph.value.trim()) ph.value = `(${info.areaCode}) `;
+    findPhone(true);
   });
+
+  // Office number from our directory of real numbers (same company, same branch city).
+  async function findPhone(quiet) {
+    if (!v('employer') || !v('c_city')) return quiet || msg('Enter the employer and company city first.');
+    const r = await fetch('/api/phone?employer=' + encodeURIComponent(v('employer')) + '&city=' + encodeURIComponent(v('c_city')));
+    const j = await r.json().catch(() => ({}));
+    if (j.phone) {
+      $('#employer_phone').value = j.phone;
+      $('#employer_phone').classList.remove('missing');
+      msg('Found in our directory (' + j.source + ')');
+    } else if (!quiet) msg('Not in our directory yet. Look it up (company site or Google Maps) and type it; Save keeps it for next time.');
+  }
+  $('#findphone').onclick = () => findPhone(false);
 
   // Name on card follows the name until edited by hand.
   let cardManual = !!f.name_on_card && f.name_on_card !== autoCardName(f.first_name, f.middle_name, f.last_name);
@@ -340,7 +355,28 @@ function renderSettings(a) {
     `<div class="card"><h3>Card to apply for (per bank)</h3><div class="row2"><div><label>Metrobank</label>${sel('cc_metrobank', o.metrobank || [], s.card_choice.metrobank)}</div><div><label>EastWest</label>${sel('cc_eastwest', o.eastwest || [], s.card_choice.eastwest)}</div><div><label>China Bank</label>${sel('cc_chinabank', o.chinabank || [], s.card_choice.chinabank)}</div></div></div>` +
     `<div class="card"><h3>Printing</h3><label>Printer</label>${sel('printer', S.printers, s.printer)}<label><input type="checkbox" id="auto_print" style="min-width:0"${s.auto_print ? ' checked' : ''}> Print new complete applications automatically (PC must be on)</label>${S.acrobat ? '' : '<p class="pill warn">Adobe Acrobat not found: printing will not work</p>'}</div>` +
     `<div class="card"><h3>Text on the forms</h3><div class="row2"><div><label>Answer size (pt, 0 = fit each box)</label><input id="text_uniform_size" type="number" step="0.5" min="0" max="20" value="${s.text_uniform_size}"></div><div><label><input type="checkbox" id="text_bold" style="min-width:0"${s.text_bold ? ' checked' : ''}> Bold</label></div></div></div>` +
-    '<button class="btn" id="save">Save settings</button>';
+    '<button class="btn" id="save">Save settings</button>' +
+    `<div class="card" style="margin-top:14px"><h3>Office numbers directory</h3><p class="muted">Real numbers only: found online (with the link) or typed by you in a Default Form. Used for the next client from the same company and city.</p>` +
+    (S.phonebook.length
+      ? `<table><tr><th>Company</th><th>City</th><th>Number</th><th>Source</th><th></th></tr>${S.phonebook
+          .map((e, i) => `<tr><td>${esc(e.company)}</td><td>${esc(e.city)}</td><td>${esc(e.phone)}</td><td class="muted">${/^https?:\/\//.test(e.source) ? `<a href="${esc(e.source)}" target="_blank" rel="noreferrer">link</a>` : esc(e.source)}</td><td><button class="btn sec" data-del="${i}">Remove</button></td></tr>`)
+          .join('')}</table>`
+      : '<p class="muted">Empty for now.</p>') +
+    `</div>`;
+  a.querySelectorAll('[data-del]').forEach(
+    (b) =>
+      (b.onclick = async () => {
+        const e = S.phonebook[Number(b.dataset.del)];
+        if (!confirm(`Remove ${e.company} (${e.city})?`)) return;
+        try {
+          await post('/api/phonebook/remove', { company: e.company, city: e.city });
+          msg('Removed');
+          load();
+        } catch (err) {
+          msg(err.message);
+        }
+      }),
+  );
   $('#save').onclick = async () => {
     const v = (id) => $('#' + id).value;
     const body = {

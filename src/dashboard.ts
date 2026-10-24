@@ -10,6 +10,7 @@ import { loadConfig } from './config.js';
 import { FlowStore } from './flowstore.js';
 import { listApplicants, loadSettings, saveForm, saveSettings, writeClientsXlsx } from './leadout.js';
 import { findAcrobat, listPrinters, printPdf } from './printer.js';
+import { forgetPhone, loadPhonebook, lookupPhone } from './phonebook.js';
 import dotenv from 'dotenv';
 
 // Local dashboard (this PC only, 127.0.0.1): applicants, their PDFs/IDs and missing items, print, and settings.
@@ -140,6 +141,10 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
         if (!d.form) return send(400, { error: 'This applicant was saved before the Default Form existed.' });
         return send(200, { form: d.form, missing: d.missing ?? [] });
       }
+      if (req.method === 'GET' && url.pathname === '/api/phone') {
+        const hit = await lookupPhone(opts.flowDir, url.searchParams.get('employer')?.slice(0, 120), url.searchParams.get('city')?.slice(0, 100));
+        return send(200, hit ? { phone: hit.phone, source: hit.source } : {});
+      }
       if (req.method === 'GET' && url.pathname === '/api/state') {
         const rows = await listApplicants(opts.flowDir);
         const applicants = [];
@@ -157,6 +162,7 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
           printers: await listPrinters().catch(() => []),
           cardOptions: await cardOptions(opts.templatesDir),
           acrobat: !!findAcrobat(),
+          phonebook: await loadPhonebook(opts.flowDir).catch(() => []),
         });
       }
       if (req.method === 'GET' && url.pathname === '/file') {
@@ -176,6 +182,10 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
           const folder = String(body.folder ?? '');
           if (!safeFile(opts.flowDir, folder, 'details.json')) return send(404, { error: 'Unknown applicant.' });
           return send(200, await saveForm(opts.flowDir, opts.templatesDir, folder, body.form));
+        }
+        if (url.pathname === '/api/phonebook/remove') {
+          const ok = await forgetPhone(opts.flowDir, String(body.company ?? ''), String(body.city ?? ''));
+          return ok ? send(200, { ok: true }) : send(404, { error: 'Not found' });
         }
         if (url.pathname === '/api/printed') {
           await setPrinted(opts.flowDir, String(body.folder ?? ''), body.printed === true);
