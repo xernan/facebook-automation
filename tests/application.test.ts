@@ -139,7 +139,7 @@ describe('finalizeLead', () => {
     const bytes = await template();
     for (const b of ['metrobank', 'eastwest', 'chinabank']) writeFileSync(path.join(tpl, `${b}.pdf`), bytes);
     writeFileSync(path.join(dir, 'lead-999-x.json'), JSON.stringify(lead({ banks: ['BDO'] })));
-    await saveSettings(dir, { agent_name: 'A', agent_code: 'T-1', card_choice: { metrobank: 'cashbackvisa' }, auto_print: false, printer: '' });
+    await saveSettings(dir, { agent_name: 'A', agent_code: 'T-1', card_choice: { metrobank: 'cashbackvisa' }, auto_print: false, printer: '', text_bold: true, text_max_size: 14, flatten: false });
 
     const r = await finalizeLead(dir, tpl, 'lead-999-x.json', details, NOW);
     expect(r.pdfs).toEqual(['Metrobank.pdf', 'EastWest.pdf', 'China Bank.pdf']);
@@ -167,6 +167,17 @@ describe('finalizeLead', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.name).toBe('Juan Dela Cruz');
     expect(readFileSync(path.join(dir, 'CLIENTS.xlsx')).length).toBeGreaterThan(1000);
+  });
+
+  it('by default the PDF is flattened: no form boxes left, so every printer shows the answers', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'flat-'));
+    const tpl = mkdtempSync(path.join(tmpdir(), 'tpl-'));
+    const bytes = await template();
+    for (const b of ['metrobank', 'eastwest', 'chinabank']) writeFileSync(path.join(tpl, `${b}.pdf`), bytes);
+    writeFileSync(path.join(dir, 'lead-999-x.json'), JSON.stringify(lead({ banks: ['BDO'] })));
+    const r = await finalizeLead(dir, tpl, 'lead-999-x.json', details, NOW);
+    const pdf = await PDFDocument.load(readFileSync(path.join(dir, r.folder, 'Metrobank.pdf')));
+    expect(pdf.getForm().getFields()).toHaveLength(0);
   });
 
   it('folder names are safe on Windows', () => {

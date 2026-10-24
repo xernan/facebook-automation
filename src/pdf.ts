@@ -64,11 +64,11 @@ function fontBytes(bold: boolean): Uint8Array {
 }
 
 const MIN_SIZE = 4;
-/** As large as the box allows (80% of its height, text fits its width), up to `largest`. */
+/** As large as the box allows (95% of its height, text fits its width), up to `largest`. */
 export function fitFontSize(font: PDFFont, text: string, box: { width: number; height: number }, cells: number, largest: number): number {
   const room = cells ? box.width / cells - 1 : box.width - 4;
   const textWidth = cells ? Math.max(...[...text].map((ch) => font.widthOfTextAtSize(ch, 1))) : font.widthOfTextAtSize(text, 1);
-  const size = Math.min(largest, box.height * 0.8, textWidth > 0 ? room / textWidth : largest);
+  const size = Math.min(largest, box.height * 0.95, textWidth > 0 ? room / textWidth : largest);
   return Math.max(MIN_SIZE, Math.floor(size * 2) / 2);
 }
 
@@ -159,5 +159,7 @@ export async function fillBankPdf(
       // Keeps the template's own look for a box that cannot be restyled.
     }
   }
+  // Flatten: answers become part of the page, so every viewer and printer shows them (some print form boxes blank).
+  if (settings.flatten) form.flatten();
   return { bytes: await pdf.save(), filled };
 }
