@@ -6,6 +6,7 @@ import { GraphClient, type Params } from './graph.js';
 import { IdempotencyStore } from './idempotency.js';
 import { contactLeadsToCsv, leadFromComment, leadFromConversation, type ContactLead } from './leads.js';
 import { flowTools } from './flowtools.js';
+import { commentTools } from './comments.js';
 import { toScheduleTimestamp } from './schedule.js';
 
 export interface Ctx {
@@ -523,6 +524,7 @@ export const tools: ToolDef[] = [
 
   // ---- Messenger application flow (src/flowtools.ts) -----------------------
   ...flowTools,
+  ...commentTools,
 ];
 
 export async function callTool(def: ToolDef, args: unknown, ctx: Ctx) {

@@ -15,7 +15,8 @@
     "doctor": "node dist/doctor.js",
     "login": "node dist/login.js",
     "watch": "node dist/watch.js",
-    "dashboard": "node dist/dashboard.js"
+    "dashboard": "node dist/dashboard.js",
+    "comments": "node dist/commentwatch.js"
   },
   "engines": {
     "node": ">=20"

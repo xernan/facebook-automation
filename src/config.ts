@@ -54,6 +54,12 @@ export const configSchema = z.object({
   FB_WATCH_CLAUDE_TIMEOUT_MIN: intIn(5, 1, 30),
   FB_WATCH_CLAUDE_BIN: z.string().optional(),
   FB_DASHBOARD_PORT: intIn(8790, 1024, 65535),
+  // Comment replies (src/comments.ts). Off until the owner turns them on.
+  FB_COMMENTS_LIVE: boolFlag(false),
+  FB_COMMENT_INTERVAL_SEC: intIn(120, 60, 3600),
+  FB_COMMENT_MIN_DELAY_SEC: intIn(90, 30, 3600),
+  FB_COMMENT_MAX_PER_HOUR: intIn(15, 1, 60),
+  FB_COMMENT_POST_DAYS: intIn(7, 1, 30),
 });
 
 export type RawConfig = z.infer<typeof configSchema>;

@@ -65,8 +65,8 @@ const alive = (pid: number) => {
 };
 
 /** Only one watcher: takes <dir>/watch.lock, or throws when another live watcher holds it. */
-export function takeLock(dir: string, pid = process.pid): () => void {
-  const file = path.join(dir, 'watch.lock');
+export function takeLock(dir: string, pid = process.pid, name = 'watch.lock'): () => void {
+  const file = path.join(dir, name);
   try {
     const other = Number(readFileSync(file, 'utf8').trim());
     if (other && other !== pid && alive(other)) throw new Error(`Another watcher is already running (process ${other}). Stop it first.`);
