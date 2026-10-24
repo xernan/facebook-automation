@@ -2,6 +2,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { saveTestMode } from '../src/testmode.js';
 import { callTool, tools } from '../src/tools.js';
 import { param, testCtx } from './helpers.js';
 
@@ -117,10 +118,23 @@ describe('photo upload', () => {
 describe('messenger', () => {
   it('sends a private reply to a commenter', async () => {
     const { ctx, calls } = testCtx(WRITE_ON);
+    await saveTestMode(ctx.cfg.flowDir, { on: false, ids: [] });
     await callTool(tool('fb_send_message'), { page_id: '111', comment_id: '5_6', text: 'Hi! Here is the price list.' }, ctx);
     const c = calls.at(-1)!;
     expect(JSON.parse(param(c, 'recipient')!)).toEqual({ comment_id: '5_6' });
     expect(param(c, 'messaging_type')).toBe('RESPONSE');
+  });
+
+  it('test mode: only listed testers get a message, also by hand', async () => {
+    const { ctx, calls } = testCtx(WRITE_ON, (c) => (c.url.pathname.endsWith('/5_6') ? { json: { from: { id: '777' } } } : { json: { ok: true } }));
+    await saveTestMode(ctx.cfg.flowDir, { on: true, ids: [] });
+    await expect(callTool(tool('fb_send_message'), { page_id: '111', recipient_psid: '900', text: 'Hi there' }, ctx)).rejects.toThrow(/not a tester/);
+    await expect(callTool(tool('fb_send_message'), { page_id: '111', comment_id: '5_6', text: 'Hi there' }, ctx)).rejects.toThrow(/not a tester/);
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    await saveTestMode(ctx.cfg.flowDir, { on: true, ids: ['900', '777'] });
+    await callTool(tool('fb_send_message'), { page_id: '111', recipient_psid: '900', text: 'Hi there' }, ctx);
+    await callTool(tool('fb_send_message'), { page_id: '111', comment_id: '5_6', text: 'Hi again' }, ctx);
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(2);
   });
 
   it('needs exactly one recipient', async () => {

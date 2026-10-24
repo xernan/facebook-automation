@@ -8,6 +8,7 @@ import { contactLeadsToCsv, leadFromComment, leadFromConversation, type ContactL
 import { flowTools } from './flowtools.js';
 import { commentTools } from './comments.js';
 import { toScheduleTimestamp } from './schedule.js';
+import { botMayAnswer, loadTestMode } from './testmode.js';
 
 export interface Ctx {
   cfg: Config;
@@ -301,8 +302,14 @@ export const tools: ToolDef[] = [
     },
     // Replies only (inside the 24-hour window). No message tags: messaging outside the window is how Pages get
     // restricted, and a bot may not use the human-agent tag.
-    handler: ({ page_id, recipient_psid, comment_id, text: body }, ctx) => {
+    handler: async ({ page_id, recipient_psid, comment_id, text: body }, ctx) => {
       if (!!recipient_psid === !!comment_id) throw new Error('Give exactly one of recipient_psid or comment_id.');
+      // Test mode covers this tool too: the Messenger watcher may call it, so only listed testers get a message.
+      const tm = await loadTestMode(ctx.cfg.flowDir);
+      if (tm.on) {
+        const who = recipient_psid ?? (await ctx.graph.get(page_id, comment_id!, { fields: 'from' })).from?.id;
+        if (!botMayAnswer(tm, who)) throw new Error('Test mode is on and this person is not a tester. Not sent.');
+      }
       const params: Params = {
         recipient: JSON.stringify(recipient_psid ? { id: recipient_psid } : { comment_id }),
         message: JSON.stringify({ text: body }),
