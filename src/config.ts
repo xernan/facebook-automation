@@ -31,6 +31,8 @@ export const configSchema = z.object({
   FB_LEADS_SCAN_MAX: intIn(200, 1, 2000),
   FB_LEADS_MESSAGES_PER_CHAT: intIn(25, 1, 100),
   FB_LEADS_SCAN_POSTS: intIn(25, 1, 100),
+  FB_LEADS_CHATS_PER_PAGE: intIn(25, 1, 100),
+  FB_PAGES_REFRESH_COOLDOWN_SEC: intIn(60, 0, 3600),
   FB_LOGIN_PORT: intIn(8765, 1024, 65535),
   FB_LOGIN_TIMEOUT_MIN: intIn(5, 1, 30),
   FB_MEDIA_DIR: z.string().default('media'),

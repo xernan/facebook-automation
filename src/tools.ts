@@ -426,7 +426,7 @@ export const tools: ToolDef[] = [
         const res: any = await ctx.graph.get(page_id, `${page_id}/conversations`, {
           platform: 'messenger',
           fields: `id,updated_time,snippet,participants,messages.limit(${ctx.cfg.FB_LEADS_MESSAGES_PER_CHAT}){message,from,created_time}`,
-          limit: Math.min(ctx.cfg.FB_MAX_LIST_LIMIT, 25),
+          limit: Math.min(ctx.cfg.FB_MAX_LIST_LIMIT, ctx.cfg.FB_LEADS_CHATS_PER_PAGE),
           after: cursor,
         });
         for (const conv of res.data ?? []) {

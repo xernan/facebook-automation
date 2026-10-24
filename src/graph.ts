@@ -71,6 +71,8 @@ export class GraphClient {
   private readonly readLimiter: RateLimiter;
   private readonly writeLimiter: RateLimiter;
   private pages: Map<string, PageInfo> | undefined;
+  /** Page ids that were not found, with when (for the refresh cooldown). */
+  private readonly missing = new Map<string, number>();
 
   constructor(
     private readonly cfg: Config,
@@ -232,10 +234,17 @@ export class GraphClient {
   /** Authorization check: the page must be one this token manages. */
   async pageToken(pageId: string): Promise<string> {
     let page = (await this.listPages()).find((p) => p.id === pageId);
-    if (!page) page = (await this.listPages(true)).find((p) => p.id === pageId);
-    if (!page && this.cfg.FB_USER_ACCESS_TOKEN && /^\d+$/.test(pageId)) {
-      page = await this.lookupPage(pageId);
-      if (page) this.pages?.set(page.id, page);
+    // A wrong id must not cost a full page-list refresh + lookup on every call.
+    const missedAt = this.missing.get(pageId);
+    const cooling = missedAt !== undefined && Date.now() - missedAt < this.cfg.FB_PAGES_REFRESH_COOLDOWN_SEC * 1000;
+    if (!page && !cooling) {
+      page = (await this.listPages(true)).find((p) => p.id === pageId);
+      if (!page && this.cfg.FB_USER_ACCESS_TOKEN && /^\d+$/.test(pageId)) {
+        page = await this.lookupPage(pageId);
+        if (page) this.pages?.set(page.id, page);
+      }
+      if (page) this.missing.delete(pageId);
+      else this.missing.set(pageId, Date.now());
     }
     if (!page) throw new GraphError(`Page ${pageId} is not managed by this token. Use fb_list_pages to see allowed pages.`);
     return page.access_token;

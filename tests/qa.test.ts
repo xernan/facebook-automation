@@ -113,3 +113,23 @@ describe('paging cursors', () => {
     await expect(callTool(tool('fb_list_posts'), { page_id: '111', after: 'a&access_token=x' }, ctx)).rejects.toThrow();
   });
 });
+
+describe('unknown page ids', () => {
+  it('do not re-fetch the page list on every call (cooldown)', async () => {
+    const { ctx, calls } = testCtx({}, () => ({ status: 400, json: { error: { code: 100, error_subcode: 33, message: 'x' } } }));
+    for (let i = 0; i < 5; i++) {
+      await expect(callTool(tool('fb_list_posts'), { page_id: '999' }, ctx)).rejects.toThrow(/not managed/);
+    }
+    const listCalls = calls.filter((c) => c.url.pathname.endsWith('/me/accounts')).length;
+    expect(listCalls).toBeLessThanOrEqual(2);
+    expect(calls.length).toBeLessThanOrEqual(6);
+  });
+});
+
+describe('messenger leads page size', () => {
+  it('comes from config, not a hard-coded number', async () => {
+    const { ctx, calls } = testCtx({ FB_LEADS_CHATS_PER_PAGE: '7' }, () => ({ json: { data: [] } }));
+    await callTool(tool('fb_messenger_leads'), { page_id: '111' }, ctx);
+    expect(calls.at(-1)!.url.searchParams.get('limit')).toBe('7');
+  });
+});
