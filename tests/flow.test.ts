@@ -632,6 +632,7 @@ describe('idVerdict (owner ID rules)', () => {
     ['old SSS with birthday alone', [id('sss_old')], true],
     ['PRC both sides + TIN', [id('prc', { side: 'both' }), id('tin')], true],
     ['PRC front + back photos + PhilHealth', [id('prc'), id('prc', { side: 'back' }), id('philhealth')], true],
+    ['blurry first try, then a clear passport', [id('passport', { clear: false }), id('passport')], true],
     ['new SSS + PhilHealth', [id('sss_new'), id('philhealth')], true],
     ['National ID both sides + TIN with signature', [id('national_id', { side: 'both' }), id('tin')], true],
   ] as const)('%s -> ok', (_n, ids, ok) => expect(idVerdict(flow, [...ids]).ok).toBe(ok));
@@ -645,6 +646,8 @@ describe('idVerdict (owner ID rules)', () => {
     ['PRC + unknown other ID', [id('prc', { side: 'both' }), id('other')], t.need_second_reply],
     ['secondary only', [id('tin'), id('philhealth')], t.need_primary_reply],
     ['blurry passport', [id('passport', { clear: false })], t.unclear_reply],
+    ['a non-ID picture, then a clear PhilHealth (only the newest photo decides blurry)', [id('other', { clear: false }), id('philhealth')], t.need_primary_reply],
+    ['clear PhilHealth, then a blurry photo', [id('philhealth'), id('other', { clear: false })], t.unclear_reply],
     ['nothing', [], t.need_image_reply],
   ] as const)('%s -> asks again', (_n, ids, reply) => expect(idVerdict(flow, [...ids])).toEqual({ ok: false, reply }));
 });

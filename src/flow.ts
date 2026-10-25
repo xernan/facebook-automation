@@ -474,7 +474,9 @@ export function idVerdict(flow: Flow, seen: IdSeen[]): IdVerdict {
     return { ok: true };
   }
 
-  if (seen.length > 0 && clear.length < seen.length) return { ok: false, reply: t.unclear_reply };
+  // Only the newest photo decides "blurry": an older bad photo (or a picture that is not an ID) must not block
+  // every clear ID sent after it.
+  if (seen.length > 0 && !seen.at(-1)!.clear) return { ok: false, reply: t.unclear_reply };
   if (clear.length > 0) return { ok: false, reply: t.need_primary_reply };
   return { ok: false, reply: t.need_image_reply };
 }
