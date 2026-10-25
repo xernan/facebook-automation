@@ -31,8 +31,11 @@ export async function loadCommentState(dir: string, now = new Date()): Promise<C
     const s = JSON.parse(await fs.readFile(path.join(dir, FILE), 'utf8')) as CommentState;
     return { started_at: s.started_at, handled: s.handled ?? {}, sent: s.sent ?? [] };
   } catch {
-    // First run: comments made before today are left alone.
-    return { started_at: now.toISOString(), handled: {}, sent: [] };
+    // First run: comments made before now are left alone. Saved right away so the start time stays fixed (otherwise
+    // every check would start "now" and no comment would ever be answered).
+    const s: CommentState = { started_at: now.toISOString(), handled: {}, sent: [] };
+    await saveCommentState(dir, s, now);
+    return s;
   }
 }
 

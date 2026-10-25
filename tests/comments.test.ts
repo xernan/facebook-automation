@@ -115,6 +115,14 @@ describe('comment replies', () => {
     expect(p).toMatch(/never promise approval/);
   });
 
+  it('first run keeps its start time, so a comment made after the bot started gets answered', async () => {
+    const { ctx, dir } = setup();
+    const start = new Date(now.getTime() - 400_000);
+    await findPendingComments(ctx, PAGE_ID, start); // bot starts before comment 11 (300 s ago) was written
+    expect((await loadCommentState(dir, now)).started_at).toBe(start.toISOString());
+    expect((await findPendingComments(ctx, PAGE_ID, now)).comments.map((c) => c.comment_id)).toEqual(['11', '12']);
+  });
+
   it('test mode (default ON, empty list) answers nobody; listed testers only', async () => {
     const { ctx, dir } = setup();
     await primeState(dir);
