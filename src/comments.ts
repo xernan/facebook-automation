@@ -4,6 +4,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { contentProblem } from './contentguard.js';
 import { replaceFile } from './files.js';
+import { FlowStore } from './flowstore.js';
 import type { Ctx, ToolDef } from './tools.js';
 import { botMayAnswer, loadTestMode } from './testmode.js';
 
@@ -14,8 +15,8 @@ import { botMayAnswer, loadTestMode } from './testmode.js';
 //   - at most FB_COMMENT_MAX_PER_HOUR replies an hour and FB_COMMENT_MAX_PER_DAY in 24 hours;
 //   - never the same reply text twice in 24 hours (Meta flags copy-paste replies);
 //   - every text passes the Community Standards guard (graph.post);
-//   - a private Messenger reply (comment to DM) only when FB_COMMENT_PRIVATE_REPLY is on (default off): Meta hides who
-//     commented, so we cannot tell if that person is already mid-application in Messenger, and the DM would cut in.
+//   - a private Messenger reply (comment to DM) only when FB_COMMENT_PRIVATE_REPLY is on, and only while nobody is
+//     mid-application in Messenger: Meta hides who commented, so it could be that same person and the DM would cut in.
 // Off until the owner turns on FB_COMMENTS_LIVE.
 
 export interface CommentState {
@@ -66,6 +67,15 @@ export interface PendingComment {
   ready: boolean;
 }
 
+const FINISHED = ['done', 'declined', 'rejected', 'excluded'];
+
+/** True while someone is mid-application in Messenger (active in the last FB_COMMENT_DM_QUIET_MIN minutes). */
+export async function messengerBusy(ctx: Ctx, now = new Date()): Promise<boolean> {
+  const st = await new FlowStore(ctx.cfg.flowDir).load(now);
+  const ms = ctx.cfg.FB_COMMENT_DM_QUIET_MIN * 60_000;
+  return Object.values(st.people).some((p) => !FINISHED.includes(p.stage) && now.getTime() - new Date(p.updated_at).getTime() < ms);
+}
+
 /** People's new top-level comments on our posts from the last FB_COMMENT_POST_DAYS days. */
 export async function findPendingComments(ctx: Ctx, pageId: string, now = new Date()) {
   const s = await loadCommentState(ctx.cfg.flowDir, now);
@@ -95,7 +105,8 @@ export async function findPendingComments(ctx: Ctx, pageId: string, now = new Da
   }
   out.sort((a, b) => a.created_time.localeCompare(b.created_time));
   const left = Math.min(ctx.cfg.FB_COMMENT_MAX_PER_HOUR - repliesInLastHour(s, now), ctx.cfg.FB_COMMENT_MAX_PER_DAY - repliesInLast(s, 86_400_000, now));
-  return { comments: out, replies_left_this_hour: Math.max(0, left) };
+  const private_message_ok = ctx.cfg.FB_COMMENT_PRIVATE_REPLY && ctx.cfg.FB_MESSENGER_LIVE && !(await messengerBusy(ctx, now));
+  return { comments: out, replies_left_this_hour: Math.max(0, left), private_message_ok };
 }
 
 // Owner rule: replies must read like a person typed them, not like AI. These give a bot away.
@@ -145,7 +156,7 @@ export const commentTools: ToolDef[] = [
     name: 'fb_comment_answer',
     description:
       'Handle one comment. action="reply": post a short public reply as the Page (your own words for this person; the same text twice is refused). ' +
-      'private_message is sent to their Messenger only when FB_COMMENT_PRIVATE_REPLY is on; otherwise it is ignored. ' +
+      'Add private_message only when fb_comment_pending said private_message_ok=true (nobody is mid-application in Messenger). ' +
       'action="skip": no reply (spam, rude, off-topic, or nothing to add).',
     write: true,
     input: {
@@ -158,7 +169,7 @@ export const commentTools: ToolDef[] = [
     handler: async ({ page_id, comment_id, action, reply, private_message }, ctx) => {
       if (!ctx.cfg.FB_COMMENTS_LIVE) throw new Error('Comment replies are off (FB_COMMENTS_LIVE). Owner turns them on.');
       const now = new Date();
-      const { comments } = await findPendingComments(ctx, page_id, now);
+      const { comments, private_message_ok } = await findPendingComments(ctx, page_id, now);
       const c = comments.find((x) => x.comment_id === comment_id);
       if (!c) throw new Error('This comment is not waiting for a reply (already handled, hidden, ours, or too old).');
       const s = await loadCommentState(ctx.cfg.flowDir, now);
@@ -169,13 +180,19 @@ export const commentTools: ToolDef[] = [
       }
       if (!c.ready) throw new Error(`Too soon: wait until ${ctx.cfg.FB_COMMENT_MIN_DELAY_SEC}s after the comment.`);
       if (!reply) throw new Error('reply is required for action="reply".');
+      if (private_message && !private_message_ok)
+        throw new Error(
+          ctx.cfg.FB_COMMENT_PRIVATE_REPLY
+            ? 'No private message now: someone may be mid-application in Messenger. Reply publicly and invite them to send the Page a message.'
+            : 'Private messages from comments are off. Reply publicly and invite them to send the Page a message.',
+        );
       const refusal = replyRefusal(s, ctx.cfg.FB_COMMENT_MAX_PER_HOUR, reply, now, ctx.cfg.FB_COMMENT_MAX_PER_DAY) ?? (private_message ? contentProblem(private_message) && `Not sent: the private message ${contentProblem(private_message)}.` : undefined);
       if (refusal) throw new Error(refusal);
       await ctx.graph.post(page_id, `${comment_id}/comments`, { message: reply });
       s.handled[comment_id] = { at: now.toISOString(), action: 'reply' };
       s.sent.push({ at: now.toISOString(), hash: hashText(reply) });
       let dm = false;
-      if (private_message && ctx.cfg.FB_MESSENGER_LIVE && ctx.cfg.FB_COMMENT_PRIVATE_REPLY) {
+      if (private_message) {
         try {
           // Comment to Messenger ("private reply"): Meta allows one per comment, within 7 days.
           await ctx.graph.post(page_id, `${page_id}/messages`, { recipient: JSON.stringify({ comment_id }), message: JSON.stringify({ text: private_message }) });
