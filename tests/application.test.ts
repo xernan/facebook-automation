@@ -399,6 +399,20 @@ describe('finalizeLead', () => {
     expect((await fill('juan.cruz@gmail.com', 'eastwest')).text).toBe('juan.cruz@gmail.com');
   });
 
+  it('China Bank: College is ticked (printed box, owner default Education = College)', async () => {
+    const app = buildApplication(lead(), details, NOW);
+    expect(app.bankOnly.chinabank['education__checkbox__college']).toBe(true);
+    const pdf = await PDFDocument.create();
+    pdf.addPage([608, 983]);
+    const { fillBankPdf } = await import('../src/pdf.js');
+    const { settingsSchema } = await import('../src/application.js');
+    const ops = async (bank: 'chinabank') => {
+      const out = await fillBankPdf(bank, await pdf.save(), { ...app, bankOnly: { ...app.bankOnly, chinabank: { 'education__checkbox__college': true } } }, settingsSchema.parse({}));
+      return out.filled;
+    };
+    expect(await ops('chinabank')).toBe(1);
+  });
+
   it('a long address is printed in full even when the bank box has a character limit', async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([600, 200]);

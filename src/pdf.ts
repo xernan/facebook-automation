@@ -69,10 +69,19 @@ const EMAIL_DOMAIN_BOX: Partial<Record<BankKey, Record<string, [number, number]>
   metrobank: { 'gmail.com': [477, 751], 'yahoo.com': [525.6, 751] },
 };
 
-/** Draws a check mark centered on (x, y). */
-function drawTick(page: PDFPage, x: number, y: number) {
-  page.drawLine({ start: { x: x - 3, y }, end: { x: x - 1, y: y - 2.5 }, thickness: 1.4 });
-  page.drawLine({ start: { x: x - 1, y: y - 2.5 }, end: { x: x + 3.5, y: y + 3.5 }, thickness: 1.4 });
+/**
+ * Bank-only check boxes printed on the template with no form field: [x, y center, size] on page 1, checked on the
+ * real template. Ticked when the bank-only value is true.
+ */
+const PRINTED_BOX: Partial<Record<BankKey, Record<string, [number, number, number]>>> = {
+  chinabank: { 'education__checkbox__college': [198.1, 719, 0.75] },
+};
+
+/** Draws a check mark centered on (x, y); size 1 fits a ~8 pt box. */
+function drawTick(page: PDFPage, x: number, y: number, size = 1) {
+  const k = size;
+  page.drawLine({ start: { x: x - 3 * k, y }, end: { x: x - 1 * k, y: y - 2.5 * k }, thickness: 1.4 * k });
+  page.drawLine({ start: { x: x - 1 * k, y: y - 2.5 * k }, end: { x: x + 3.5 * k, y: y + 3.5 * k }, thickness: 1.4 * k });
 }
 
 /** Bank-only boxes that take a value from the Default Form (so dashboard edits reach them). */
@@ -116,6 +125,12 @@ export async function fillBankPdf(
   if (choice) bankOnly[`card_choice__checkbox__${choice}`] = true;
   if (choice && bank === 'chinabank') bankOnly[`card_variant__checkbox__${choice}`] = true;
   let filled = 0;
+  for (const [stem, [x, y, size]] of Object.entries(PRINTED_BOX[bank] ?? {})) {
+    if (bankOnly[stem] === true) {
+      drawTick(pdf.getPages()[0]!, x, y, size);
+      filled++;
+    }
+  }
 
   for (const field of form.getFields()) {
     const name = field.getName().replace(/__\d+$/, '');

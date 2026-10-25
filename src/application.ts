@@ -384,6 +384,8 @@ export function bankOnlyFor(lead: Lead, f: AppForm, idNumber?: string): BuiltApp
       ...bizZip,
     },
     chinabank: {
+      // Owner default Education = College (a printed box on this form, ticked by pdf.ts).
+      'education__checkbox__college': true,
       ...workBoxes('chinabank', f),
       'card_delivery_address__checkbox__presentaddress': true,
       'soa_delivery__checkbox__personalemailaddress': true,
