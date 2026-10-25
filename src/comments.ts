@@ -14,8 +14,8 @@ import { botMayAnswer, loadTestMode } from './testmode.js';
 //   - at most FB_COMMENT_MAX_PER_HOUR replies an hour and FB_COMMENT_MAX_PER_DAY in 24 hours;
 //   - never the same reply text twice in 24 hours (Meta flags copy-paste replies);
 //   - every text passes the Community Standards guard (graph.post);
-//   - a private Messenger reply (comment to DM) only once per comment, only when Messenger is live, and only
-//     for someone who asked how to apply.
+//   - a private Messenger reply (comment to DM) only when FB_COMMENT_PRIVATE_REPLY is on (default off): Meta hides who
+//     commented, so we cannot tell if that person is already mid-application in Messenger, and the DM would cut in.
 // Off until the owner turns on FB_COMMENTS_LIVE.
 
 export interface CommentState {
@@ -145,7 +145,7 @@ export const commentTools: ToolDef[] = [
     name: 'fb_comment_answer',
     description:
       'Handle one comment. action="reply": post a short public reply as the Page (your own words for this person; the same text twice is refused). ' +
-      'Add private_message only when they asked how to apply: it is sent once to their Messenger (only when Messenger is live). ' +
+      'private_message is sent to their Messenger only when FB_COMMENT_PRIVATE_REPLY is on; otherwise it is ignored. ' +
       'action="skip": no reply (spam, rude, off-topic, or nothing to add).',
     write: true,
     input: {
@@ -175,7 +175,7 @@ export const commentTools: ToolDef[] = [
       s.handled[comment_id] = { at: now.toISOString(), action: 'reply' };
       s.sent.push({ at: now.toISOString(), hash: hashText(reply) });
       let dm = false;
-      if (private_message && ctx.cfg.FB_MESSENGER_LIVE) {
+      if (private_message && ctx.cfg.FB_MESSENGER_LIVE && ctx.cfg.FB_COMMENT_PRIVATE_REPLY) {
         try {
           // Comment to Messenger ("private reply"): Meta allows one per comment, within 7 days.
           await ctx.graph.post(page_id, `${page_id}/messages`, { recipient: JSON.stringify({ comment_id }), message: JSON.stringify({ text: private_message }) });

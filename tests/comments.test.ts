@@ -79,8 +79,17 @@ describe('comment replies', () => {
     await expect(answer({ page_id: PAGE_ID, comment_id: '11', action: 'skip' }, off.ctx)).rejects.toThrow(/off/);
   });
 
-  it('a private message goes to Messenger only for a reply, once', async () => {
-    const { ctx, graph, dir } = setup({ FB_COMMENT_MIN_DELAY_SEC: '30' });
+  it('no private message by default (it would cut into a Messenger chat already going on)', async () => {
+    const { ctx, graph, dir } = setup();
+    await primeState(dir);
+    expect(await answer({ page_id: PAGE_ID, comment_id: '11', action: 'reply', reply: 'Just send us a message here!', private_message: 'Hi Ana, reply here to start.' }, ctx)).toMatchObject({ private_message_sent: false });
+    expect(graph.posts.map((x) => x.p)).toEqual(['11/comments']);
+    expect(commentPrompt(PAGE_ID)).toMatch(/Do not add private_message/);
+    expect(commentPrompt(PAGE_ID)).not.toMatch(/Sent you a message/);
+  });
+
+  it('a private message goes to Messenger only for a reply, once (when turned on)', async () => {
+    const { ctx, graph, dir } = setup({ FB_COMMENT_MIN_DELAY_SEC: '30', FB_COMMENT_PRIVATE_REPLY: 'true' });
     await primeState(dir);
     await answer({ page_id: PAGE_ID, comment_id: '11', action: 'reply', reply: 'Sent you a message!', private_message: 'Hi Ana, we can help you apply for free if you already have a credit card. Just reply here.' }, ctx);
     expect(graph.posts.map((x) => x.p)).toEqual(['11/comments', `${PAGE_ID}/messages`]);

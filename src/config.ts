@@ -61,6 +61,7 @@ export const configSchema = z.object({
   FB_COMMENT_MAX_PER_HOUR: intIn(15, 1, 60),
   FB_COMMENT_MAX_PER_DAY: intIn(60, 1, 300),
   FB_COMMENT_POST_DAYS: intIn(7, 1, 30),
+  FB_COMMENT_PRIVATE_REPLY: boolFlag(false),
 });
 
 export type RawConfig = z.infer<typeof configSchema>;

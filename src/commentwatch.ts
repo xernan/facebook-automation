@@ -14,15 +14,22 @@ import { ClaudeBrake, takeLock } from './watchguard.js';
 
 const ALLOWED = ['fb_comment_pending', 'fb_comment_answer'].map((t) => `mcp__facebook__${t}`);
 
-export function commentPrompt(pageId: string): string {
+export function commentPrompt(pageId: string, privateReply = false): string {
   return [
     `You reply to comments on Facebook Page ${pageId} (CARD MAX: free help applying for another credit card, for people who already have one).`,
     `1. Call fb_comment_pending with page_id ${pageId}. Handle only comments with ready=true, oldest first, while replies_left_this_hour > 0.`,
     '2. For each comment, call fb_comment_answer once:',
     '   - A question or an answer to the post: action="reply". Write it in English, the way a friendly person who runs the Page',
     '     would type it on a phone. 1-2 short sentences. Answer what THEY said; add a short follow-up question only when it fits.',
-    '   - They ask how to apply or want help: reply publicly (e.g. "Sent you a message!") and add private_message: a short note',
-    '     that we can help them apply for free if they already have a credit card, and they can reply there to start.',
+    ...(privateReply
+      ? [
+          '   - They ask how to apply or want help: reply publicly (e.g. "Sent you a message!") and add private_message: a short note',
+          '     that we can help them apply for free if they already have a credit card, and they can reply there to start.',
+        ]
+      : [
+          '   - They ask how to apply or want help: reply publicly and ask them to send the Page a message (e.g. "Just send us a',
+          "     message here and we'll help you apply, it's free.\"). Do not add private_message.",
+        ]),
     '   - Now and then (not every time) a casual "Follow us for more card tips" is fine.',
     '   - Spam, rude, scam-looking, political, or no words: action="skip".',
     "   Sound human, not like AI: plain everyday words and contractions (you're, it's); no \"Great question!\", \"Absolutely!\",",
@@ -57,7 +64,7 @@ async function main() {
     new Promise<number | null>((resolve) => {
       const child = spawn(
         claudeBin(ctx.cfg.FB_WATCH_CLAUDE_BIN),
-        ['-p', commentPrompt(pageId), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', '', '--allowedTools', ALLOWED.join(',')],
+        ['-p', commentPrompt(pageId, ctx.cfg.FB_COMMENT_PRIVATE_REPLY), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', '', '--allowedTools', ALLOWED.join(',')],
         { cwd: ctx.cfg.flowDir, stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true },
       );
       const timer = setTimeout(() => child.kill(), ctx.cfg.FB_WATCH_CLAUDE_TIMEOUT_MIN * 60_000);
