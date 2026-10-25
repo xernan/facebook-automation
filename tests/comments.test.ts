@@ -39,7 +39,7 @@ function setup(env: Record<string, string> = {}) {
     },
     post: async (_p: string, p: string, params: any) => {
       posts.push({ p, params });
-      return { id: 'r' };
+      return p.endsWith('/messages') && params.recipient?.includes('comment_id') ? { recipient_id: '555', message_id: 'm_1' } : { id: 'r' };
     },
   };
   const cfg = testConfig({ FB_COMMENTS_LIVE: 'true', FB_FLOW_DIR: dir, FB_WRITE_ENABLED: 'true', ...env });
@@ -97,18 +97,18 @@ describe('comment replies', () => {
     expect(JSON.parse(graph.posts[1].params.recipient)).toEqual({ comment_id: '11' });
   });
 
-  it('no DM while someone is mid-application in Messenger (Meta hides who commented; it could be them)', async () => {
-    const { ctx, graph, dir } = setup({ FB_COMMENT_MIN_DELAY_SEC: '30', FB_COMMENT_PRIVATE_REPLY: 'true' });
+  it('a DM that lands in a chat mid-application picks the application up again', async () => {
+    const { ctx, graph, dir } = setup({ FB_COMMENT_MIN_DELAY_SEC: '30', FB_COMMENT_PRIVATE_REPLY: 'true', FB_FLOW_FILE: 'flow.example.json' });
     await primeState(dir);
-    const person = (stage: string, sec: number) => ({ stage, updated_at: ago(sec) });
-    writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ version: 1, started_at: ago(9999), handled: [], people: { '555': person('steps', 600) } }));
-    expect((await findPendingComments(ctx, PAGE_ID, now)).private_message_ok).toBe(false);
-    await expect(answer({ page_id: PAGE_ID, comment_id: '11', action: 'reply', reply: 'Sent you a message!', private_message: 'Hi, reply here to start.' }, ctx)).rejects.toThrow(/mid-application/);
-    expect(graph.posts).toEqual([]);
-    // Finished chats and chats quiet for longer than FB_COMMENT_DM_QUIET_MIN do not block it.
-    writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ version: 1, started_at: ago(9999), handled: [], people: { '555': person('done', 60), '556': person('steps', 3600) } }));
-    expect((await findPendingComments(ctx, PAGE_ID, now)).private_message_ok).toBe(true);
-    expect((await findPendingComments(setup().ctx, PAGE_ID, now)).private_message_ok).toBe(false); // switch off by default
+    writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ version: 1, started_at: ago(9999), handled: [], people: { '555': { stage: 'consent', updated_at: ago(60) } } }));
+    const r = await answer({ page_id: PAGE_ID, comment_id: '11', action: 'reply', reply: 'Sent you a message!', private_message: 'Hi, reply here to start.' }, ctx);
+    expect(r).toMatchObject({ private_message_sent: true, application_resumed: true });
+    expect(graph.posts.map((x) => x.p)).toEqual(['11/comments', `${PAGE_ID}/messages`, `${PAGE_ID}/messages`]);
+    expect(JSON.parse(graph.posts[2].params.recipient)).toEqual({ id: '555' });
+    expect(JSON.parse(graph.posts[2].params.message).text).toMatch(/^Tuloy natin/);
+    // Someone new (not in the flow) just gets the DM.
+    writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ version: 1, started_at: ago(9999), handled: [], people: {} }));
+    expect(await answer({ page_id: PAGE_ID, comment_id: '12', action: 'skip' }, ctx)).toMatchObject({ skipped: true });
   });
 
   it('limits: same text twice a day, hourly cap, Meta rules', () => {

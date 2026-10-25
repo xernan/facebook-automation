@@ -23,9 +23,8 @@ export function commentPrompt(pageId: string, privateReply = false): string {
     '     would type it on a phone. 1-2 short sentences. Answer what THEY said; add a short follow-up question only when it fits.',
     ...(privateReply
       ? [
-          '   - They ask how to apply or want help, and private_message_ok=true: reply publicly (e.g. "Sent you a message!") and add',
-          '     private_message: a short note that we can help them apply for free if they already have a credit card, and they can',
-          '     reply there to start. If private_message_ok=false: reply publicly asking them to send the Page a message instead.',
+          '   - They ask how to apply or want help: reply publicly (e.g. "Sent you a message!") and add private_message: a short note',
+          '     that we can help them apply for free if they already have a credit card, and they can reply there to start.',
         ]
       : [
           '   - They ask how to apply or want help: reply publicly and ask them to send the Page a message (e.g. "Just send us a',
