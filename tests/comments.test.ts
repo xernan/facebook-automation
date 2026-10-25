@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -98,7 +98,11 @@ describe('comment replies', () => {
   });
 
   it('a DM that lands in a chat mid-application picks the application up again', async () => {
-    const { ctx, graph, dir } = setup({ FB_COMMENT_MIN_DELAY_SEC: '30', FB_COMMENT_PRIVATE_REPLY: 'true', FB_FLOW_FILE: 'flow.example.json' });
+    const flow = JSON.parse(readFileSync('flow.example.json', 'utf8'));
+    flow.consent.choices = ['Oo', 'Hindi'];
+    const flowFile = path.join(mkdtempSync(path.join(tmpdir(), 'fbkit-')), 'flow.json');
+    writeFileSync(flowFile, JSON.stringify(flow));
+    const { ctx, graph, dir } = setup({ FB_COMMENT_MIN_DELAY_SEC: '30', FB_COMMENT_PRIVATE_REPLY: 'true', FB_FLOW_FILE: flowFile });
     await primeState(dir);
     writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ version: 1, started_at: ago(9999), handled: [], people: { '555': { stage: 'consent', updated_at: ago(60) } } }));
     const r = await answer({ page_id: PAGE_ID, comment_id: '11', action: 'reply', reply: 'Sent you a message!', private_message: 'Hi, reply here to start.' }, ctx);
@@ -106,6 +110,7 @@ describe('comment replies', () => {
     expect(graph.posts.map((x) => x.p)).toEqual(['11/comments', `${PAGE_ID}/messages`, `${PAGE_ID}/messages`]);
     expect(JSON.parse(graph.posts[2].params.recipient)).toEqual({ id: '555' });
     expect(JSON.parse(graph.posts[2].params.message).text).toMatch(/^Tuloy natin/);
+    expect(JSON.parse(graph.posts[2].params.message).quick_replies.map((q: any) => q.title)).toEqual(['Oo', 'Hindi']); // buttons come back too
     // Someone new (not in the flow) just gets the DM.
     writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ version: 1, started_at: ago(9999), handled: [], people: {} }));
     expect(await answer({ page_id: PAGE_ID, comment_id: '12', action: 'skip' }, ctx)).toMatchObject({ skipped: true });

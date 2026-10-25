@@ -4,7 +4,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { contentProblem } from './contentguard.js';
 import { replaceFile } from './files.js';
-import { currentPrompt } from './flow.js';
+import { currentQuestion } from './flow.js';
 import { FlowStore, loadFlow } from './flowstore.js';
 import type { Ctx, ToolDef } from './tools.js';
 import { botMayAnswer, loadTestMode } from './testmode.js';
@@ -75,13 +75,16 @@ const FINISHED = ['done', 'declined', 'rejected', 'excluded'];
 export async function resumeApplication(ctx: Ctx, pageId: string, psid: string, now = new Date()): Promise<boolean> {
   const p = (await new FlowStore(ctx.cfg.flowDir).load(now)).people[psid];
   if (!p || FINISHED.includes(p.stage) || !botMayAnswer(await loadTestMode(ctx.cfg.flowDir), psid)) return false;
-  const q = currentPrompt(loadFlow(ctx.cfg.flowFile), p);
+  const q = currentQuestion(loadFlow(ctx.cfg.flowFile), p);
   if (!q) return false;
+  // Same buttons as before: Messenger only shows quick replies on the newest message, so the DM hid them.
+  const text = `Tuloy natin ang application mo 🙂
+
+${q.reply}`;
+  const quick_replies = q.choices?.map((c) => ({ content_type: 'text', title: c, payload: c }));
   await ctx.graph.post(pageId, `${pageId}/messages`, {
     recipient: JSON.stringify({ id: psid }),
-    message: JSON.stringify({ text: `Tuloy natin ang application mo 🙂
-
-${q}` }),
+    message: JSON.stringify(quick_replies?.length ? { text, quick_replies } : { text }),
     messaging_type: 'RESPONSE',
   });
   return true;

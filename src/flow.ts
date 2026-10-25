@@ -440,6 +440,17 @@ export function currentPrompt(flow: Flow, p: Person): string | undefined {
   }
 }
 
+/** The question they are on with its buttons, as it was first sent (used to pick a chat up again). No side effects. */
+export function currentQuestion(flow: Flow, p: Person): Question | undefined {
+  const reply = currentPrompt(flow, p);
+  if (!reply) return undefined;
+  if (p.stage === 'consent') return { reply, choices: flow.consent.choices };
+  if (p.stage === 'carded') return { reply, choices: flow.carded.choices };
+  if (p.stage !== 'steps') return { reply };
+  const step = flow.steps[p.step];
+  return step ? question(flow, { ...p }, step, p.suggestions ?? []) : { reply };
+}
+
 export type IdVerdict = { ok: true } | { ok: false; reply: string };
 
 /** Owner ID rules: is this set of ID photos enough? Pure, so the rules are the same every time. */
