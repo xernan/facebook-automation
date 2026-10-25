@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFArray, PDFCheckBox, PDFDict, PDFDocument, PDFDropdown, PDFName, PDFRadioGroup, PDFRef, PDFTextField, type PDFFont, type PDFPage } from 'pdf-lib';
-import { cardName, type BankKey, type BuiltApplication, type Settings } from './application.js';
+import { cardName, DECLARE_NO, type BankKey, type BuiltApplication, type Settings } from './application.js';
 
 // Fills a bank's PDF template. Box names say what goes in them (same naming as the card app's templates):
 //   <key>                         text, e.g. mother_maiden_name
@@ -106,7 +106,7 @@ export async function fillBankPdf(
       if (name.startsWith('bank_only__')) {
         const stem = name.slice('bank_only__'.length);
         const v = bankOnly[stem];
-        if (v === true && field instanceof PDFCheckBox) {
+        if ((v === true || (v === undefined && DECLARE_NO.test(stem))) && field instanceof PDFCheckBox) {
           field.check();
           filled++;
         } else if (typeof v === 'string' && field instanceof PDFTextField) {

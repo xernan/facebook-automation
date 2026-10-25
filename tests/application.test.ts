@@ -240,6 +240,25 @@ describe('finalizeLead', () => {
     for (const max of [19, 21]) expect(cardName('Ma. Lourdes Josefina', 'Garcia', 'Dela Cruz Jr', max).length).toBeLessThanOrEqual(max);
   });
 
+  it('every bank declaration question is ticked NO (owner default), nothing else', async () => {
+    const { DECLARE_NO } = await import('../src/application.js');
+    for (const n of ['existing_eastwest_client', 'existing_principal_cardholder', 'related_to_eastwest_officer', 'related_to_government_official', 'relatives_in_china_bank', 'related_to_metrobank_employee', 'close_ties_public_position'])
+      expect(DECLARE_NO.test(`${n}__checkbox__no`), n).toBe(true);
+    for (const n of ['existing_credit_card__checkbox__no', 'condo__checkbox__no', 'related_to_government_official__checkbox__yes'])
+      expect(DECLARE_NO.test(n), n).toBe(false);
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 200]);
+    const form = pdf.getForm();
+    const names = ['bank_only__related_to_government_official__checkbox__no', 'bank_only__related_to_government_official__checkbox__yes', 'bank_only__condo__checkbox__no'];
+    names.forEach((n, i) => form.createCheckBox(n).addToPage(page, { x: 20 + i * 30, y: 100, width: 10, height: 10 }));
+    const app = { banks: ['eastwest' as const], data: {}, bankOnly: { metrobank: {}, eastwest: {}, chinabank: {} }, missing: [], defaults: [] };
+    const { fillBankPdf } = await import('../src/pdf.js');
+    const { settingsSchema } = await import('../src/application.js');
+    const out = await fillBankPdf('eastwest', await pdf.save(), app, settingsSchema.parse({ flatten: false }));
+    const f = (await PDFDocument.load(out.bytes)).getForm();
+    expect(names.map((n) => { try { return f.getCheckBox(n).isChecked(); } catch { return 'flattened'; } })).toEqual([true, false, false]);
+  });
+
   it('the PDF gets the shortened name, not a name cut in half', async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([600, 200]);

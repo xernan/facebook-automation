@@ -207,6 +207,13 @@ const has = (v: string | undefined): v is string => v !== undefined && v.trim() 
 const join = (...parts: (string | undefined)[]) => parts.filter(has).join(', ');
 
 /** PDF data from the form: the form's own values plus the combined ones some banks print. */
+/**
+ * Owner default: every bank declaration question is answered NO (existing client of that bank, principal
+ * cardholder, related to a bank officer/employee, related to or ties with a government official). Matches the
+ * box stem of any form, so a new bank's form is covered when its boxes follow the naming.
+ */
+export const DECLARE_NO = /^(existing_\w*_client|existing_principal_cardholder|related_to_\w+|relatives_in_\w+|close_ties_\w+)__checkbox__no$/;
+
 /** Owner default: the bank calls the applicant within office hours. */
 export const BEST_TIME_TO_CALL = '9AM-5PM';
 
@@ -303,7 +310,6 @@ export function formMissing(f: AppForm): string[] {
   if (f.civil_status === 'Married') need(f.spouse_name, 'Spouse name');
   // Never on the form: only the applicant can sign or answer these, on paper.
   m.push('Signature (client signs the printed form)');
-  m.push('Bank declarations: relatives at the bank / ties to public officials (applicant answers on the form)');
   return m;
 }
 
@@ -411,7 +417,7 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
     f.date_hired = `${done.getFullYear() - yrs}-${String(done.getMonth() + 1).padStart(2, '0')}-01`;
     defaults.push('Date hired = completion month, year minus years with employer');
   }
-  defaults.push(`Best time to call = ${BEST_TIME_TO_CALL} (owner default)`, 'Education = College (owner default)', 'Source of funds = Salary, card delivery = home, statement = personal email');
+  defaults.push('Bank declarations (existing client, relatives at the bank, government officials) = NO (owner default)', `Best time to call = ${BEST_TIME_TO_CALL} (owner default)`, 'Education = College (owner default)', 'Source of funds = Salary, card delivery = home, statement = personal email');
   return { form: f, defaults };
 }
 
