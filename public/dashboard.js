@@ -329,11 +329,13 @@ async function renderForm(a) {
     field('department', 'Department / nature of business', f.department) +
     field('industry', 'Industry', f.industry, { list: 'dl_ind' }) +
     select('employment_type', 'Employment type', f.employment_type, ['Private Sector', 'Government', 'Self-employed']) +
-    field('length_of_service', 'Years with present employer', f.length_of_service) +
+    field('length_of_service', 'Years with present employer', f.length_of_service, { hint: 'Number only, e.g. 5' }) +
+    field('length_of_service_months', 'Months (on top of the years)', f.length_of_service_months) +
     field('total_years_working', 'Total years of working', f.total_years_working) +
     field('date_hired', 'Date hired', f.date_hired, { type: 'date' }) +
     field('gross_income', 'Gross annual income', f.gross_income, { hint: 'Only what the applicant declared.' }) +
-    field('c_street', 'Company street / building / floor', c.street) +
+    field('c_unit', 'Company unit / floor / building', c.unit) +
+    field('c_street', 'Company street', c.street) +
     field('c_province', 'Company province', c.province, { list: 'dl_prov' }) +
     field('c_city', 'Company city / municipality', c.city, { list: 'dl_ccity' }) +
     field('c_barangay', 'Company barangay', c.barangay, { list: 'dl_cbrgy' }) +
@@ -413,7 +415,7 @@ async function renderForm(a) {
   // Red = still empty. Required (*) fields and the ones the missing list names.
   const MARK = ['first_name', 'last_name', 'birthday', 'gender', 'nationality', 'birth_town', 'civil_status', 'mother_maiden_name', 'email', 'mobile',
     'h_street', 'h_province', 'h_city', 'h_barangay', 'h_zip', 'employer', 'position', 'department', 'industry', 'employment_type',
-    'c_street', 'c_province', 'c_city', 'c_barangay', 'c_zip', 'employer_phone', 'length_of_service', 'gross_income', 'tin_number', 'gsis_sss_number'];
+    'c_street', 'c_province', 'c_city', 'c_barangay', 'c_zip', 'employer_phone', 'length_of_service', 'length_of_service_months', 'gross_income', 'tin_number', 'gsis_sss_number'];
   const markEmpty = () => {
     for (const id of MARK) $('#' + id).classList.toggle('missing', !v(id) || /^\(\d+\)\s*$/.test(v(id)));
     $('#spouse_name').classList.toggle('missing', v('civil_status') === 'Married' && !v('spouse_name'));
@@ -456,10 +458,11 @@ async function renderForm(a) {
       industry: opt(v('industry')),
       employment_type: opt(v('employment_type')),
       length_of_service: opt(v('length_of_service')),
+      length_of_service_months: opt(v('length_of_service_months')),
       total_years_working: opt(v('total_years_working')),
       date_hired: opt(v('date_hired')),
       gross_income: opt(v('gross_income')),
-      company: { ...c, street: opt(v('c_street')), province: opt(v('c_province')), city: opt(v('c_city')), barangay: opt(v('c_barangay')), zip: opt(v('c_zip')), zip_sure: true },
+      company: { ...c, unit: opt(v('c_unit')), street: opt(v('c_street')), province: opt(v('c_province')), city: opt(v('c_city')), barangay: opt(v('c_barangay')), zip: opt(v('c_zip')), zip_sure: true },
       employer_phone: opt(v('employer_phone').replace(/^\(\d+\)\s*$/, '')),
       ref_name: opt(v('ref_name')),
       ref_relationship: opt(v('ref_relationship')),

@@ -32,7 +32,7 @@ export function operatorPrompt(pageId: string): string {
     '   - needs_finalize (a lead file name): the application is complete but has no PDFs yet. Call fb_flow_id_images, then',
     '     fb_lead_finalize with lead_file = that name, as below. Do not message the person for this. If the IDs do not look',
     "     right (names do not match the applicant, not a real ID, a screenshot, edited), call fb_lead_hold instead.",
-    '   - lead_saved: (or fb_lead_hold if the IDs do not look right, see above) call fb_lead_finalize with what you read on the IDs and found in public info (split addresses + zip,',
+    '   - lead_saved: (or fb_lead_hold if the IDs do not look right, see above) call fb_lead_finalize with what you read on the IDs and found in public info (split addresses: unit/floor/building, street, barangay + zip,',
     '     office phone with its source URL (the branch landline from the company site or map listing), nature of business,',
     '     department, employment type, TIN only if printed on an ID). Leave out what you are not sure of; a saved office',
     '     number for the same company and city is filled in by the code. Never invent income, TIN, SSS or phone numbers.',

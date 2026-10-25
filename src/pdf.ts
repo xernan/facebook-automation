@@ -61,6 +61,12 @@ export const BOX_FIX: Partial<Record<BankKey, Record<string, { raise?: number; c
   metrobank: { full_name: { raise: 3, center: true } },
 };
 
+/** Bank-only boxes that take a value from the Default Form (so dashboard edits reach them). */
+const FROM_FORM = new Set(['business_unit_floor_building']);
+
+/** One box with YEARS and MONTHS columns: years in the left half, months in the right (checked on the real template). */
+const YEARS_MONTHS: Partial<Record<BankKey, Record<string, string>>> = { metrobank: { length_of_service: 'length_of_service_months' } };
+
 /** Boxes a bank prints as First / Middle / Last columns (checked on the real template). */
 const NAME_COLUMNS: Partial<Record<BankKey, string[]>> = { eastwest: ['mother_maiden_name', 'spouse_name'] };
 
@@ -113,7 +119,7 @@ export async function fillBankPdf(
       }
       if (name.startsWith('bank_only__')) {
         const stem = name.slice('bank_only__'.length);
-        const v = bankOnly[stem];
+        const v = bankOnly[stem] ?? (FROM_FORM.has(stem) ? app.data[stem] : undefined);
         if ((v === true || (v === undefined && DECLARE_NO.test(stem))) && field instanceof PDFCheckBox) {
           field.check();
           filled++;
@@ -182,6 +188,19 @@ export async function fillBankPdf(
       const cells = field.isCombed() ? (field.getMaxLength() ?? 0) : 0;
       const page = pages.find((pg) => pg.ref === widget.P()) ?? pages[0]!;
       const key = field.getName().replace(/__\d+$/, '');
+      const monthsKey = YEARS_MONTHS[bank]?.[key];
+      if (monthsKey) {
+        const half = rect.width / 2;
+        const largest = settings.text_uniform_size || settings.text_max_size;
+        [t, app.data[monthsKey]].forEach((part, i) => {
+          if (!part) return;
+          const size = Math.min(largest, fitFontSize(font, part, { width: half, height: settings.text_uniform_size ? 1e6 : rect.height }, 0, 1e6));
+          const y = rect.y + Math.max(0.8, (rect.height - size * 0.72) / 2);
+          page.drawText(part, { x: rect.x + i * half + (half - font.widthOfTextAtSize(part, size)) / 2, y, size, font });
+        });
+        form.removeField(field);
+        continue;
+      }
       if (NAME_COLUMNS[bank]?.includes(key) && app.data[`${key}_first`]) {
         // One name part centered in each third of the box, under its First / Middle / Last label.
         const third = rect.width / 3;

@@ -29,6 +29,8 @@ const BANK_NAME: Record<BankKey, string> = { metrobank: 'Metrobank', eastwest: '
 const text = (max = 200) => z.string().trim().min(1).max(max);
 const addr = z
   .object({
+    /** Unit / floor / building (e.g. "4th Level, Festival Mall"); banks with a separate box print it there. */
+    unit: text(120).optional(),
     street: text().optional(),
     barangay: text(100).optional(),
     city: text(100).optional(),
@@ -155,7 +157,7 @@ const CIVIL: Record<string, string> = { single: 'Single', married: 'Married', se
 // ---- the Default Form ---------------------------------------------------------------------------------------
 const s = (max = 300) => z.string().max(max).optional();
 const formAddr = z
-  .object({ street: s(), barangay: s(100), city: s(100), province: s(100), zip: s(10), zip_sure: z.boolean().optional() })
+  .object({ unit: s(120), street: s(), barangay: s(100), city: s(100), province: s(100), zip: s(10), zip_sure: z.boolean().optional() })
   .strict();
 
 /** Same sections as the card app's Default Form (Personal, Address, Employment, References, Other card). */
@@ -189,6 +191,8 @@ export const formSchema = z
     company: formAddr.optional(),
     employer_phone: s(40),
     length_of_service: s(30),
+    /** Months on top of the years (Metrobank's MONTHS box). */
+    length_of_service_months: s(10),
     total_years_working: s(10),
     date_hired: s(10),
     gross_income: s(30),
@@ -225,7 +229,7 @@ export function formToData(f: AppForm): Record<string, string> {
   for (const k of [
     'first_name', 'middle_name', 'last_name', 'suffix', 'name_on_card', 'birthday', 'gender', 'nationality', 'birth_town',
     'civil_status', 'email', 'mobile', 'home_phone', 'mother_maiden_name', 'home_ownership', 'years_of_stay', 'employer',
-    'position', 'department', 'industry', 'employment_type', 'employer_phone', 'length_of_service', 'total_years_working',
+    'position', 'department', 'industry', 'employment_type', 'employer_phone', 'length_of_service', 'length_of_service_months', 'total_years_working',
     'date_hired', 'gross_income', 'tin_number', 'gsis_sss_number', 'other_card_company', 'other_card_number', 'ref_name',
     'ref_relationship', 'ref_mobile',
   ] as const) put(k, f[k]);
@@ -234,20 +238,22 @@ export function formToData(f: AppForm): Record<string, string> {
   put('best_time_to_call', BEST_TIME_TO_CALL);
   if (f.nationality && norm(f.nationality) !== 'filipino') put('nationality_other', f.nationality);
   const h = f.home ?? {};
-  put('street', h.street);
+  put('street', join(h.unit, h.street));
   put('barangay', h.barangay);
   put('city_province', join(h.city, h.province));
   put('zipcode', h.zip);
-  put('home_address', join(h.street, h.barangay, h.city, h.province));
+  put('home_address', join(h.unit, h.street, h.barangay, h.city, h.province));
   d.permanent_same_as_present = 'yes';
   put('permanent_address', d.home_address);
   put('permanent_zip_code', d.zipcode);
   put('permanent_length_of_stay', d.years_of_stay);
   const c = f.company ?? {};
+  // Banks with a unit/floor/building box get it there; the others print it before the street.
+  put('business_unit_floor_building', c.unit);
   put('company_street', c.street);
   put('company_barangay', c.barangay);
   put('company_city_province', join(c.city, c.province));
-  put('company_address', join(c.street, c.barangay, c.city, c.province));
+  put('company_address', join(c.unit, c.street, c.barangay, c.city, c.province));
   // China Bank ticks Employed / Self-Employed (Business); a self-employed applicant here owns a business.
   if (f.employment_type) put('employment_status', f.employment_type === 'Self-employed' ? 'Self-employed Business' : 'Employed');
   if (f.civil_status === 'Married') put('spouse_name', f.spouse_name);
@@ -297,7 +303,7 @@ export function formMissing(f: AppForm): string[] {
   need(f.industry, 'Nature of business');
   need(f.employment_type, 'Employment type');
   const c = f.company ?? {};
-  need(c.street, 'Office street/building');
+  need(c.street || c.unit, 'Office street/building');
   need(c.barangay, 'Office barangay');
   if (!has(c.city) && !has(c.province)) m.push('Office city/province');
   else if (!has(c.province)) m.push('Office province');
@@ -362,6 +368,8 @@ export function formatTin(raw: string): string | undefined {
   return d.match(/\d{3}/g)!.join('-');
 }
 
+const OWNER_TITLE = /\b(owner|co-?owner|proprietor|proprietress|founder|business\s*owner|may-?ari)\b/i;
+
 export function formFromLead(lead: Lead, details: Details, now: Date): { form: AppForm; defaults: string[] } {
   const a = lead.answers;
   const defaults: string[] = [];
@@ -382,13 +390,13 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
     mother_name_parts: details.mother_name_parts,
     spouse_name: lead.married ? a.spouse_name : undefined,
     spouse_name_parts: details.spouse_name_parts,
-    home: details.home && { street: details.home.street, barangay: details.home.barangay, city: details.home.city, province: details.home.province, zip: details.home.zip, zip_sure: details.home.zip_sure },
+    home: details.home && { unit: details.home.unit, street: details.home.street, barangay: details.home.barangay, city: details.home.city, province: details.home.province, zip: details.home.zip, zip_sure: details.home.zip_sure },
     employer: a.employer_name,
     position: a.position,
     department: details.department ?? a.department,
     industry: details.industry,
     employment_type: details.employment_type,
-    company: details.company && { street: details.company.street, barangay: details.company.barangay, city: details.company.city, province: details.company.province, zip: details.company.zip, zip_sure: details.company.zip_sure },
+    company: details.company && { unit: details.company.unit, street: details.company.street, barangay: details.company.barangay, city: details.company.city, province: details.company.province, zip: details.company.zip, zip_sure: details.company.zip_sure },
     employer_phone: details.employer_phone,
     // From the ID first; else what they typed in Messenger (optional question, checked as 9 or 12 digits).
     tin_number: details.tin ? formatTin(details.tin) : a.tin ? formatTin(a.tin) : undefined,
@@ -400,6 +408,9 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
     ref_mobile: a.reference_mobile,
   };
   if (details.home_from_id) defaults.push('Home address taken from the ID');
+  // Owner rule: a business owner is self-employed, and a self-employed applicant's position is Owner.
+  if (!f.employment_type && f.position && OWNER_TITLE.test(f.position)) f.employment_type = 'Self-employed';
+  if (f.employment_type === 'Self-employed' && !f.position) f.position = 'Owner';
 
   // Owner rules: ownership, years of stay and total years working from age (birthday on the ID).
   const age = details.birthday ? ageOn(details.birthday, now) : undefined;
@@ -412,11 +423,13 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
   }
   const yrs = yearsFrom(a.years_with_employer);
   if (yrs !== undefined) {
-    f.length_of_service = `${yrs} ${yrs === 1 ? 'year' : 'years'}`;
-    // Owner rule: year = completion year - years with employer; month = the month they finished applying.
+    // Owner rule: numbers only in the years box; months = the month they applied (October = 10).
     const done = new Date(lead.completed_at);
+    f.length_of_service = String(yrs);
+    f.length_of_service_months = String(done.getMonth() + 1);
+    // Owner rule: year = completion year - years with employer; month = the month they finished applying.
     f.date_hired = `${done.getFullYear() - yrs}-${String(done.getMonth() + 1).padStart(2, '0')}-01`;
-    defaults.push('Date hired = completion month, year minus years with employer');
+    defaults.push('Date hired = completion month, year minus years with employer', 'Months with employer = month applied (owner default)');
   }
   defaults.push('Bank declarations (existing client, relatives at the bank, government officials) = NO (owner default)', `Best time to call = ${BEST_TIME_TO_CALL} (owner default)`, 'Education = College (owner default)', 'Source of funds = Salary, card delivery = home, statement = personal email');
   return { form: f, defaults };

@@ -46,6 +46,26 @@ describe('TIN', () => {
 });
 
 describe('owner rules in buildApplication', () => {
+  it('position Owner makes the applicant self-employed; self-employed with no position is Owner', () => {
+    const owner = buildApplication(lead({ answers: { ...lead().answers, position: 'Owner' } }), details, NOW).form;
+    expect(owner.employment_type).toBe('Self-employed');
+    const noPos = buildApplication(lead({ answers: { ...lead().answers, position: '' } }), { ...details, employment_type: 'Self-employed' }, NOW).form;
+    expect(noPos.position).toBe('Owner');
+    expect(buildApplication(lead(), details, NOW).form.employment_type).toBeUndefined();
+  });
+
+  it('years with employer is a number only, months = the month they applied', () => {
+    const f = buildApplication(lead(), details, NOW).form;
+    expect([f.length_of_service, f.length_of_service_months]).toEqual(['5', '10']);
+  });
+
+  it('office unit/floor/building goes to its own box and before the street in one-line addresses', () => {
+    const d = buildApplication(lead(), { ...details, company: { unit: '4th Level, Festival Mall', street: 'Filinvest Corporate City', barangay: 'Alabang', city: 'Muntinlupa City' } }, NOW).data;
+    expect(d.business_unit_floor_building).toBe('4th Level, Festival Mall');
+    expect(d.company_street).toBe('Filinvest Corporate City');
+    expect(d.company_address).toBe('4th Level, Festival Mall, Filinvest Corporate City, Alabang, Muntinlupa City');
+  });
+
   it('self-employed ticks China Bank Self-Employed (Business), employed ticks Employed', () => {
     const self = buildApplication(lead(), { ...details, employment_type: 'Self-employed' }, NOW).data.employment_status;
     expect(self?.toLowerCase().replace(/[^a-z0-9]/g, '')).toBe('selfemployedbusiness');
@@ -297,6 +317,28 @@ describe('finalizeLead', () => {
     const doc = await getDocument({ data: new Uint8Array(out.bytes) }).promise;
     const text = (await (await doc.getPage(1)).getTextContent()).items.map((i: any) => i.str).join('').replace(/\s+/g, '');
     expect(text).toBe('MARIADELACRUZ');
+  });
+
+  it('Metrobank prints years and months in their own halves of the tenure box, and the unit in its box', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 200]);
+    const form = pdf.getForm();
+    form.createTextField('length_of_service').addToPage(page, { x: 100, y: 100, width: 100, height: 17 });
+    form.createTextField('bank_only__business_unit_floor_building').addToPage(page, { x: 250, y: 100, width: 200, height: 17 });
+    const data = { length_of_service: '26', length_of_service_months: '10', business_unit_floor_building: '4th Level' };
+    const app = { banks: ['metrobank' as const], data, bankOnly: { metrobank: {}, eastwest: {}, chinabank: {} }, missing: [], defaults: [] };
+    const { fillBankPdf } = await import('../src/pdf.js');
+    const { settingsSchema } = await import('../src/application.js');
+    const out = await fillBankPdf('metrobank', await pdf.save(), app, settingsSchema.parse({}));
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const doc = await getDocument({ data: new Uint8Array(out.bytes) }).promise;
+    const items = (await (await doc.getPage(1)).getTextContent()).items.map((i: any) => ({ s: i.str, x: i.transform[4] }));
+    const at = (s: string) => items.find((i) => i.s === s)?.x ?? -1;
+    expect(at('26')).toBeGreaterThan(100);
+    expect(at('26')).toBeLessThan(150);
+    expect(at('10')).toBeGreaterThan(150);
+    expect(at('10')).toBeLessThan(200);
+    expect(items.some((i) => i.s === '4th Level')).toBe(true);
   });
 
   it('a long address is printed in full even when the bank box has a character limit', async () => {
