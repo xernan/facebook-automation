@@ -259,6 +259,22 @@ describe('finalizeLead', () => {
     expect(names.map((n) => { try { return f.getCheckBox(n).isChecked(); } catch { return 'flattened'; } })).toEqual([true, false, false]);
   });
 
+  it("Metrobank's printed name sits above the signature label, centered", async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 300]);
+    pdf.getForm().createTextField('full_name').addToPage(page, { x: 75, y: 138, width: 350, height: 8 });
+    const app = { banks: ['metrobank' as const], data: { full_name: 'JUAN DELA CRUZ' }, bankOnly: { metrobank: {}, eastwest: {}, chinabank: {} }, missing: [], defaults: [] };
+    const { fillBankPdf } = await import('../src/pdf.js');
+    const { settingsSchema } = await import('../src/application.js');
+    const out = await fillBankPdf('metrobank', await pdf.save(), app, settingsSchema.parse({ text_uniform_size: 11.5 }));
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const doc = await getDocument({ data: new Uint8Array(out.bytes) }).promise;
+    const item: any = (await (await doc.getPage(1)).getTextContent()).items.find((i: any) => i.str.includes('JUAN'));
+    expect(item.transform[5]).toBeGreaterThanOrEqual(141); // 3 points higher than the template box
+    const mid = item.transform[4] + item.width / 2;
+    expect(Math.abs(mid - 250)).toBeLessThan(2); // centered in the box (75..425)
+  });
+
   it('the PDF gets the shortened name, not a name cut in half', async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([600, 200]);

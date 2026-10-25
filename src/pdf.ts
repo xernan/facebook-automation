@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fontkit from '@pdf-lib/fontkit';
-import { PDFArray, PDFCheckBox, PDFDict, PDFDocument, PDFDropdown, PDFName, PDFRadioGroup, PDFRef, PDFTextField, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFArray, PDFCheckBox, TextAlignment, PDFDict, PDFDocument, PDFDropdown, PDFName, PDFRadioGroup, PDFRef, PDFTextField, type PDFFont, type PDFPage } from 'pdf-lib';
 import { cardName, DECLARE_NO, type BankKey, type BuiltApplication, type Settings } from './application.js';
 
 // Fills a bank's PDF template. Box names say what goes in them (same naming as the card app's templates):
@@ -52,6 +52,14 @@ export function combText(text: string, boxes: number): string {
 }
 
 const DATE_KEYS = new Set(['birthday', 'date_hired']);
+
+/**
+ * Boxes whose template position needs a fix (checked on the real template): `raise` points up, `center` the text.
+ * Metrobank's printed name touched the "SIGNATURE OF APPLICANT OVER PRINTED NAME" label under it.
+ */
+export const BOX_FIX: Partial<Record<BankKey, Record<string, { raise?: number; center?: boolean }>>> = {
+  metrobank: { full_name: { raise: 3, center: true } },
+};
 
 /** Boxes a bank prints as First / Middle / Last columns (checked on the real template). */
 const NAME_COLUMNS: Partial<Record<BankKey, string[]>> = { eastwest: ['mother_maiden_name', 'spouse_name'] };
@@ -167,6 +175,9 @@ export async function fillBankPdf(
     if (!t) continue;
     try {
       const widget = field.acroField.getWidgets()[0]!;
+      const fix = BOX_FIX[bank]?.[field.getName().replace(/__\d+$/, '')];
+      if (fix?.raise) widget.setRectangle({ ...widget.getRectangle(), y: widget.getRectangle().y + fix.raise });
+      if (fix?.center) field.setAlignment(TextAlignment.Center);
       const rect = widget.getRectangle();
       const cells = field.isCombed() ? (field.getMaxLength() ?? 0) : 0;
       const page = pages.find((pg) => pg.ref === widget.P()) ?? pages[0]!;
@@ -186,7 +197,7 @@ export async function fillBankPdf(
         continue;
       }
       if (settings.text_uniform_size) {
-        plans.push(planUniform(font, t, rect, cells, page, settings.text_uniform_size));
+        plans.push({ ...planUniform(font, t, rect, cells, page, settings.text_uniform_size), center: fix?.center });
         form.removeField(field);
       } else {
         field.setFontSize(fitFontSize(font, t, rect, cells, settings.text_max_size));
@@ -211,6 +222,7 @@ interface Plan {
   lines: string[];
   cells: number;
   size: number;
+  center?: boolean;
 }
 
 /** Split text into two lines at the space nearest the middle. */
@@ -249,7 +261,7 @@ export function sameSizePerLine<T extends { page: unknown; rect: { y: number }; 
 }
 
 function drawPlans(font: PDFFont, plans: Plan[]) {
-  for (const { page, rect, lines, cells, size } of plans) {
+  for (const { page, rect, lines, cells, size, center } of plans) {
     if (cells) {
       const y = rect.y + Math.max(0.8, (rect.height - size * 0.72) / 2);
       const cell = rect.width / cells;
@@ -258,7 +270,8 @@ function drawPlans(font: PDFFont, plans: Plan[]) {
       page.drawText(lines[0]!, { x: rect.x + 1.5, y: rect.y + rect.height / 2 + 0.8, size, font });
       page.drawText(lines[1]!, { x: rect.x + 1.5, y: rect.y + 1.2, size, font });
     } else {
-      page.drawText(lines[0]!, { x: rect.x + 1.5, y: rect.y + Math.max(0.8, (rect.height - size * 0.72) / 2), size, font });
+      const x = center ? rect.x + (rect.width - font.widthOfTextAtSize(lines[0]!, size)) / 2 : rect.x + 1.5;
+      page.drawText(lines[0]!, { x, y: rect.y + Math.max(0.8, (rect.height - size * 0.72) / 2), size, font });
     }
   }
 }
