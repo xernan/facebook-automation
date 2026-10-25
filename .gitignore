@@ -17,3 +17,4 @@ media/*
 flow.json
 # Bank PDF templates (bank material) stay local
 pdf-templates/
+logs/

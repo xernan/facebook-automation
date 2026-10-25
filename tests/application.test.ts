@@ -46,6 +46,12 @@ describe('TIN', () => {
 });
 
 describe('owner rules in buildApplication', () => {
+  it('self-employed ticks China Bank Self-Employed (Business), employed ticks Employed', () => {
+    const self = buildApplication(lead(), { ...details, employment_type: 'Self-employed' }, NOW).data.employment_status;
+    expect(self?.toLowerCase().replace(/[^a-z0-9]/g, '')).toBe('selfemployedbusiness');
+    expect(buildApplication(lead(), { ...details, employment_type: 'Private Sector' }, NOW).data.employment_status).toBe('Employed');
+  });
+
   it('PDFs only for banks the person has no card with (Metrobank card -> EastWest + China Bank)', () => {
     expect(buildApplication(lead(), details, NOW).banks).toEqual(['eastwest', 'chinabank']);
   });

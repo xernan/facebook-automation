@@ -248,7 +248,8 @@ export function formToData(f: AppForm): Record<string, string> {
   put('company_barangay', c.barangay);
   put('company_city_province', join(c.city, c.province));
   put('company_address', join(c.street, c.barangay, c.city, c.province));
-  if (f.employment_type) put('employment_status', f.employment_type === 'Self-employed' ? undefined : 'Employed');
+  // China Bank ticks Employed / Self-Employed (Business); a self-employed applicant here owns a business.
+  if (f.employment_type) put('employment_status', f.employment_type === 'Self-employed' ? 'Self-employed Business' : 'Employed');
   if (f.civil_status === 'Married') put('spouse_name', f.spouse_name);
   for (const [key, given] of [
     ['mother_maiden_name', f.mother_name_parts],
