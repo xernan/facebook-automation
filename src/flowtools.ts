@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
-import { advance, cleanSuggestions, currentPrompt, ID_TYPES, idVerdict, newPerson, nextStepIf, scriptCanAnswer, type IdSeen, type Person } from './flow.js';
+import { advance, cleanSuggestions, currentPrompt, currentQuestion, ID_TYPES, idVerdict, newPerson, nextStepIf, scriptCanAnswer, type IdSeen, type Person } from './flow.js';
 import { detailsSchema } from './application.js';
 import { FlowStore, loadFlow, type FlowState } from './flowstore.js';
 import { finalizeLead } from './leadout.js';
@@ -116,6 +116,43 @@ async function send(ctx: Ctx, page_id: string, to: string, text: string, choices
  * Saves the reply in the person's outbox, sends it, then marks the messages handled. If sending fails the
  * outbox stays and the next fb_flow_answer resends it; a maybe-sent reply is never sent twice.
  */
+const OPEN_STAGES = ['consent', 'carded', 'banks', 'steps', 'id_photo'];
+// Meta's standard reply window is 24 hours from their last message; we stop reminding well before it closes.
+const NUDGE_LAST_HOUR = 20;
+
+/**
+ * One reminder to each person who stopped mid-application: after FB_FLOW_NUDGE_AFTER_HOURS without an answer, and
+ * only while Meta's 24-hour window is open. Once per stop (it resets when they answer). No AI. Returns how many were sent.
+ */
+export async function sendNudges(ctx: Ctx, page_id: string, now = new Date()): Promise<number> {
+  const s = store(ctx);
+  const flow = loadFlow(ctx.cfg.flowFile);
+  const tm = await loadTestMode(ctx.cfg.flowDir);
+  return s.withLock(async () => {
+    const state = await s.load(now);
+    let sent = 0;
+    for (const [who, p] of Object.entries(state.people)) {
+      if (!OPEN_STAGES.includes(p.stage) || p.outbox || !botMayAnswer(tm, who)) continue;
+      const quiet = now.getTime() - new Date(p.updated_at).getTime();
+      if (quiet < ctx.cfg.FB_FLOW_NUDGE_AFTER_HOURS * 3_600_000 || quiet > NUDGE_LAST_HOUR * 3_600_000) continue;
+      if (p.nudged_at && p.nudged_at >= p.updated_at) continue;
+      const q = currentQuestion(flow, p);
+      if (!q) continue;
+      p.nudged_at = now.toISOString();
+      await s.save(state); // marked before sending: never two reminders, even if the send fails or is uncertain
+      try {
+        await send(ctx, page_id, who, `${flow.nudge}
+
+${q.reply}`, q.choices);
+        sent++;
+      } catch {
+        // Window closed, blocked, or no connection: no second try for this stop.
+      }
+    }
+    return sent;
+  });
+}
+
 async function deliver(
   ctx: Ctx,
   s: FlowStore,

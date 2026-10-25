@@ -4,7 +4,7 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ROOT_DIR, createContext } from './context.js';
-import { findPending, flowTools } from './flowtools.js';
+import { findPending, flowTools, sendNudges } from './flowtools.js';
 import { GraphError } from './graph.js';
 import { ClaudeBrake, isMessagingBlocked, pendingKey, takeLock } from './watchguard.js';
 
@@ -124,6 +124,11 @@ async function main() {
             log(`fast reply failed, Claude will handle it: ${ctx.graph.scrub(err instanceof Error ? err.message : String(err))}`);
           }
         }
+      }
+      // One reminder to people who stopped mid-application (no AI; inside Meta's 24-hour window only).
+      if (Date.now() >= blockedUntil) {
+        const n = await sendNudges(ctx, pageId);
+        if (n) log(`sent ${n} reminder(s) to people who stopped mid-application`);
       }
       // Whatever the fast lane did not finish goes to Claude (never while Meta blocks messaging).
       const waiting = (list: typeof pending) => list.filter((p) => p.outbox_pending || p.needs_id_review || (p.can_reply && p.messages.length > 0));

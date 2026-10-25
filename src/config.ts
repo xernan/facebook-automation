@@ -45,6 +45,7 @@ export const configSchema = z.object({
   FB_PDF_TEMPLATES_DIR: z.string().default('pdf-templates'),
   FB_FLOW_PAGE_ID: z.string().regex(/^\d+$/).optional(),
   FB_FLOW_COOLDOWN_DAYS: intIn(180, 1, 730),
+  FB_FLOW_NUDGE_AFTER_HOURS: intIn(3, 1, 20),
   FB_FLOW_REPLY_WINDOW_HOURS: intIn(23, 1, 24),
   FB_FLOW_MESSAGES_PER_CHAT: intIn(10, 1, 50),
   FB_FLOW_MAX_IMAGE_MB: intIn(10, 1, 25),

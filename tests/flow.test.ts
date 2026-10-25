@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } fro
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { sendNudges } from '../src/flowtools.js';
 import { advance, cleanSuggestions, flowSchema, idVerdict, newPerson, parseYesNo, scriptCanAnswer, validAnswer, type IdSeen, type Person } from '../src/flow.js';
 import { FlowStore, loadFlow } from '../src/flowstore.js';
 import { callTool, tools } from '../src/tools.js';
@@ -289,6 +290,28 @@ describe('flow tools', () => {
     expect(r.reply).toBe(flow.id_photo.unclear_reply);
     expect(r.stage).toBe('id_photo');
     expect(existsSync(path.join(dir, 'valid_ids'))).toBe(false);
+  });
+
+  it('one reminder to someone who stopped mid-application, only inside the 24-hour window', async () => {
+    const msgs = { m_1: { text: 'hi' }, m_2: { text: 'yes' }, m_3: { text: 'oo' } };
+    const { ctx, sent } = setup(msgs);
+    for (const mid of Object.keys(msgs)) await answer(ctx, [mid]);
+    const asked = sent.length;
+    const at = (h: number) => new Date(Date.now() + h * 3_600_000);
+    expect(await sendNudges(ctx, '111', at(1))).toBe(0); // too soon (default: after 3 hours)
+    expect(await sendNudges(ctx, '111', at(4))).toBe(1);
+    expect(sent.at(-1)).toMatch(/^Hi! Tuloy pa ba natin/);
+    expect(sent.at(-1)).toContain(sent[asked - 1]); // the question they stopped at
+    expect(await sendNudges(ctx, '111', at(5))).toBe(0); // only once per stop
+    expect(sent).toHaveLength(asked + 1);
+
+    const late = setup(msgs);
+    for (const mid of Object.keys(msgs)) await answer(late.ctx, [mid]);
+    expect(await sendNudges(late.ctx, '111', at(21))).toBe(0); // too close to the end of Meta's 24-hour window
+
+    const done = setup({ m_1: { text: 'hi' }, m_2: { text: 'no' } }); // declined: never reminded
+    for (const mid of ['m_1', 'm_2']) await answer(done.ctx, [mid]);
+    expect(await sendNudges(done.ctx, '111', at(4))).toBe(0);
   });
 
   it('a saved ID photo (already handled) can still be replied to after Claude reads it', async () => {

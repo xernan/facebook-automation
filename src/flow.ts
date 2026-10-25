@@ -93,6 +93,8 @@ export const flowSchema = z
       })
       .strict(),
     done_reply: msg,
+    /** One reminder to someone who stopped mid-application (the question they are on follows it). */
+    nudge: msg.default('Hi! Tuloy pa ba natin ang application mo? 🙂 Ito ang susunod na tanong:'),
     yes_no_reply: msg,
     /** Shown with suggestions: the button that means "none of these, I will type it". */
     other_choice: z.string().trim().min(1).max(20).default('Iba'),
@@ -136,6 +138,8 @@ export interface Person {
   updated_at: string;
   /** When they first wrote (for the funnel stats). Older records may not have it. */
   started_at?: string;
+  /** When we sent the one reminder for the question they stopped at (see sendNudges). */
+  nudged_at?: string;
   /** A reply saved but not sent yet (see fb_flow_answer). */
   outbox?: { text: string; for_messages: string[]; choices?: string[] };
 }
