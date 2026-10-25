@@ -55,6 +55,14 @@ describe('dashboard', () => {
     expect([s.stats.current_month, ...s.stats.archive].flatMap((m: any) => m.weeks.flatMap((w: any) => w.folders))).toContain('2026-10-25 Juan Dela Cruz');
   });
 
+  it('shows applications held because the IDs did not look right (no names, just date and reason)', async () => {
+    const { base, dir } = await start();
+    expect((await (await fetch(`${base}/api/state`)).json()).flow.held).toEqual([]);
+    const person = { stage: 'done', step: 0, answers: {}, banks: [], married: false, updated_at: '2026-10-25T02:15:00Z', hold: { at: '2026-10-25T02:30:00Z', reason: 'ids_do_not_match' } };
+    writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ version: 1, started_at: '2026-10-25T00:00:00Z', handled: [], people: { '555': person } }));
+    expect((await (await fetch(`${base}/api/state`)).json()).flow.held).toEqual([{ at: '2026-10-25T02:30:00Z', reason: 'ids_do_not_match' }]);
+  });
+
   it('bank result needs the token; marketing shows it; draft check uses the guard', async () => {
     const { base, folder } = await start();
     const body = JSON.stringify({ folder, result: 'Approved', card: 'EastWest Platinum', proof_ok: true, source: 'Group' });

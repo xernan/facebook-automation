@@ -395,6 +395,11 @@ describe('flow tools', () => {
       expect(sent.at(-1)).toBe(flow.done_reply);
       // Until the PDFs are made, the pending list keeps asking Claude to finalize (it may stop before doing it).
       expect((await pend())?.needs_finalize).toBe(r.lead_saved);
+      // IDs that do not look right: Claude holds it for the owner, and the retries stop.
+      await expect(callTool(tool('fb_lead_hold'), { lead_file: 'lead-1-x.json', reason: 'ids_do_not_match' }, ctx)).rejects.toThrow(/No application/);
+      await callTool(tool('fb_lead_hold'), { lead_file: r.lead_saved, reason: 'ids_do_not_match' }, ctx);
+      expect(await pend()).toBeUndefined();
+      expect(await callTool(tool('fb_flow_status'), {}, ctx)).toMatchObject({ held_for_id_check: 1 });
       await callTool(tool('fb_lead_finalize'), { lead_file: r.lead_saved, details: {} }, ctx);
       expect(await pend()).toBeUndefined();
     } finally {

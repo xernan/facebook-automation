@@ -142,6 +142,8 @@ export interface Person {
   lead_file?: string;
   /** When fb_lead_finalize made the PDFs; until then the watcher keeps asking Claude to finalize. */
   finalized_at?: string;
+  /** Claude would not finalize: the IDs do not look right (owner checks it in the dashboard). Stops the retries. */
+  hold?: { at: string; reason: string };
   /** When we sent the one reminder for the question they stopped at (see sendNudges). */
   nudged_at?: string;
   /** A reply saved but not sent yet (see fb_flow_answer). */

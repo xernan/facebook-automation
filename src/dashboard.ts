@@ -179,12 +179,14 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
         }
         const state = await new FlowStore(opts.flowDir).load(new Date());
         const waiting = Object.values(state.people).filter((p) => !['done', 'declined', 'rejected', 'excluded'].includes(p.stage)).length;
+        // Complete chats Claude held because the IDs did not look right (no PDFs made); the owner checks them in Messenger.
+        const held = Object.values(state.people).filter((p) => p.hold).map((p) => ({ at: p.hold!.at, reason: p.hold!.reason }));
         const settings = await loadSettings(opts.flowDir);
         return send(200, {
           applicants,
           stats: applicationStats(rows, { quota: settings.weekly_quota, startDay: settings.week_start_day, target: settings.weekly_target }),
           funnel: funnelStats(Object.values(state.people), rows, settings.week_start_day),
-          flow: { waiting },
+          flow: { waiting, held },
           settings,
           printers: await printers(),
           cardOptions: await cardOptions(opts.templatesDir),

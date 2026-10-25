@@ -76,7 +76,7 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
     // ID photos saved (right away, by the watcher) but not read by Claude yet.
     const needsIdReview = p?.stage === 'id_photo' && (p.id_files?.length ?? 0) > (p.id_review?.length ?? 0);
     // Complete but no PDFs yet (Claude stopped before fb_lead_finalize): keep asking until it is done.
-    const needsFinalize = p?.stage === 'done' && p.lead_file && !p.finalized_at ? p.lead_file : undefined;
+    const needsFinalize = p?.stage === 'done' && p.lead_file && !p.finalized_at && !p.hold ? p.lead_file : undefined;
     if (msgs.length === 0 && !p?.outbox && !needsIdReview && !needsFinalize) continue;
     const cur = p ?? newPerson(now);
     const joined = { text: msgs.map((m) => m.text).filter(Boolean).join('\n'), image_url: msgs.find((m) => m.image_url)?.image_url };
@@ -381,6 +381,29 @@ export const flowTools: ToolDef[] = [
     },
   },
   {
+    name: 'fb_lead_hold',
+    description:
+      'Use instead of fb_lead_finalize when the IDs do not look right for this application (names on the IDs do not match the ' +
+      "applicant, not a real ID, a screenshot, or looks edited or someone else's). No PDFs are made; the owner checks it. " +
+      'Do not message the applicant about it.',
+    write: false,
+    input: {
+      lead_file: z.string().regex(/^lead-\d+-[\w-]+\.json$/, 'Use the lead file name exactly as given'),
+      reason: z.enum(['ids_do_not_match', 'not_a_real_id', 'other']),
+    },
+    handler: async ({ lead_file, reason }, ctx) => {
+      const s = store(ctx);
+      return s.withLock(async () => {
+        const state = await s.load(new Date());
+        const p = Object.values(state.people).find((x) => x.lead_file === lead_file);
+        if (!p) throw new Error('No application with this lead file.');
+        p.hold = { at: new Date().toISOString(), reason };
+        await s.save(state);
+        return { ok: true, held: lead_file, reason };
+      });
+    },
+  },
+  {
     name: 'fb_flow_status',
     description: 'Application flow overview: how many people are at each stage, and finished applications. No personal details.',
     write: false,
@@ -390,7 +413,8 @@ export const flowTools: ToolDef[] = [
       const stages: Record<string, number> = {};
       for (const p of Object.values(state.people)) stages[p.stage] = (stages[p.stage] ?? 0) + 1;
       const outbox = Object.values(state.people).filter((p) => p.outbox).length;
-      return { started_at: state.started_at, people: Object.keys(state.people).length, stages, replies_waiting_to_send: outbox };
+      const held = Object.values(state.people).filter((p) => p.hold).length;
+      return { started_at: state.started_at, people: Object.keys(state.people).length, stages, replies_waiting_to_send: outbox, held_for_id_check: held };
     },
   },
   {

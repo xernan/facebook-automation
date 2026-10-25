@@ -55,7 +55,9 @@ function render() {
     `<div class="card"><div class="row2"><h3 style="margin:0">This week</h3><span class="muted">${esc(w.start)} to ${esc(w.end)}</span></div>` +
     goalBar('Target', w.complete, w.target, w.pct_target, w.target_reached) +
     goalBar('Quota', w.complete, w.quota, w.pct_quota, w.reached) +
-    `<div class="stats"><div class="stat"><b>${w.complete}</b>Complete applications</div><div class="stat"><b>${w.ready}</b>Ready (nothing to check)</div><div class="stat"><b>${w.printed}</b>Printed</div><div class="stat"><b>${S.flow.waiting || 0}</b>In chat now</div></div></div>` +
+    `<div class="stats"><div class="stat"><b>${w.complete}</b>Complete applications</div><div class="stat"><b>${w.ready}</b>Ready (nothing to check)</div><div class="stat"><b>${w.printed}</b>Printed</div><div class="stat"><b>${S.flow.waiting || 0}</b>In chat now</div></div>` +
+    ((S.flow.held || []).length ? `<p class="pill warn">On hold, IDs did not look right (no PDFs made): ${S.flow.held.map((h) => esc(h.at.slice(0, 10)) + ' (' + esc(h.reason.replace(/_/g, ' ')) + ')').join(', ')}. Check the IDs in Messenger.</p>` : '') +
+    `</div>` +
     funnelCard(S.funnel) +
     weeksTable(cm, 'This month') +
     `<div class="card"><table><tr><th>Completed</th><th>Name</th><th>Mobile</th><th>PDFs</th><th>Flags</th><th>To check</th><th>Printed</th><th>Bank result</th></tr>` +
