@@ -321,14 +321,24 @@ export function formMissing(f: AppForm): string[] {
 }
 
 /** Bank-only boxes: owner defaults plus the ID types Claude saw. */
+/**
+ * Source of funds boxes. Owner default: Salary; owner rule: self-employed = Business (Metrobank's row already has
+ * the Self-employed box, so no "Others: Salary" there).
+ */
+export function sourceOfFunds(bank: BankKey, f: AppForm): Record<string, string | true> {
+  const self = f.employment_type === 'Self-employed';
+  if (bank === 'metrobank') return self ? {} : { 'source_of_funds__checkbox__others': true, source_of_funds_others: 'Salary' };
+  if (bank === 'eastwest') return { [self ? 'source_of_funds__checkbox__businessincome' : 'source_of_funds__checkbox__salarybenefits']: true };
+  return { [self ? 'source_of_funds__checkbox__business' : 'source_of_funds__checkbox__salary']: true };
+}
+
 export function bankOnlyFor(lead: Lead, f: AppForm, idNumber?: string): BuiltApplication['bankOnly'] {
   const bizZip: Record<string, string> = f.company?.zip ? { business_zip_code: f.company.zip } : {};
   const idTypes = new Set((lead.id_review ?? []).filter((r) => r.clear).map((r) => r.type));
   return {
     metrobank: {
       'education__checkbox__college': true,
-      'source_of_funds__checkbox__others': true,
-      source_of_funds_others: 'Salary',
+      ...sourceOfFunds('metrobank', f),
       'existing_credit_card__checkbox__yes': true,
       'delivery_instruction__checkbox__home': true,
       'soa_delivery__checkbox__personalemail': true,
@@ -341,13 +351,13 @@ export function bankOnlyFor(lead: Lead, f: AppForm, idNumber?: string): BuiltApp
     },
     eastwest: {
       'education__checkbox__college': true,
-      'source_of_funds__checkbox__salarybenefits': true,
+      ...sourceOfFunds('eastwest', f),
       'other_credit_cards__checkbox__yes': true,
       'card_delivery_address__checkbox__presenthomeaddress': true,
       ...bizZip,
     },
     chinabank: {
-      'source_of_funds__checkbox__salary': true,
+      ...sourceOfFunds('chinabank', f),
       'card_delivery_address__checkbox__presentaddress': true,
       'soa_delivery__checkbox__personalemailaddress': true,
       'residency__checkbox__resident': true,
@@ -431,7 +441,7 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
     f.date_hired = `${done.getFullYear() - yrs}-${String(done.getMonth() + 1).padStart(2, '0')}-01`;
     defaults.push('Date hired = completion month, year minus years with employer', 'Months with employer = month applied (owner default)');
   }
-  defaults.push('Bank declarations (existing client, relatives at the bank, government officials) = NO (owner default)', `Best time to call = ${BEST_TIME_TO_CALL} (owner default)`, 'Education = College (owner default)', 'Source of funds = Salary, card delivery = home, statement = personal email');
+  defaults.push('Bank declarations (existing client, relatives at the bank, government officials) = NO (owner default)', `Best time to call = ${BEST_TIME_TO_CALL} (owner default)`, 'Education = College (owner default)', 'Source of funds = Salary (Business when self-employed), card delivery = home, statement = personal email');
   return { form: f, defaults };
 }
 

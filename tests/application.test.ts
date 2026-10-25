@@ -46,6 +46,19 @@ describe('TIN', () => {
 });
 
 describe('owner rules in buildApplication', () => {
+  it('source of funds: Salary when employed, Business when self-employed (every bank)', () => {
+    const emp = buildApplication(lead(), { ...details, employment_type: 'Private Sector' }, NOW).bankOnly;
+    expect(emp.metrobank.source_of_funds_others).toBe('Salary');
+    expect(emp.eastwest['source_of_funds__checkbox__salarybenefits']).toBe(true);
+    expect(emp.chinabank['source_of_funds__checkbox__salary']).toBe(true);
+    const self = buildApplication(lead(), { ...details, employment_type: 'Self-employed' }, NOW).bankOnly;
+    expect(Object.keys(self.metrobank).filter((k) => k.startsWith('source_of_funds'))).toEqual([]);
+    expect(self.eastwest['source_of_funds__checkbox__businessincome']).toBe(true);
+    expect(self.eastwest['source_of_funds__checkbox__salarybenefits']).toBeUndefined();
+    expect(self.chinabank['source_of_funds__checkbox__business']).toBe(true);
+    expect(self.chinabank['source_of_funds__checkbox__salary']).toBeUndefined();
+  });
+
   it('position Owner makes the applicant self-employed; self-employed with no position is Owner', () => {
     const owner = buildApplication(lead({ answers: { ...lead().answers, position: 'Owner' } }), details, NOW).form;
     expect(owner.employment_type).toBe('Self-employed');
@@ -382,6 +395,12 @@ describe('finalizeLead', () => {
     expect(f.getTextField('tin_number').getText()).toBe('123-456-789');
     expect(f.getTextField('mother_maiden_name').getText()).toBe('Rosa Cruz');
     await expect(saveForm(dir, tpl, folder, { ...before.form, not_a_field: 'x' } as any)).rejects.toThrow();
+    // Changing the employment type in the dashboard moves the source of funds with it.
+    await saveForm(dir, tpl, folder, { ...before.form, employment_type: 'Self-employed' });
+    const self = JSON.parse(readFileSync(path.join(dir, r.folder, 'details.json'), 'utf8')).bank_only;
+    expect(self.chinabank['source_of_funds__checkbox__business']).toBe(true);
+    expect(self.chinabank['source_of_funds__checkbox__salary']).toBeUndefined();
+    expect(self.metrobank.source_of_funds_others).toBeUndefined();
   });
 
   it('office phone: a number found online is saved to the directory; the next client from that branch gets it', async () => {
