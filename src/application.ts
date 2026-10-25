@@ -207,6 +207,9 @@ const has = (v: string | undefined): v is string => v !== undefined && v.trim() 
 const join = (...parts: (string | undefined)[]) => parts.filter(has).join(', ');
 
 /** PDF data from the form: the form's own values plus the combined ones some banks print. */
+/** Owner default: the bank calls the applicant within office hours. */
+export const BEST_TIME_TO_CALL = '9AM-5PM';
+
 export function formToData(f: AppForm): Record<string, string> {
   const d: Record<string, string> = {};
   const put = (k: string, v: string | number | undefined) => {
@@ -220,6 +223,8 @@ export function formToData(f: AppForm): Record<string, string> {
     'ref_relationship', 'ref_mobile',
   ] as const) put(k, f[k]);
   put('full_name', [f.first_name, f.middle_name, f.last_name, f.suffix].filter(has).join(' '));
+  // Owner default for every form with a "best time to call" box (EastWest today).
+  put('best_time_to_call', BEST_TIME_TO_CALL);
   if (f.nationality && norm(f.nationality) !== 'filipino') put('nationality_other', f.nationality);
   const h = f.home ?? {};
   put('street', h.street);
@@ -406,7 +411,7 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
     f.date_hired = `${done.getFullYear() - yrs}-${String(done.getMonth() + 1).padStart(2, '0')}-01`;
     defaults.push('Date hired = completion month, year minus years with employer');
   }
-  defaults.push('Education = College (owner default)', 'Source of funds = Salary, card delivery = home, statement = personal email');
+  defaults.push(`Best time to call = ${BEST_TIME_TO_CALL} (owner default)`, 'Education = College (owner default)', 'Source of funds = Salary, card delivery = home, statement = personal email');
   return { form: f, defaults };
 }
 
