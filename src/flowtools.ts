@@ -65,8 +65,10 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
     if (new Date(conv.updated_time).getTime() < start) continue;
     const person = (conv.participants?.data ?? []).find((p: any) => p.id !== page_id);
     if (!person || !botMayAnswer(tm, person.id)) continue; // test mode: only the listed testers
-    const msgs: InMsg[] = (conv.messages?.data ?? [])
-      .filter((m: any) => m.from?.id === person.id)
+    const theirs = (conv.messages?.data ?? []).filter((m: any) => m.from?.id === person.id);
+    // Newest message from them, handled or not: an ID photo is marked handled when saved, but we still reply to it.
+    const lastIn: string | undefined = theirs[0]?.created_time;
+    const msgs: InMsg[] = theirs
       .map(toInMsg)
       .filter((m: InMsg) => new Date(m.created_time).getTime() >= start && !state.handled.includes(m.id))
       .reverse();
@@ -84,7 +86,7 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
       current_question: currentPrompt(flow, cur),
       outbox_pending: !!p?.outbox,
       needs_id_review: needsIdReview,
-      can_reply: !!msgs.at(-1) && withinWindow(ctx, msgs.at(-1)!.created_time, now),
+      can_reply: !!lastIn && withinWindow(ctx, lastIn, now),
       messages: msgs.map((m) => ({ id: m.id, text: m.text, has_image: !!m.image_url, created_time: m.created_time })),
       // If these messages answer the current question, this is asked next. When wants_suggestions is true you may
       // pass up to 5 suggestions to fb_flow_answer, ONLY from public facts you are sure of (e.g. a company branch

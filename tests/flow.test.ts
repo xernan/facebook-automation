@@ -291,6 +291,28 @@ describe('flow tools', () => {
     expect(existsSync(path.join(dir, 'valid_ids'))).toBe(false);
   });
 
+  it('a saved ID photo (already handled) can still be replied to after Claude reads it', async () => {
+    const msgs = {
+      m_1: { text: 'hi' },
+      m_2: { text: 'yes' },
+      m_3: { text: 'oo' },
+      m_4: { text: 'BDO' },
+      m_5: { text: 'Juan' },
+      m_6: { text: 'single' },
+      m_7: { text: '09171234567' },
+      m_8: { image: 'https://scontent.fbcdn.net/cat.jpg' },
+    };
+    vi.stubGlobal('fetch', async () => new Response(new Uint8Array(50), { headers: { 'content-type': 'image/jpeg' } }));
+    try {
+      const { ctx } = setup(msgs);
+      for (const mid of Object.keys(msgs)) await answer(ctx, [mid]);
+      const p = ((await callTool(tool('fb_flow_pending'), { page_id: '111' }, ctx)) as any[]).find((x) => x.psid === PSID);
+      expect(p).toMatchObject({ needs_id_review: true, can_reply: true, messages: [] });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('ID photo -> Claude sees it -> review decides with the owner rules -> lead saved', async () => {
     const msgs = {
       m_1: { text: 'hi' },
