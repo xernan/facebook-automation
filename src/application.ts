@@ -373,7 +373,7 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
     home: details.home && { street: details.home.street, barangay: details.home.barangay, city: details.home.city, province: details.home.province, zip: details.home.zip, zip_sure: details.home.zip_sure },
     employer: a.employer_name,
     position: a.position,
-    department: details.department,
+    department: details.department ?? a.department,
     industry: details.industry,
     employment_type: details.employment_type,
     company: details.company && { street: details.company.street, barangay: details.company.barangay, city: details.company.city, province: details.company.province, zip: details.company.zip, zip_sure: details.company.zip_sure },

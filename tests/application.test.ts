@@ -33,6 +33,9 @@ describe('TIN', () => {
   it('from the ID first, else the optional Messenger answer; formatted XXX-XXX-XXX', () => {
     expect(buildApplication(lead({ answers: { ...lead().answers, tin: '123 456 789' } }), details, NOW).data.tin_number).toBe('123-456-789');
     expect(buildApplication(lead({ answers: { ...lead().answers, tin: '111222333' } }), { ...details, tin: '999-888-777-000' }, NOW).data.tin_number).toBe('999-888-777-000');
+    // Department comes from the chat answer when Claude did not fill it (EastWest and Metrobank print it).
+    expect(buildApplication(lead({ answers: { ...lead().answers, department: 'Operations' } }), { ...details, department: undefined }, NOW).data.department).toBe('Operations');
+    expect(buildApplication(lead({ answers: { ...lead().answers, department: 'Operations' } }), { ...details, department: 'Sales' }, NOW).data.department).toBe('Sales');
     // Skipped: blank and in the missing list (never generated).
     const b = buildApplication(lead(), details, NOW);
     expect(b.data.tin_number).toBeUndefined();
