@@ -46,6 +46,16 @@ describe('TIN', () => {
 });
 
 describe('owner rules in buildApplication', () => {
+  it('EastWest: Owner rank when self-employed, nature of work from the industry (blank when unclear)', () => {
+    const ew = (d: object) => buildApplication(lead(), { ...details, ...d }, NOW).bankOnly.eastwest;
+    expect(ew({ employment_type: 'Self-employed', industry: 'Dental clinic' })).toMatchObject({ 'position_rank__checkbox__owner': true, 'nature_of_work__checkbox__communitysocialpersonal': true });
+    expect(ew({ employment_type: 'Private Sector', industry: 'BPO / IT services' })['nature_of_work__checkbox__bpo']).toBe(true);
+    expect(ew({ employment_type: 'Private Sector', industry: 'BPO / IT services' })['position_rank__checkbox__owner']).toBeUndefined();
+    expect(ew({ employment_type: 'Government', industry: 'Public school' })['nature_of_work__checkbox__government']).toBe(true);
+    const unclear = ew({ employment_type: 'Private Sector', industry: 'Xyz' });
+    expect(Object.keys(unclear).filter((k) => k.startsWith('nature_of_work'))).toEqual([]);
+  });
+
   it('source of funds: Salary when employed, Business when self-employed (every bank)', () => {
     const emp = buildApplication(lead(), { ...details, employment_type: 'Private Sector' }, NOW).bankOnly;
     expect(emp.metrobank.source_of_funds_others).toBe('Salary');

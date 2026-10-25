@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import ExcelJS from 'exceljs';
-import { BANKS, buildApplication, sourceOfFunds, type BankKey, formMissing, formSchema, formToData, settingsSchema, type AppForm, type BuiltApplication, type Details, type Lead, type Settings } from './application.js';
+import { BANKS, buildApplication, workBoxes, WORK_BOX, type BankKey, formMissing, formSchema, formToData, settingsSchema, type AppForm, type BuiltApplication, type Details, type Lead, type Settings } from './application.js';
 import { PDFDocument } from 'pdf-lib';
 import { fillBankPdf } from './pdf.js';
 import { printPdf } from './printer.js';
@@ -188,9 +188,9 @@ export async function saveForm(flowDir: string, templatesDir: string, folderName
   for (const b of Object.keys(bankOnly)) {
     if (clean.company?.zip) bankOnly[b].business_zip_code = clean.company.zip;
     else delete bankOnly[b].business_zip_code;
-    // Source of funds follows the employment type on the form.
-    for (const k of Object.keys(bankOnly[b])) if (k.startsWith('source_of_funds')) delete bankOnly[b][k];
-    Object.assign(bankOnly[b], sourceOfFunds(b as BankKey, clean));
+    // Source of funds, EastWest rank and nature of work follow the employment type and industry on the form.
+    for (const k of Object.keys(bankOnly[b])) if (WORK_BOX.test(k)) delete bankOnly[b][k];
+    Object.assign(bankOnly[b], workBoxes(b as BankKey, clean));
   }
   // A number the owner typed (or changed) goes into our directory for the next client from that branch.
   if (clean.employer_phone && clean.employer && clean.company?.city) {

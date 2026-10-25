@@ -321,16 +321,43 @@ export function formMissing(f: AppForm): string[] {
 }
 
 /** Bank-only boxes: owner defaults plus the ID types Claude saw. */
+/** EastWest "Nature of Work" from the industry words; no box when nothing clearly fits (first match wins). */
+const NATURE_OF_WORK: [RegExp, string][] = [
+  [/\b(bpo|call ?cent(er|re)|outsourc\w*)\b/i, 'bpo'],
+  [/\bpawn ?shop\b/i, 'pawnshop'],
+  [/\bremittance\b/i, 'moneytransmittersremittanceagents'],
+  [/\bbank(ing)?\b/i, 'banking'],
+  [/\binsurance\b/i, 'insurance'],
+  [/\b(lending|financ\w*|loans?)\b/i, 'financing'],
+  [/\bconstruction\b/i, 'construction'],
+  [/\b(manufactur\w*|factory)\b/i, 'manufacturing'],
+  [/\b(real ?estate|realty)\b/i, 'realestate'],
+  [/\b(transport\w*|logistics?|telecom\w*|shipping|airlines?|courier)\b/i, 'transportationcommunication'],
+  [/\b(utilit(y|ies)|electric\w*|water district)\b/i, 'utilities'],
+  [/\b(agri\w*|farm\w*|mining|fishing)\b/i, 'agriculturalmining'],
+  [/\b(retail|wholesale|store|grocery|supermarket|bakeshop|bakery|trading|sari-?sari)\b/i, 'wholesaleretail'],
+  [/\b(clinic|hospital|dental|medical|health\w*|school|education|salon|spa|church)\b/i, 'communitysocialpersonal'],
+  [/\b(restaurant|food|hotel|it services|software|consult\w*|services?)\b/i, 'businesscommercialservices'],
+];
+
 /**
- * Source of funds boxes. Owner default: Salary; owner rule: self-employed = Business (Metrobank's row already has
- * the Self-employed box, so no "Others: Salary" there).
+ * Work boxes that follow the employment type and industry on the form (recomputed when the owner edits the form).
+ * Source of funds: owner default Salary; owner rule self-employed = Business (Metrobank's row already has the
+ * Self-employed box, so no "Others: Salary" there). EastWest: Position/Rank Owner when self-employed, Nature of Work.
  */
-export function sourceOfFunds(bank: BankKey, f: AppForm): Record<string, string | true> {
+export function workBoxes(bank: BankKey, f: AppForm): Record<string, string | true> {
   const self = f.employment_type === 'Self-employed';
   if (bank === 'metrobank') return self ? {} : { 'source_of_funds__checkbox__others': true, source_of_funds_others: 'Salary' };
-  if (bank === 'eastwest') return { [self ? 'source_of_funds__checkbox__businessincome' : 'source_of_funds__checkbox__salarybenefits']: true };
-  return { [self ? 'source_of_funds__checkbox__business' : 'source_of_funds__checkbox__salary']: true };
+  if (bank === 'chinabank') return { [self ? 'source_of_funds__checkbox__business' : 'source_of_funds__checkbox__salary']: true };
+  const nature = f.employment_type === 'Government' ? 'government' : NATURE_OF_WORK.find(([re]) => re.test(`${f.industry ?? ''} ${f.employer ?? ''}`))?.[1];
+  return {
+    [self ? 'source_of_funds__checkbox__businessincome' : 'source_of_funds__checkbox__salarybenefits']: true,
+    ...(self ? { 'position_rank__checkbox__owner': true } : {}),
+    ...(nature ? { [`nature_of_work__checkbox__${nature}`]: true } : {}),
+  };
 }
+/** Bank-only keys workBoxes() owns. */
+export const WORK_BOX = /^(source_of_funds|position_rank|nature_of_work)/;
 
 export function bankOnlyFor(lead: Lead, f: AppForm, idNumber?: string): BuiltApplication['bankOnly'] {
   const bizZip: Record<string, string> = f.company?.zip ? { business_zip_code: f.company.zip } : {};
@@ -338,7 +365,7 @@ export function bankOnlyFor(lead: Lead, f: AppForm, idNumber?: string): BuiltApp
   return {
     metrobank: {
       'education__checkbox__college': true,
-      ...sourceOfFunds('metrobank', f),
+      ...workBoxes('metrobank', f),
       'existing_credit_card__checkbox__yes': true,
       'delivery_instruction__checkbox__home': true,
       'soa_delivery__checkbox__personalemail': true,
@@ -351,13 +378,13 @@ export function bankOnlyFor(lead: Lead, f: AppForm, idNumber?: string): BuiltApp
     },
     eastwest: {
       'education__checkbox__college': true,
-      ...sourceOfFunds('eastwest', f),
+      ...workBoxes('eastwest', f),
       'other_credit_cards__checkbox__yes': true,
       'card_delivery_address__checkbox__presenthomeaddress': true,
       ...bizZip,
     },
     chinabank: {
-      ...sourceOfFunds('chinabank', f),
+      ...workBoxes('chinabank', f),
       'card_delivery_address__checkbox__presentaddress': true,
       'soa_delivery__checkbox__personalemailaddress': true,
       'residency__checkbox__resident': true,
