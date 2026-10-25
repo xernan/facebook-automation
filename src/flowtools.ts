@@ -75,7 +75,9 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
     const p = state.people[person.id];
     // ID photos saved (right away, by the watcher) but not read by Claude yet.
     const needsIdReview = p?.stage === 'id_photo' && (p.id_files?.length ?? 0) > (p.id_review?.length ?? 0);
-    if (msgs.length === 0 && !p?.outbox && !needsIdReview) continue;
+    // Complete but no PDFs yet (Claude stopped before fb_lead_finalize): keep asking until it is done.
+    const needsFinalize = p?.stage === 'done' && p.lead_file && !p.finalized_at ? p.lead_file : undefined;
+    if (msgs.length === 0 && !p?.outbox && !needsIdReview && !needsFinalize) continue;
     const cur = p ?? newPerson(now);
     const joined = { text: msgs.map((m) => m.text).filter(Boolean).join('\n'), image_url: msgs.find((m) => m.image_url)?.image_url };
     const next = msgs.length ? nextStepIf(flow, cur, joined, now, ctx.cfg.FB_FLOW_COOLDOWN_DAYS) : undefined;
@@ -86,6 +88,7 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
       current_question: currentPrompt(flow, cur),
       outbox_pending: !!p?.outbox,
       needs_id_review: needsIdReview,
+      needs_finalize: needsFinalize,
       can_reply: !!lastIn && withinWindow(ctx, lastIn, now),
       messages: msgs.map((m) => ({ id: m.id, text: m.text, has_image: !!m.image_url, created_time: m.created_time })),
       // If these messages answer the current question, this is asked next. When wants_suggestions is true you may
@@ -345,6 +348,7 @@ export const flowTools: ToolDef[] = [
         if (!v.ok) return deliver(ctx, s, state, page_id, who, person, v.reply, undefined, [], { id_ok: false });
         person.stage = 'done';
         const leadFile = await s.saveLead(who, person, now);
+        person.lead_file = leadFile;
         return deliver(ctx, s, state, page_id, who, person, flow.done_reply, undefined, [], { id_ok: true, lead_saved: leadFile });
       });
     },
@@ -362,7 +366,19 @@ export const flowTools: ToolDef[] = [
       lead_file: z.string().regex(/^lead-\d+-[\w-]+\.json$/, 'Use lead_saved exactly as returned'),
       details: detailsSchema,
     },
-    handler: ({ lead_file, details }, ctx) => finalizeLead(ctx.cfg.flowDir, ctx.cfg.templatesDir, lead_file, details),
+    handler: async ({ lead_file, details }, ctx) => {
+      const out = await finalizeLead(ctx.cfg.flowDir, ctx.cfg.templatesDir, lead_file, details);
+      const s = store(ctx);
+      await s.withLock(async () => {
+        const state = await s.load(new Date());
+        const p = Object.values(state.people).find((x) => x.lead_file === lead_file);
+        if (p) {
+          p.finalized_at = new Date().toISOString();
+          await s.save(state);
+        }
+      });
+      return out;
+    },
   },
   {
     name: 'fb_flow_status',

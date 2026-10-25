@@ -138,6 +138,10 @@ export interface Person {
   updated_at: string;
   /** When they first wrote (for the funnel stats). Older records may not have it. */
   started_at?: string;
+  /** The saved lead (lead-<psid>-<time>.json) once the application is complete. */
+  lead_file?: string;
+  /** When fb_lead_finalize made the PDFs; until then the watcher keeps asking Claude to finalize. */
+  finalized_at?: string;
   /** When we sent the one reminder for the question they stopped at (see sendNudges). */
   nudged_at?: string;
   /** A reply saved but not sent yet (see fb_flow_answer). */

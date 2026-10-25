@@ -29,6 +29,8 @@ export function operatorPrompt(pageId: string): string {
     '   - reply null (finished, excluded or cooldown): reply yourself only if they asked something.',
     '   - needs_id_review: call fb_flow_id_images, look at every photo, then fb_flow_id_review with one entry per photo',
     '     (type, side, clear, has_signature, and name/birthday/sex only if you can read them). The code decides if the IDs are enough.',
+    '   - needs_finalize (a lead file name): the application is complete but has no PDFs yet. Call fb_flow_id_images, then',
+    '     fb_lead_finalize with lead_file = that name, as below. Do not message the person for this.',
     '   - lead_saved: call fb_lead_finalize with what you read on the IDs and found in public info (split addresses + zip,',
     '     office phone with its source URL (the branch landline from the company site or map listing), nature of business,',
     '     department, employment type, TIN only if printed on an ID). Leave out what you are not sure of; a saved office',
@@ -131,7 +133,7 @@ async function main() {
         if (n) log(`sent ${n} reminder(s) to people who stopped mid-application`);
       }
       // Whatever the fast lane did not finish goes to Claude (never while Meta blocks messaging).
-      const waiting = (list: typeof pending) => list.filter((p) => p.outbox_pending || p.needs_id_review || (p.can_reply && p.messages.length > 0));
+      const waiting = (list: typeof pending) => list.filter((p) => p.outbox_pending || p.needs_id_review || p.needs_finalize || (p.can_reply && p.messages.length > 0));
       const rest = Date.now() < blockedUntil || waiting(pending).length === 0 ? [] : waiting(fast.length ? await findPending(ctx, pageId) : pending);
       const key = pendingKey(rest);
       if (rest.length > 0 && brake.canRun(key)) {

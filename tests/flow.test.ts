@@ -393,6 +393,10 @@ describe('flow tools', () => {
       expect(lead.consent_at).toBeTruthy();
       await expect(review([prcFront])).rejects.toThrow(/not at the ID photo step/);
       expect(sent.at(-1)).toBe(flow.done_reply);
+      // Until the PDFs are made, the pending list keeps asking Claude to finalize (it may stop before doing it).
+      expect((await pend())?.needs_finalize).toBe(r.lead_saved);
+      await callTool(tool('fb_lead_finalize'), { lead_file: r.lead_saved, details: {} }, ctx);
+      expect(await pend()).toBeUndefined();
     } finally {
       vi.unstubAllGlobals();
     }
