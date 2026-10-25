@@ -46,6 +46,16 @@ describe('TIN', () => {
 });
 
 describe('owner rules in buildApplication', () => {
+  it('total years working is never less than years with employer; a business owner gets department Management', () => {
+    const young = buildApplication(lead({ answers: { ...lead().answers, years_with_employer: '7' } }), { ...details, birthday: '2001-01-15' }, NOW).form;
+    expect([young.total_years_working, young.length_of_service]).toEqual(['7', '7']);
+    const old = buildApplication(lead(), details, NOW).form;
+    expect(old.total_years_working).toBe('15');
+    const owner = buildApplication(lead({ answers: { ...lead().answers, position: 'Owner' } }), details, NOW).form;
+    expect(owner.department).toBe('Management');
+    expect(buildApplication(lead(), details, NOW).form.department).toBeUndefined();
+  });
+
   it('EastWest: Owner rank when self-employed, nature of work from the industry (blank when unclear)', () => {
     const ew = (d: object) => buildApplication(lead(), { ...details, ...d }, NOW).bankOnly.eastwest;
     expect(ew({ employment_type: 'Self-employed', industry: 'Dental clinic' })).toMatchObject({ 'position_rank__checkbox__owner': true, 'nature_of_work__checkbox__communitysocialpersonal': true });

@@ -36,6 +36,8 @@ export function operatorPrompt(pageId: string): string {
     '     office phone with its source URL (the branch landline from the company site or map listing), nature of business,',
     '     department, employment type, TIN only if printed on an ID). Leave out what you are not sure of; a saved office',
     '     number for the same company and city is filled in by the code. Never invent income, TIN, SSS or phone numbers.',
+    '     A business owner (position Owner, own business): employment_type Self-employed, and WebSearch the business name',
+    '     and city for its line of business (e.g. "Dental clinic", "Bakery") as industry. If you cannot find it, leave it out.',
     '     If the result lists a missing HOME or OFFICE address part (street/house no., barangay, city, province), ask the',
     '     applicant for exactly that part in one short message (only within the 24-hour window), then finalize again.',
     '   - next_question.wants_suggestions: you may WebSearch public facts for it (e.g. the branch address of the employer',

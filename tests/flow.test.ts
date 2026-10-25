@@ -454,6 +454,8 @@ describe('watcher prompt', () => {
     expect(p).toMatch(/Never ask for a card number, CVV, OTP, PIN/);
     expect(p).toMatch(/Never promise approval/);
     expect(p).toMatch(/Never suggest or guess personal details/);
+    expect(p).toMatch(/business owner.*Self-employed.*WebSearch the business name/s);
+    expect(p).toMatch(/unit\/floor\/building, street, barangay/);
   });
 });
 

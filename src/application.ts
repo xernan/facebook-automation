@@ -448,6 +448,10 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
   // Owner rule: a business owner is self-employed, and a self-employed applicant's position is Owner.
   if (!f.employment_type && f.position && OWNER_TITLE.test(f.position)) f.employment_type = 'Self-employed';
   if (f.employment_type === 'Self-employed' && !f.position) f.position = 'Owner';
+  if (f.employment_type === 'Self-employed' && !f.department) {
+    f.department = 'Management';
+    defaults.push('Department = Management for a business owner (owner default)');
+  }
 
   // Owner rules: ownership, years of stay and total years working from age (birthday on the ID).
   const age = details.birthday ? ageOn(details.birthday, now) : undefined;
@@ -467,6 +471,8 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
     // Owner rule: year = completion year - years with employer; month = the month they finished applying.
     f.date_hired = `${done.getFullYear() - yrs}-${String(done.getMonth() + 1).padStart(2, '0')}-01`;
     defaults.push('Date hired = completion month, year minus years with employer', 'Months with employer = month applied (owner default)');
+    // Owner rule: total years working is never less than the years with this employer.
+    if (f.total_years_working !== undefined && Number(f.total_years_working) < yrs) f.total_years_working = String(yrs);
   }
   defaults.push('Bank declarations (existing client, relatives at the bank, government officials) = NO (owner default)', `Best time to call = ${BEST_TIME_TO_CALL} (owner default)`, 'Education = College (owner default)', 'Source of funds = Salary (Business when self-employed), card delivery = home, statement = personal email');
   return { form: f, defaults };
