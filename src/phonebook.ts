@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
+import { replaceFile } from './files.js';
 
 // Our own directory of real office landlines, per company and branch city (this PC only:
 // <flowDir>/company-phones.json). A number goes in only with where it came from: a public page found online,
@@ -67,7 +68,7 @@ async function save(flowDir: string, entries: PhoneEntry[]): Promise<void> {
   await fs.mkdir(flowDir, { recursive: true });
   const tmp = `${file(flowDir)}.${process.pid}.tmp`;
   await fs.writeFile(tmp, JSON.stringify({ entries }, null, 2), 'utf8');
-  await fs.rename(tmp, file(flowDir));
+  await replaceFile(tmp, file(flowDir));
 }
 
 /**

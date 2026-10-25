@@ -2,6 +2,7 @@ import { contentProblem } from './contentguard.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync, promises as fs, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { replaceFile } from './files.js';
 import { flowSchema, type Flow, type Person } from './flow.js';
 
 // Flow state and finished applications. Personal data (Data Privacy Act): it stays in FB_FLOW_DIR on
@@ -75,7 +76,7 @@ export class FlowStore {
     await fs.mkdir(this.dir, { recursive: true });
     const tmp = path.join(this.dir, `state.${randomUUID()}.tmp`);
     await fs.writeFile(tmp, JSON.stringify(state, null, 2), 'utf8');
-    await fs.rename(tmp, this.file);
+    await replaceFile(tmp, this.file);
   }
 
   /**

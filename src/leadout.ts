@@ -7,6 +7,7 @@ import { fillBankPdf } from './pdf.js';
 import { printPdf } from './printer.js';
 import { lookupPhone, OWNER_SOURCE, rememberPhone } from './phonebook.js';
 import { applicationStats } from './stats.js';
+import { replaceFile } from './files.js';
 
 // Finished applications on this computer only (personal data; never shown to the client):
 //   <flowDir>/applicants/<YYYY-MM-DD> <Name>/  bank PDFs, ID photos, details.json, MISSING.txt
@@ -305,8 +306,7 @@ export async function writeClientsXlsx(flowDir: string): Promise<void> {
   }
   const tmp = path.join(flowDir, `CLIENTS.${process.pid}.tmp.xlsx`);
   await wb.xlsx.writeFile(tmp);
-  await fs.rename(tmp, path.join(flowDir, 'CLIENTS.xlsx')).catch(async (err) => {
-    await fs.rm(tmp, { force: true });
+  await replaceFile(tmp, path.join(flowDir, 'CLIENTS.xlsx')).catch(async (err) => {
     // Excel keeps the file locked while it is open; the folders stay the source of truth.
     if (err?.code === 'EPERM' || err?.code === 'EBUSY') throw new Error('CLIENTS.xlsx is open in Excel. Close it; it will update next time.');
     throw err;

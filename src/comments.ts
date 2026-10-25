@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import { contentProblem } from './contentguard.js';
+import { replaceFile } from './files.js';
 import type { Ctx, ToolDef } from './tools.js';
 import { botMayAnswer, loadTestMode } from './testmode.js';
 
@@ -46,7 +47,7 @@ export async function saveCommentState(dir: string, s: CommentState, now = new D
   s.sent = s.sent.filter((x) => new Date(x.at).getTime() > weekAgo);
   const tmp = path.join(dir, `${FILE}.tmp`);
   await fs.writeFile(tmp, JSON.stringify(s, null, 2), 'utf8');
-  await fs.rename(tmp, path.join(dir, FILE));
+  await replaceFile(tmp, path.join(dir, FILE));
 }
 
 export function repliesInLast(s: CommentState, ms: number, now = new Date()): number {
