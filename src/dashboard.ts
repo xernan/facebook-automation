@@ -8,7 +8,7 @@ import { settingsSchema } from './application.js';
 import { ROOT_DIR } from './context.js';
 import { loadConfig } from './config.js';
 import { FlowStore } from './flowstore.js';
-import { listApplicants, loadSettings, saveForm, saveSettings, writeClientsXlsx } from './leadout.js';
+import { finalizeLead, listApplicants, loadSettings, saveForm, saveSettings, writeClientsXlsx } from './leadout.js';
 import { findAcrobat, listPrinters, printPdf } from './printer.js';
 import { forgetPhone, loadPhonebook, lookupPhone } from './phonebook.js';
 import { applicationStats, funnelStats } from './stats.js';
@@ -180,7 +180,7 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
         const state = await new FlowStore(opts.flowDir).load(new Date());
         const waiting = Object.values(state.people).filter((p) => !['done', 'declined', 'rejected', 'excluded'].includes(p.stage)).length;
         // Complete chats Claude held because the IDs did not look right (no PDFs made); the owner checks them in Messenger.
-        const held = Object.values(state.people).filter((p) => p.hold).map((p) => ({ at: p.hold!.at, reason: p.hold!.reason }));
+        const held = Object.values(state.people).filter((p) => p.hold).map((p) => ({ at: p.hold!.at, reason: p.hold!.reason, lead_file: p.lead_file }));
         const settings = await loadSettings(opts.flowDir);
         return send(200, {
           applicants,
@@ -236,6 +236,25 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
           if (!file) return send(404, { error: 'Unknown applicant.' });
           await setOutcome(file, { result: body.result, card: body.card, proof_ok: body.proof_ok === true, source: body.source });
           await writeClientsXlsx(opts.flowDir).catch(() => undefined);
+          return send(200, { ok: true });
+        }
+        if (url.pathname === '/api/release') {
+          // Owner checked the IDs of a held application and wants the PDFs anyway (missing items show as usual).
+          const lead = String(body.lead_file ?? '');
+          if (!/^lead-\d+-[\w-]+\.json$/.test(lead)) return send(400, { error: 'Bad request' });
+          const store = new FlowStore(opts.flowDir);
+          const held = (await store.load(new Date())).people;
+          if (!Object.values(held).some((p) => p.lead_file === lead && p.hold)) return send(404, { error: 'Not found' });
+          await finalizeLead(opts.flowDir, opts.templatesDir, lead, {});
+          await store.withLock(async () => {
+            const st = await store.load(new Date());
+            const p = Object.values(st.people).find((x) => x.lead_file === lead);
+            if (p) {
+              delete p.hold;
+              p.finalized_at = new Date().toISOString();
+              await store.save(st);
+            }
+          });
           return send(200, { ok: true });
         }
         if (url.pathname === '/api/testmode') {

@@ -58,9 +58,21 @@ describe('dashboard', () => {
   it('shows applications held because the IDs did not look right (no names, just date and reason)', async () => {
     const { base, dir } = await start();
     expect((await (await fetch(`${base}/api/state`)).json()).flow.held).toEqual([]);
-    const person = { stage: 'done', step: 0, answers: {}, banks: [], married: false, updated_at: '2026-10-25T02:15:00Z', hold: { at: '2026-10-25T02:30:00Z', reason: 'ids_do_not_match' } };
+    const lead_file = 'lead-555-2026-10-25T02-15-00-000Z.json';
+    const person = { stage: 'done', step: 0, answers: {}, banks: [], married: false, updated_at: '2026-10-25T02:15:00Z', lead_file, hold: { at: '2026-10-25T02:30:00Z', reason: 'ids_do_not_match' } };
     writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ version: 1, started_at: '2026-10-25T00:00:00Z', handled: [], people: { '555': person } }));
-    expect((await (await fetch(`${base}/api/state`)).json()).flow.held).toEqual([{ at: '2026-10-25T02:30:00Z', reason: 'ids_do_not_match' }]);
+    writeFileSync(path.join(dir, lead_file), JSON.stringify({ psid: '555', completed_at: '2026-10-25T02:15:00Z', banks: ['BDO'], married: false, answers: { email: 'a@b.co', mobile: '09171234567' } }));
+    expect((await (await fetch(`${base}/api/state`)).json()).flow.held).toEqual([{ at: '2026-10-25T02:30:00Z', reason: 'ids_do_not_match', lead_file }]);
+
+    // "Make PDFs anyway": token needed, only a held lead file name, then the hold is gone and the applicant shows up.
+    const release = (body: unknown, token = 'tok') => fetch(`${base}/api/release`, { method: 'POST', body: JSON.stringify(body), headers: { 'x-token': token } });
+    expect((await release({ lead_file }, 'nope')).status).toBe(403);
+    expect((await release({ lead_file: '../state.json' })).status).toBe(400);
+    expect((await release({ lead_file: 'lead-1-x.json' })).status).toBe(404);
+    expect((await release({ lead_file })).status).toBe(200);
+    const after = await (await fetch(`${base}/api/state`)).json();
+    expect(after.flow.held).toEqual([]);
+    expect(after.applicants).toHaveLength(2);
   });
 
   it('bank result needs the token; marketing shows it; draft check uses the guard', async () => {

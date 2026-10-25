@@ -56,7 +56,7 @@ function render() {
     goalBar('Target', w.complete, w.target, w.pct_target, w.target_reached) +
     goalBar('Quota', w.complete, w.quota, w.pct_quota, w.reached) +
     `<div class="stats"><div class="stat"><b>${w.complete}</b>Complete applications</div><div class="stat"><b>${w.ready}</b>Ready (nothing to check)</div><div class="stat"><b>${w.printed}</b>Printed</div><div class="stat"><b>${S.flow.waiting || 0}</b>In chat now</div></div>` +
-    ((S.flow.held || []).length ? `<p class="pill warn">On hold, IDs did not look right (no PDFs made): ${S.flow.held.map((h) => esc(h.at.slice(0, 10)) + ' (' + esc(h.reason.replace(/_/g, ' ')) + ')').join(', ')}. Check the IDs in Messenger.</p>` : '') +
+    ((S.flow.held || []).length ? `<p class="pill warn">On hold, IDs did not look right (no PDFs made): ${S.flow.held.map((h) => esc(h.at.slice(0, 10)) + ' (' + esc(h.reason.replace(/_/g, ' ')) + ') <button class="btn" data-release="' + esc(h.lead_file || '') + '">Make PDFs anyway</button>').join(' ')} Check the IDs in Messenger first.</p>` : '') +
     `</div>` +
     funnelCard(S.funnel) +
     weeksTable(cm, 'This month') +
@@ -70,6 +70,18 @@ function render() {
           .join('')
       : '<tr><td colspan="8" class="muted">No applicants yet. Finished Messenger applications show up here.</td></tr>') +
     '</table></div>';
+  a.querySelectorAll('[data-release]').forEach(
+    (b) =>
+      (b.onclick = async () => {
+        if (!confirm('Make the PDFs even though the IDs did not look right? Check the IDs in Messenger first.')) return;
+        try {
+          await post('/api/release', { lead_file: b.dataset.release });
+          await load();
+        } catch (e) {
+          alert(e.message);
+        }
+      }),
+  );
   a.querySelectorAll('tr.row').forEach(
     (t) =>
       (t.onclick = () => {
