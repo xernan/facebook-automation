@@ -225,6 +225,35 @@ describe('finalizeLead', () => {
     expect(pdf.getPages()[0]!.node.Annots()).toBeUndefined();
   });
 
+  it('name on card fits the bank boxes the owner way (drop middle initial, then the second given name)', async () => {
+    const { cardName } = await import('../src/application.js');
+    expect(cardName('Juan', 'Santos', 'Dela Cruz')).toBe('JUAN S. DELA CRUZ');
+    expect(cardName('Juan', 'Santos', 'Dela Cruz', 21)).toBe('JUAN S. DELA CRUZ');
+    expect(cardName('Maria Cristina', 'Santos', 'Dela Cruz', 21)).toBe('MARIA DELA CRUZ'); // 26 -> 22 -> 15
+    expect(cardName('Xernan Bryan', 'Bautista', 'Reyes', 19)).toBe('XERNAN BRYAN REYES'); // drop M.I. only
+    expect(cardName('Xernan Bryan', 'Bautista', 'Reyes', 15)).toBe('XERNAN REYES');
+    expect(cardName('Maximiliano', '', 'Villanueva-Santiago', 19)).toBe('M. VILLANUEVA-SANTI');
+    for (const max of [19, 21]) expect(cardName('Ma. Lourdes Josefina', 'Garcia', 'Dela Cruz Jr', max).length).toBeLessThanOrEqual(max);
+  });
+
+  it('the PDF gets the shortened name, not a name cut in half', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 200]);
+    const f = pdf.getForm().createTextField('name_on_card');
+    f.setMaxLength(21);
+    f.enableCombing();
+    f.addToPage(page, { x: 20, y: 100, width: 400, height: 20 });
+    const data = { first_name: 'Maria Cristina', middle_name: 'Santos', last_name: 'Dela Cruz', name_on_card: 'MARIA CRISTINA S. DELA CRUZ' };
+    const app = { banks: ['chinabank' as const], data, bankOnly: { metrobank: {}, eastwest: {}, chinabank: {} }, missing: [], defaults: [] };
+    const { fillBankPdf } = await import('../src/pdf.js');
+    const { settingsSchema } = await import('../src/application.js');
+    const out = await fillBankPdf('chinabank', await pdf.save(), app, settingsSchema.parse({}));
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const doc = await getDocument({ data: new Uint8Array(out.bytes) }).promise;
+    const text = (await (await doc.getPage(1)).getTextContent()).items.map((i: any) => i.str).join('').replace(/\s+/g, '');
+    expect(text).toBe('MARIADELACRUZ');
+  });
+
   it('a long address is printed in full even when the bank box has a character limit', async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([600, 200]);

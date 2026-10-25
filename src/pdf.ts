@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFArray, PDFCheckBox, PDFDict, PDFDocument, PDFDropdown, PDFName, PDFRadioGroup, PDFRef, PDFTextField, type PDFFont, type PDFPage } from 'pdf-lib';
-import type { BankKey, BuiltApplication, Settings } from './application.js';
+import { cardName, type BankKey, type BuiltApplication, type Settings } from './application.js';
 
 // Fills a bank's PDF template. Box names say what goes in them (same naming as the card app's templates):
 //   <key>                         text, e.g. mother_maiden_name
@@ -138,6 +138,8 @@ export async function fillBankPdf(
         t = t.replace(/[\r\n\t]+/g, ' ').trim();
         if (!t) continue;
         const max = field.getMaxLength();
+        // Name on card over the bank's boxes: shorten it the owner's way (never just cut a name in half).
+        if (key === 'name_on_card' && max && t.length > max) t = cardName(app.data.first_name, app.data.middle_name, app.data.last_name, max) || t;
         if (max && field.isCombed()) t = combText(t, max);
         else if (max && t.length > max) {
           // With one uniform size the text is drawn on the page, so a long address is never cut: lift the box limit.

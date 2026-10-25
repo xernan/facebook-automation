@@ -5,6 +5,21 @@ import type { IdSeen } from './flow.js';
 // on the ID photos and found in public info (finalize details), the owner's derived rules, and the owner's
 // settings. Never invents personal facts: anything not given is left blank and listed as missing.
 
+/**
+ * Name printed on the card, at most `max` letters (banks charge a penalty when it runs over the boxes).
+ * Owner rule: FIRST M. LAST; too long -> drop the middle initial; still too long -> only the first of two given
+ * names; then the first initial; the last resort cuts it.
+ */
+export function cardName(first = '', middle = '', last = '', max = Infinity): string {
+  const up = (v: string) => v.replace(/\s+/g, ' ').trim().toUpperCase();
+  const f = up(first);
+  const l = up(last);
+  const mi = up(middle) ? `${up(middle)[0]}.` : '';
+  const f1 = f.split(' ')[0] ?? '';
+  const tries = [[f, mi, l], [f, l], [f1, l], [f1 ? `${f1[0]}.` : '', l]].map((p) => p.filter(Boolean).join(' '));
+  return tries.find((t) => t.length <= max) ?? tries.at(-1)!.slice(0, max);
+}
+
 export const BANKS = ['metrobank', 'eastwest', 'chinabank'] as const;
 export type BankKey = (typeof BANKS)[number];
 
@@ -343,7 +358,7 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
     middle_name: details.middle_name,
     last_name: details.last_name,
     suffix: details.suffix,
-    name_on_card: [details.first_name, details.middle_name?.[0] ? `${details.middle_name[0]}.` : '', details.last_name].filter(Boolean).join(' ').toUpperCase() || undefined,
+    name_on_card: cardName(details.first_name, details.middle_name, details.last_name) || undefined,
     birthday: details.birthday,
     gender: details.gender,
     nationality: details.nationality,
