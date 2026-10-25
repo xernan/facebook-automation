@@ -9,8 +9,9 @@ import { z } from 'zod';
 const FILE = 'test-mode.json';
 export const testModeSchema = z.object({
   on: z.boolean(),
-  // Messenger PSIDs and/or comment author ids (Facebook gives the same person different ids in each).
-  ids: z.array(z.string().regex(/^\d{1,25}$/)).max(20),
+  // Messenger PSIDs, comment author ids (Facebook gives the same person different ids in each), or comment ids
+  // ("postid_commentid"): Meta often hides who wrote a comment, so a test comment is listed by its own id.
+  ids: z.array(z.string().regex(/^\d{1,25}(_\d{1,25})?$/)).max(20),
 });
 export type TestMode = z.infer<typeof testModeSchema>;
 
@@ -31,4 +32,4 @@ export async function saveTestMode(dir: string, input: unknown): Promise<TestMod
 }
 
 /** True when the bots may answer this person. */
-export const botMayAnswer = (tm: TestMode, id: string | undefined) => !tm.on || (!!id && tm.ids.includes(id));
+export const botMayAnswer = (tm: TestMode, ...ids: (string | undefined)[]) => !tm.on || ids.some((id) => !!id && tm.ids.includes(id));

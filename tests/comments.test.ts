@@ -124,5 +124,8 @@ describe('comment replies', () => {
     await saveTestMode(dir, { on: true, ids: ['900'] });
     expect((await findPendingComments(ctx, PAGE_ID, now)).comments.map((c) => c.comment_id)).toEqual(['11']);
     await expect(saveTestMode(dir, { on: true, ids: ['abc'] })).rejects.toThrow();
+    // Meta often hides the comment author: a tester's comment can be listed by its own id.
+    await saveTestMode(dir, { on: true, ids: ['12'] });
+    expect((await findPendingComments(ctx, PAGE_ID, now)).comments.map((c) => c.comment_id)).toEqual(['12']);
   });
 });

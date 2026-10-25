@@ -75,7 +75,7 @@ export async function findPendingComments(ctx: Ctx, pageId: string, now = new Da
   for (const p of posts.data ?? []) {
     if (new Date(p.created_time).getTime() < now.getTime() - ctx.cfg.FB_COMMENT_POST_DAYS * 86_400_000) continue;
     for (const c of p.comments?.data ?? []) {
-      if (s.handled[c.id] || c.is_hidden || c.from?.id === pageId || !botMayAnswer(tm, c.from?.id)) continue;
+      if (s.handled[c.id] || c.is_hidden || c.from?.id === pageId || !botMayAnswer(tm, c.from?.id, c.id)) continue;
       const at = new Date(c.created_time).getTime();
       if (at < since || !c.message) continue;
       out.push({

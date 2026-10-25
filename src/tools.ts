@@ -308,7 +308,7 @@ export const tools: ToolDef[] = [
       const tm = await loadTestMode(ctx.cfg.flowDir);
       if (tm.on) {
         const who = recipient_psid ?? (await ctx.graph.get(page_id, comment_id!, { fields: 'from' })).from?.id;
-        if (!botMayAnswer(tm, who)) throw new Error('Test mode is on and this person is not a tester. Not sent.');
+        if (!botMayAnswer(tm, who, comment_id)) throw new Error('Test mode is on and this person is not a tester. Not sent.');
       }
       const params: Params = {
         recipient: JSON.stringify(recipient_psid ? { id: recipient_psid } : { comment_id }),
