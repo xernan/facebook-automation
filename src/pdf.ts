@@ -61,6 +61,20 @@ export const BOX_FIX: Partial<Record<BankKey, Record<string, { raise?: number; c
   metrobank: { full_name: { raise: 3, center: true } },
 };
 
+/**
+ * Email domain boxes printed on the template (no form field): the domain is ticked and only the part before the @ is
+ * written, so it is not printed twice. Centers in PDF points, checked on the real template (owner, 2026-10-25).
+ */
+const EMAIL_DOMAIN_BOX: Partial<Record<BankKey, Record<string, [number, number]>>> = {
+  metrobank: { 'gmail.com': [477, 751], 'yahoo.com': [525.6, 751] },
+};
+
+/** Draws a check mark centered on (x, y). */
+function drawTick(page: PDFPage, x: number, y: number) {
+  page.drawLine({ start: { x: x - 3, y }, end: { x: x - 1, y: y - 2.5 }, thickness: 1.4 });
+  page.drawLine({ start: { x: x - 1, y: y - 2.5 }, end: { x: x + 3.5, y: y + 3.5 }, thickness: 1.4 });
+}
+
 /** Bank-only boxes that take a value from the Default Form (so dashboard edits reach them). */
 const FROM_FORM = new Set(['business_unit_floor_building']);
 
@@ -154,6 +168,14 @@ export async function fillBankPdf(
         const max = field.getMaxLength();
         // Name on card over the bank's boxes: shorten it the owner's way (never just cut a name in half).
         if (key === 'name_on_card' && max && t.length > max) t = cardName(app.data.first_name, app.data.middle_name, app.data.last_name, max) || t;
+        const domainBox = key === 'email' ? EMAIL_DOMAIN_BOX[bank] : undefined;
+        const at = domainBox && /^([^@\s]+)@([^@\s]+)$/.exec(t);
+        const box = at && domainBox[at[2]!.toLowerCase()];
+        if (at && box) {
+          const widget = field.acroField.getWidgets()[0]!;
+          drawTick(pdf.getPages().find((pg) => pg.ref === widget.P()) ?? pdf.getPages()[0]!, box[0], box[1]);
+          t = at[1]!;
+        }
         if (max && field.isCombed()) t = combText(t, max);
         else if (max && t.length > max) {
           // With one uniform size the text is drawn on the page, so a long address is never cut: lift the box limit.

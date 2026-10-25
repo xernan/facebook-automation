@@ -374,6 +374,31 @@ describe('finalizeLead', () => {
     expect(items.some((i) => i.s === '4th Level')).toBe(true);
   });
 
+  it('Metrobank: a gmail/yahoo address ticks the printed domain box and writes only the name; other domains stay whole', async () => {
+    const fill = async (email: string, bank: 'metrobank' | 'eastwest') => {
+      const pdf = await PDFDocument.create();
+      const page = pdf.addPage([610, 992]);
+      pdf.getForm().createTextField('email').addToPage(page, { x: 305, y: 738, width: 164, height: 16 });
+      const app = { banks: [bank], data: { email }, bankOnly: { metrobank: {}, eastwest: {}, chinabank: {} }, missing: [], defaults: [] };
+      const { fillBankPdf } = await import('../src/pdf.js');
+      const { settingsSchema } = await import('../src/application.js');
+      const out = await fillBankPdf(bank, await pdf.save(), app, settingsSchema.parse({}));
+      const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const doc = await getDocument({ data: new Uint8Array(out.bytes) }).promise;
+      const pg = await doc.getPage(1);
+      const text = (await pg.getTextContent()).items.map((i: any) => i.str).join('');
+      const ops = (await pg.getOperatorList()).fnArray.length;
+      return { text, ops };
+    };
+    const g = await fill('juan.cruz@gmail.com', 'metrobank');
+    expect(g.text).toBe('juan.cruz');
+    expect((await fill('juan@Yahoo.com', 'metrobank')).text).toBe('juan');
+    const other = await fill('juan@company.ph', 'metrobank');
+    expect(other.text).toBe('juan@company.ph');
+    expect(g.ops).toBeGreaterThan(other.ops); // the tick is drawn
+    expect((await fill('juan.cruz@gmail.com', 'eastwest')).text).toBe('juan.cruz@gmail.com');
+  });
+
   it('a long address is printed in full even when the bank box has a character limit', async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([600, 200]);
