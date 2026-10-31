@@ -75,6 +75,8 @@
 
 Owner priority (2026-10-31): finding clients comes first. Code only for real failures; no new features. The pending application question stays at 4 banks (owner). The first real client doubles as the stranger test.
 
+Marketing plan (2026-10-31; no older written plan found, and no results yet). Goal for week 1: 5 real people message the Page and 1 finishes an application; the dashboard target stays 40 a week. Owner by hand: message 10 contacts or old clients a day, share in 3-5 groups a day within each group's rules, pin the Oct 31 post. Page: the 11 scheduled photo posts. Every applicant gets "Where they came from" set. Claude: on Nov 8 count chats and sources, then keep what brings people. Small click-to-Messenger ad test only if the owner approves the money. The owner deleted the Oct 30 post that did not match the offer.
+
 Next when the owner comes back:
 1. PDFs through the real chat: proven 2026-10-31 (13:24 UTC). Metrobank, EastWest, China Bank and ID photos were made with an ID note and no hold; the owner saw the China Bank PDF. Field-by-field accuracy of the 3 PDFs has not been checked by Claude.
 2. Finish the wording review of the bank question with the owner.
