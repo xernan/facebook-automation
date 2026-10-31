@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { extractBanks, extractEmails, extractPhones } from './leads.js';
-import { clearlyComplete } from './placecheck.js';
+import { clearlyComplete, placeInProvince, provinceOnly } from './placecheck.js';
 
 // Messenger application flow: a fixed script the Page follows with each person, one state per person.
 // The qualifier rules (no card -> reject with cooldown, all excluded banks -> stop) are decided here in
@@ -68,6 +68,8 @@ export const flowSchema = z
             check: msg.optional(),
             /** The code accepts a clearly complete answer of this kind at once; anything else still goes to Claude. */
             auto_accept: z.enum(['birthplace', 'home_address', 'office_address']).optional(),
+            /** Sent at once when the answer is only a province; {province} and {example} are filled in. The next answer is joined to that province. */
+            province_only_reply: msg.optional(),
             /** Messenger button that offers the email or phone on their Facebook profile. Hidden when the profile has none. */
             autofill: z.enum(['user_email', 'user_phone_number']).optional(),
             /**
@@ -152,6 +154,8 @@ export interface Person {
   id_review?: IdSeen[];
   /** Suggestions shown with the current question; a reply "1".."n" picks one. */
   suggestions?: string[];
+  /** The province they answered with; the next answer says where in it (see province_only_reply). */
+  place_province?: string;
   updated_at: string;
   /** When they first wrote (for the funnel stats). Older records may not have it. */
   started_at?: string;
@@ -418,6 +422,15 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
         const q = question(flow, p, step, p.suggestions ?? []);
         return ask(`${step.invalid_reply}\n\n${q.reply}`, q.choices);
       }
+      if (step.province_only_reply) {
+        const only = provinceOnly(answer);
+        if (only) {
+          p.place_province = only.province;
+          return ask(step.province_only_reply.replaceAll('{province}', only.province).replaceAll('{example}', only.example));
+        }
+        if (p.place_province) answer = placeInProvince(p.place_province, answer);
+        delete p.place_province;
+      }
       p.answers[step.key] = answer;
       if (step.sets_married) p.married = MARRIED.test(answer);
       if (step.flag_if_yes && parseYesNo(answer) === 'yes') p.flags = [...new Set([...(p.flags ?? []), step.flag_if_yes])];
@@ -463,6 +476,7 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
     case 'steps': {
       const step = flow.steps[p.step];
       if (!step) return false;
+      if (step.province_only_reply && (p.place_province || provinceOnly(text))) return w.length <= 25;
       if (step.check) return !!step.auto_accept && clearlyComplete(step.auto_accept, text);
       const tapped =[...(step.choices ?? []), ...(step.optional_group ? [flow.skip_choice] : []), ...(p.suggestions?.length ? [flow.other_choice] : [])];
       if (tapped.some((c) => c.toLowerCase() === text.toLowerCase())) return true;

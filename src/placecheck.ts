@@ -113,6 +113,25 @@ function citiesIn(text: string) {
   );
 }
 
+/** "sa Malolos po." -> "Malolos": the place without the words around it. */
+const placeOnly = (text: string) => text.trim().replace(/[\s.!]+$/, '').replace(/^(?:taga|sa)\s+/i, '').replace(/\s+(?:po|province|probinsya)$/i, '');
+
+/** The province when the answer names nothing else ("Bulacan", "sa Bulacan po"), with a town in it as an example. */
+export function provinceOnly(text: string): { province: string; example: string } | undefined {
+  const place = placeOnly(text);
+  const data = address();
+  const found = Object.keys(data).find((p) => provinceKey(p) === provinceKey(place) || (isMetroManila(place) && provinceKey(p) === 'metromanila'));
+  if (!found) return undefined;
+  const first = Object.keys(data[found]!.cities)[0] ?? '';
+  return { province: found.replace(/\s*\(ncr\)/i, ''), example: first.replace(/\s+city$/i, '') };
+}
+
+/** The answer to "where in that province?" as a full place: "Malolos" -> "Malolos, Bulacan". */
+export function placeInProvince(province: string, text: string): string {
+  if (clearlyComplete('birthplace', text) || norm(text).includes(provinceKey(province))) return text;
+  return `${placeOnly(text)}, ${province}`;
+}
+
 /** True only when the answer is clearly complete, so the bot can move on at once. Anything else goes to Claude. */
 export function clearlyComplete(kind: 'birthplace' | 'home_address' | 'office_address', text: string): boolean {
   const found = citiesIn(text);

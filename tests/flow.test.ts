@@ -881,6 +881,50 @@ describe('auto_accept', () => {
     expect(scriptCanAnswer(f, p, { text: 'Taguig' })).toBe(true);
     expect(scriptCanAnswer(f, p, { text: 'Bulacan' })).toBe(false);
   });
+
+  describe('province_only_reply', () => {
+    const steps = [{ ...f.steps[0]!, province_only_reply: 'Saan sa {province}? Halimbawa: {example}' }, { key: 'next_one', prompt: 'Next?' }];
+    const g = { ...flow, steps };
+    const say = (who: Person, text: string) => advance(g, who, { text }, NOW, 30);
+
+    it('asks at once where in the province, without Claude', () => {
+      expect(scriptCanAnswer(g, p, { text: 'sa Bulacan po' })).toBe(true);
+      const r = say(p, 'sa Bulacan po');
+      expect(r.reply).toBe('Saan sa Bulacan? Halimbawa: Malolos');
+      expect(r.person.step).toBe(0);
+      expect(r.person.answers.place_of_birth).toBeUndefined();
+    });
+
+    it('joins the next answer to the province and moves on', () => {
+      const asked = say(p, 'Bulacan').person;
+      expect(scriptCanAnswer(g, asked, { text: 'Malolos' })).toBe(true);
+      const r = say(asked, 'Malolos').person;
+      expect(r.answers.place_of_birth).toBe('Malolos, Bulacan');
+      expect(r.step).toBe(1);
+      expect(r.place_province).toBeUndefined();
+    });
+
+    it('keeps a full answer as typed, and a misspelled town still reaches the spelling check', () => {
+      const asked = say(p, 'Bulacan').person;
+      expect(say(asked, 'Malolos, Bulacan').person.answers.place_of_birth).toBe('Malolos, Bulacan');
+      expect(say(asked, 'Maloloss').person.answers.place_of_birth).toBe('Maloloss, Bulacan');
+    });
+
+    it('a question while asked still goes to Claude', () => {
+      expect(scriptCanAnswer(g, say(p, 'Bulacan').person, { text: 'bakit po?' })).toBe(false);
+    });
+
+    it('covers Metro Manila too, and a city there stays the city alone', () => {
+      const r = say(p, 'NCR');
+      expect(r.reply).toMatch(/^Saan sa Metro Manila\? Halimbawa: \S/);
+      expect(say(r.person, 'Taguig').person.answers.place_of_birth).toBe('Taguig');
+    });
+
+    it('a place that is not only a province is untouched', () => {
+      expect(say(p, 'Taguig').person.answers.place_of_birth).toBe('Taguig');
+      expect(say(p, 'Quezon City').person.answers.place_of_birth).toBe('Quezon City');
+    });
+  });
 });
 
 describe('ID photo received', () => {
