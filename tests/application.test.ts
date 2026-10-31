@@ -154,6 +154,14 @@ describe('owner rules in buildApplication', () => {
     expect(formToData({ ...b.form, gsis_sss_number: '34-1234567-8' }).gsis_sss_number).toBeUndefined();
   });
 
+  it("the mother's maiden name typed by the client stays on the form, whatever the ID note says", () => {
+    const l = lead();
+    const typed = 'Nay Nay Mo';
+    const b = buildApplication({ ...l, answers: { ...l.answers, mothers_maiden_name: typed } }, { ...details, id_note: 'Name looks odd.' }, NOW);
+    expect(b.data.mother_maiden_name).toBe(typed);
+    expect(b.missing).not.toContain("Mother's maiden name");
+  });
+
   it('TIN read from an ID is used', () => {
     expect(buildApplication(lead(), { ...details, tin: '123-456-789' }, NOW).data.tin_number).toBe('123-456-789');
   });
