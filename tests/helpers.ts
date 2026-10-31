@@ -10,7 +10,8 @@ export const PAGE_ID = '111';
 export const APP_SECRET = 'fake-app-secret-for-tests'; // gitleaks:allow
 
 export function testConfig(env: Record<string, string> = {}, root = process.cwd()): Config {
-  return loadConfig({ FB_USER_ACCESS_TOKEN: USER_TOKEN, FB_APP_SECRET: APP_SECRET, ...env }, root);
+  // Tests exercise sending, so Messenger is live here; the real default is off (see contentguard test).
+  return loadConfig({ FB_USER_ACCESS_TOKEN: USER_TOKEN, FB_APP_SECRET: APP_SECRET, FB_MESSENGER_LIVE: 'true', ...env }, root);
 }
 
 export interface Call {

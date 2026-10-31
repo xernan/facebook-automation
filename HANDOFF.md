@@ -37,7 +37,29 @@
 - QA pass 2 (2026-10-24, 84 tests): cut-off answer to a write now maybe-done (no double post),
   base64 cursors, doctor OK when only Lead Ads perms missing. Live read smoke test of all main tools OK. PR #5.
 
+- Messenger application flow (2026-10-24, staging, not live yet): fb_flow_pending/answer/status/reset +
+  `npm run watch` (polls, wakes headless Claude with flow tools only). Owner texts in git-ignored flow.json.
+  Qualifier is locked owner logic (no card -> 180-day cooldown; all 4 excluded banks -> stop). No existing-card
+  details collected, no signature (owner decision). 121 tests. Next: owner tests the flow in chat, then set
+  FB_FLOW_PAGE_ID + FB_FLOW_DIR in .env (owner), restart Claude, run the watcher at logon.
+
+- 2026-10-24 late (staging 8cd7837, 205 tests, not live): Messenger flow (buttons, suggestions, ID review with owner
+  ID rules), bank PDF autofill (Metrobank/EastWest/China Bank, templates git-ignored), Default Form editor + local
+  dashboard (`npm run dashboard`, http://localhost:8790), print via Acrobat, CLIENTS.xlsx. Income/TIN are never
+  invented. Next: owner sets FB_FLOW_PAGE_ID, FB_FLOW_DIR, FB_PDF_TEMPLATES_DIR in .env; test with own PM; watcher +
+  dashboard at logon (owner OK).
+
+- 2026-10-24 (b791105, 215 tests): optional TIN question (Skip) + TIN from ID; office-number directory
+  (FB_FLOW_DIR/company-phones.json, real numbers with source or typed by owner, per company + city): finalize fills
+  blank office phone, Default Form "Find number", Settings lists/removes. Random TIN/phone from the card app NOT ported.
+
+- Verified 2026-10-31: 286 tests + secret scan pass, doctor OK. Logon task for the bots exists; watch, commentwatch and
+  dashboard are running. Staging CI green; staging is 68 commits ahead of main (last PR to main: #5).
+  Business Page, last 16 posts: 0 reactions, 1 comment, 6 shares. 2 Messenger chats; the one finished by someone other
+  than the owner is not yet confirmed as a real lead.
+
 ## Open (needs owner)
+- Bot duplicates fixed 2026-10-31: logs showed hundreds of retries until 10:37; one keeper per bot now, live-tested. Staging -> main PR is open for owner review.
 - GitHub done 2026-10-24: PR #1 merged to main; old cardmaxmarketing-blip repo deleted.
 - Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
 

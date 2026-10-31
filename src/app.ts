@@ -70,8 +70,11 @@ export function createServer(loadCtx: () => Ctx): { server: McpServer; ctx?: Ctx
       async (args: unknown) => {
         if (!ctx) return text(setupHelp(), true);
         try {
+          const result: any = await callTool(def, args, ctx);
+          // A tool may return MCP content directly (e.g. ID images for Claude to look at).
+          if (Array.isArray(result?.__content)) return { content: result.__content };
           // Scrub results too: a Graph read can return a token (e.g. fields=access_token).
-          return text(ctx.graph.scrub(JSON.stringify(await callTool(def, args, ctx), null, 2)));
+          return text(ctx.graph.scrub(JSON.stringify(result, null, 2)));
         } catch (err) {
           return text(formatError(err, (s) => ctx.graph.scrub(s)), true);
         }

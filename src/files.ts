@@ -73,3 +73,22 @@ export async function writeExport(exportDir: string, baseName: string, content: 
   await fs.writeFile(file, '﻿' + content, 'utf8');
   return file;
 }
+
+/**
+ * Replaces `dest` with `tmp` (the last step of an atomic save). On Windows a virus scanner, the search indexer or
+ * OneDrive can hold the just-written file for a moment and rename fails with EPERM/EBUSY/EACCES; retry briefly.
+ */
+export async function replaceFile(tmp: string, dest: string, rename = fs.rename, tries = 8): Promise<void> {
+  for (let i = 1; ; i++) {
+    try {
+      return await rename(tmp, dest);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (i >= tries || !['EPERM', 'EBUSY', 'EACCES'].includes(code ?? '')) {
+        await fs.rm(tmp, { force: true }).catch(() => undefined);
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, 50 * i));
+    }
+  }
+}

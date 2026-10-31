@@ -1,0 +1,83 @@
+{
+  "greeting": "Hi! Thanks for messaging. We help you apply for a credit card for free.",
+  "consent": {
+    "prompt": "Before we start: we will collect your details only for your credit card application (Data Privacy Act of 2012). Do you agree? (Yes / No)",
+    "decline_reply": "No problem. Message us anytime if you change your mind."
+  },
+  "carded": {
+    "prompt": "Do you have a credit card now? (Yes / No)",
+    "reject_reply": "Thank you! Sorry, we have no offer right now for people without a credit card. You can try again after 6 months."
+  },
+  "banks": {
+    "prompt": "Which banks are your credit cards from? (e.g. BDO, BPI, Metrobank, RCBC, EastWest)",
+    "unknown_reply": "Please type the bank names of your credit cards (e.g. BDO, BPI, Metrobank).",
+    "exclude_if_all": [
+      "BPI",
+      "Metrobank",
+      "RCBC",
+      "EastWest"
+    ],
+    "excluded_reply": "Thank you, and congrats on all your credit cards!"
+  },
+  "steps": [
+    {
+      "key": "full_name",
+      "prompt": "What is your full name? (First, Middle, Last)"
+    },
+    {
+      "key": "civil_status",
+      "prompt": "Civil status? (Single / Married / Separated / Widowed)",
+      "sets_married": true
+    },
+    {
+      "key": "mobile",
+      "prompt": "Mobile number?",
+      "validate": "mobile",
+      "invalid_reply": "That does not look like a PH mobile number (e.g. 0917 123 4567)."
+    },
+    {
+      "key": "spouse_name",
+      "prompt": "Spouse's full name?",
+      "only_if_married": true
+    }
+  ],
+  "id_photo": {
+    "prompt": "Last step: please send a clear photo of one valid government ID.",
+    "need_image_reply": "Please send the ID as a photo.",
+    "unclear_reply": "The photo is not clear. Please send it again: sharp, whole ID, nothing covering it.",
+    "need_back_reply": "Please also send the back of the ID.",
+    "need_second_reply": "This ID needs one more ID (primary or secondary). Please send a photo of another ID.",
+    "need_signature_reply": "Please send one more ID that shows your signature.",
+    "need_primary_reply": "Please send a primary ID (Driver's License, Passport, UMID, Postal, Voter's ID)."
+  },
+  "done_reply": "Thank you! Your application details are complete. We will update you here.",
+  "yes_no_reply": "Please answer Yes or No.",
+  "id_rules": {
+    "primary": [
+      "drivers_license",
+      "passport",
+      "umid",
+      "postal",
+      "voters",
+      "sss_old"
+    ],
+    "pair": {
+      "prc": {
+        "both_sides": true,
+        "second_needs_signature": false
+      },
+      "sss_new": {
+        "both_sides": false,
+        "second_needs_signature": false
+      },
+      "national_id": {
+        "both_sides": true,
+        "second_needs_signature": true
+      }
+    },
+    "secondary": [
+      "philhealth",
+      "tin"
+    ]
+  }
+}
