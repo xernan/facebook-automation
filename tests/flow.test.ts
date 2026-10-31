@@ -865,6 +865,8 @@ describe('answers Claude must check', () => {
 
   it('the operator is told to ask for the missing part and never fill it in', async () => {
     const { operatorPrompt } = await import('../src/watch.js');
+    expect(operatorPrompt('1')).toMatch(/never compare an ID with the Facebook name/);
+    expect(operatorPrompt('1')).not.toMatch(/names do not match the applicant/);
     expect(operatorPrompt('1')).toMatch(/answer_check/);
     expect(operatorPrompt('1')).toMatch(/Never fill in a part yourself/);
     expect(operatorPrompt('1')).toMatch(/send the whole answer again/);

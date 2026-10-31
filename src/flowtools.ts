@@ -388,8 +388,8 @@ export const flowTools: ToolDef[] = [
   {
     name: 'fb_lead_hold',
     description:
-      'Use instead of fb_lead_finalize when the IDs do not look right for this application (names on the IDs do not match the ' +
-      "applicant, not a real ID, a screenshot, or looks edited or someone else's). No PDFs are made; the owner checks it. " +
+      'Use instead of fb_lead_finalize when the IDs do not look right for this application (the IDs name different people, ' +
+      'not a real ID, a screenshot, or looks edited). A different Facebook name is no reason: those are often aliases. No PDFs are made; the owner checks it. ' +
       'Do not message the applicant about it.',
     write: false,
     input: {
