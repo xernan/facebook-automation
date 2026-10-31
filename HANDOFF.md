@@ -74,7 +74,7 @@
 ## Open
 
 Next when the owner comes back:
-1. Prove PDFs through the real chat. The 3 tests on 2026-10-31 made none because the bot held them over the ID (see 13). Owner rule since then: never hold, what the client sends is the client's decision, and doubts go in an ID note; the watcher no longer has the hold tool. Not tested live yet. Repeat the test to the end, even with a screenshot as the ID, and do not reset until the folder shows.
+1. PDFs through the real chat: proven 2026-10-31 (13:24 UTC). Metrobank, EastWest, China Bank and ID photos were made with an ID note and no hold; the owner saw the China Bank PDF. Field-by-field accuracy of the 3 PDFs has not been checked by Claude.
 2. Finish the wording review of the bank question with the owner.
 3. Stranger test: one person with no role on the Page or Meta app. Not proven yet.
 4. Staging to main PR (30 commits ahead on 2026-10-31, CI green at the last check) after the test passes.
