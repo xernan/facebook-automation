@@ -97,3 +97,35 @@ function checkBirthplace(place: string | undefined): string[] {
 export function placeProblems(f: AppForm): string[] {
   return [...checkBirthplace(f.birth_town), ...checkAddress('home', f.home), ...checkAddress('office', f.company)];
 }
+
+const STREET_WORDS = /\b(st|street|ave|avenue|road|rd|blvd|boulevard|drive|dr|highway|hwy|lane|ln|ext|extension|purok|sitio|zone)\b|\d/i;
+const BUILDING_WORDS = /\b(bldg|building|tower|plaza|mall|center|centre|floor|flr|unit)\b/i;
+const BARANGAY_WORD = /\b(brgy|bgy|barangay)\b/i;
+
+/** A city named in the text, with its province, skipping province names that also name a city ("Bulacan" alone). */
+function citiesIn(text: string) {
+  const data = address();
+  const whole = norm(text);
+  return Object.keys(data).flatMap((p) =>
+    Object.keys(data[p]!.cities)
+      .filter((c) => cityKey(c).length >= 4 && whole.includes(cityKey(c)))
+      .map((c) => ({ province: p, city: c, rest: whole.replace(cityKey(c), '') })),
+  );
+}
+
+/** True only when the answer is clearly complete, so the bot can move on at once. Anything else goes to Claude. */
+export function clearlyComplete(kind: 'birthplace' | 'home_address' | 'office_address', text: string): boolean {
+  const found = citiesIn(text);
+  const hasProvince = (x: { province: string; rest: string }) => x.rest.includes(provinceKey(x.province));
+  if (kind === 'birthplace') {
+    const isProvinceName = Object.keys(address()).some((p) => provinceKey(p) === norm(text));
+    if (isProvinceName) return false;
+    return found.some((x) => provinceKey(x.province) === 'metromanila' || hasProvince(x));
+  }
+  const street = STREET_WORDS.test(text) || (kind === 'office_address' && BUILDING_WORDS.test(text));
+  if (!street) return false;
+  return found.some((x) => {
+    const barangays = address()[x.province]!.cities[x.city]!.barangays ?? [];
+    return BARANGAY_WORD.test(text) || barangays.some((b) => norm(text).includes(norm(b)));
+  });
+}

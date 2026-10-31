@@ -870,3 +870,13 @@ describe('answers Claude must check', () => {
     expect(operatorPrompt('1')).toMatch(/send the whole answer again/);
   });
 });
+
+describe('auto_accept', () => {
+  const f = { ...flow, steps: [{ key: 'place_of_birth', prompt: 'Where?', check: 'City', auto_accept: 'birthplace' as const }] };
+  const p = { ...newPerson(NOW), stage: 'steps' as const };
+
+  it('the script answers a clear answer and leaves the rest to Claude', () => {
+    expect(scriptCanAnswer(f, p, { text: 'Taguig' })).toBe(true);
+    expect(scriptCanAnswer(f, p, { text: 'Bulacan' })).toBe(false);
+  });
+});

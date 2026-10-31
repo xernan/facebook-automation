@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { extractBanks, extractEmails, extractPhones } from './leads.js';
+import { clearlyComplete } from './placecheck.js';
 
 // Messenger application flow: a fixed script the Page follows with each person, one state per person.
 // The qualifier rules (no card -> reject with cooldown, all excluded banks -> stop) are decided here in
@@ -65,6 +66,8 @@ export const flowSchema = z
             choices,
             /** What Claude must find in the answer before it counts (the script never accepts it alone). */
             check: msg.optional(),
+            /** The code accepts a clearly complete answer of this kind at once; anything else still goes to Claude. */
+            auto_accept: z.enum(['birthplace', 'home_address', 'office_address']).optional(),
             /** Messenger button that offers the email or phone on their Facebook profile. Hidden when the profile has none. */
             autofill: z.enum(['user_email', 'user_phone_number']).optional(),
             /**
@@ -457,7 +460,8 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
       return extractBanks(text).length > 0 || (!!flow.banks.choices && banksDone(flow, p, text));
     case 'steps': {
       const step = flow.steps[p.step];
-      if (!step || step.check) return false;
+      if (!step) return false;
+      if (step.check) return !!step.auto_accept && clearlyComplete(step.auto_accept, text);
       const tapped =[...(step.choices ?? []), ...(step.optional_group ? [flow.skip_choice] : []), ...(p.suggestions?.length ? [flow.other_choice] : [])];
       if (tapped.some((c) => c.toLowerCase() === text.toLowerCase())) return true;
       if (p.suggestions?.length && /^\d+$/.test(text)) return true;

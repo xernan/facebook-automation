@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formFromLead, type Lead } from '../src/application.js';
-import { placeProblems } from '../src/placecheck.js';
+import { clearlyComplete, placeProblems } from '../src/placecheck.js';
 
 describe('place names on the form', () => {
   it('accepts names on our list, however the city is written', () => {
@@ -33,5 +33,24 @@ describe('spelling fixes from finalize', () => {
     const { form, defaults } = formFromLead(lead, { birth_town: 'Malolos, Bulacan', spelling_fixes: ['Bulakan -> Bulacan'] }, new Date('2026-10-31'));
     expect(form.birth_town).toBe('Malolos, Bulacan');
     expect(defaults).toContain('Spelling corrected: Bulakan -> Bulacan');
+  });
+});
+
+describe('answers the code accepts at once', () => {
+  it('place of birth: Metro Manila city alone, or town and province', () => {
+    for (const ok of ['Taguig', 'Taguig City', 'Malolos, Bulacan', 'malolos bulacan']) expect(clearlyComplete('birthplace', ok)).toBe(true);
+    for (const no of ['Bulacan', 'Malolos', 'Quezon', 'Xyzzyville']) expect(clearlyComplete('birthplace', no)).toBe(false);
+  });
+
+  it('address: needs a street sign, a barangay and a known city', () => {
+    expect(clearlyComplete('home_address', '12 Rizal St, Brgy San Jose, Malolos, Bulacan')).toBe(true);
+    expect(clearlyComplete('home_address', 'Rizal St, Bayanan, Muntinlupa')).toBe(true);
+    for (const no of ['Muntinlupa', 'Brgy Bayanan, Muntinlupa', 'Rizal St, Muntinlupa', '12 Rizal St, Bayanan, Muntinlua']) expect(clearlyComplete('home_address', no)).toBe(false);
+  });
+
+  it('a building counts for the office, not for the home', () => {
+    const a = 'Datu Building, Bayanan, Muntinlupa';
+    expect(clearlyComplete('office_address', a)).toBe(true);
+    expect(clearlyComplete('home_address', a)).toBe(false);
   });
 });
