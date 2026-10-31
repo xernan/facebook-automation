@@ -956,6 +956,35 @@ describe('office address: suggestions first, then part by part', () => {
   });
 });
 
+describe('office address: nothing found on the web', () => {
+  const f = {
+    ...flow,
+    steps: [
+      { key: 'department', prompt: 'Department?' },
+      { key: 'office_address', prompt: 'Is it this?', suggest: true, suggest_only: true },
+      { key: 'office_address_typed', prompt: 'Type it.', part_of: 'office_address', check: 'Full address', auto_accept: 'office_address' as const },
+      { key: 'last_one', prompt: 'Last?' },
+    ],
+  };
+  const p = { ...newPerson(NOW), stage: 'steps' as const };
+  const FOUND = '1 Rizal St, Bayanan, Muntinlupa, Metro Manila';
+
+  it('asks one line, and the typed answer is the office address', () => {
+    const asked = advance(f, p, { text: 'HR' }, NOW, 30);
+    expect(asked.reply).toBe('Type it.');
+    expect(scriptCanAnswer(f, asked.person, { text: 'Brgy Bayanan, Muntinlupa' })).toBe(false); // no street: Claude checks it
+    const done = advance(f, asked.person, { text: FOUND }, NOW, 30).person;
+    expect(done.answers.office_address).toBe(FOUND);
+    expect(f.steps[done.step]!.key).toBe('last_one');
+  });
+
+  it('"Iba" asks the same line, and a picked suggestion skips it', () => {
+    const shown = advance(f, p, { text: 'HR' }, NOW, 30, [FOUND]).person;
+    expect(advance(f, shown, { text: 'Iba' }, NOW, 30).reply).toBe('Type it.');
+    expect(f.steps[advance(f, shown, { text: '1' }, NOW, 30).person.step]!.key).toBe('last_one');
+  });
+});
+
 describe('a greeting in the middle of the flow', () => {
   const f = { ...flow, steps: [{ key: 'email', prompt: 'Email?', validate: 'email' as const, invalid_reply: 'Bad email.' }, { key: 'next_one', prompt: 'Next?' }] };
   const p = { ...newPerson(NOW), stage: 'steps' as const };

@@ -51,7 +51,7 @@ export function operatorPrompt(pageId: string): string {
     '     they named, or its line of business) and pass up to 5 as suggestions to fb_flow_answer. Only facts you found and',
     '     are sure of. If unsure, pass none. For office_address, always WebSearch the employer in answers_so_far first; pass only',
     '     full addresses (street, barangay, city, province) of that company where the barangay really is in that city and province,',
-    '     written "street, barangay, city, province". With none, the code asks for the parts one by one. Never suggest or guess personal details (names, birthplace, home address,',
+    '     written "street, barangay, city, province". With none, the code asks them to type it.Never suggest or guess personal details (names, birthplace, home address,',
     "     mother's maiden name).",
     '3. Never ask for a card number, CVV, OTP, PIN or passwords, and never mention them in a reply, not even as a warning',
     '   (Meta restricted the Page for that). Never promise approval, rates or promos. The code refuses such messages.',

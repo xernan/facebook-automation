@@ -89,6 +89,8 @@ Claude, low:
 9. Autofill code (quickReply, autofill field) is unused: tapping sent only the words, so it was removed from flow.json. The "Email" chip still showed on the owner's phone although nothing sends it; check it on another account.
 10. Run npm run login before data access ends on 2027-01-21. Keep the Claude CLI updated: an old one stops every AI reply.
 
+11. Office address rule (owner, 2026-10-31): Claude looks for it on the web and offers what it finds; if nothing or "Iba", one line only: "I type ang complete address ng company." The part-by-part code (place_part, cityFromAnswer) is unused in flow.json; remove it if it stays that way. Facebook's own "Confirm your address" sheet is not from our code; the owner looks for the setting.
+
 Owner decides later: Instagram, Marketing API (ads), lead alerts.
 
 ## Reference
