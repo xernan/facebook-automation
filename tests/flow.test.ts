@@ -867,5 +867,6 @@ describe('answers Claude must check', () => {
     const { operatorPrompt } = await import('../src/watch.js');
     expect(operatorPrompt('1')).toMatch(/answer_check/);
     expect(operatorPrompt('1')).toMatch(/Never fill in a part yourself/);
+    expect(operatorPrompt('1')).toMatch(/send the whole answer again/);
   });
 });
