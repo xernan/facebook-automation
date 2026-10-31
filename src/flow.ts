@@ -52,6 +52,8 @@ export const flowSchema = z
             validate: z.enum(['mobile', 'email', 'tin', 'sss_gsis', 'date', 'number', 'yes_no']).optional(),
             /** A clear "yes" adds this flag to the lead (e.g. pending_application), so the client sees it. */
             flag_if_yes: z.string().regex(/^[a-z_]+$/).optional(),
+            /** Asked only when the lead has this flag; the answer is added to the flag ("pending_application: BPI"). */
+            detail_of_flag: z.string().regex(/^[a-z_]+$/).optional(),
             invalid_reply: msg.optional(),
             /** Fixed buttons shown with the question. Typing an answer still works. */
             choices,
@@ -267,7 +269,8 @@ function isFirstOfGroup(flow: Flow, i: number): boolean {
 /** Moves `p` to the next question that applies from step `from` and returns it (or the ID photo prompt). */
 function goToStep(flow: Flow, p: Person, from: number, suggestions: string[] = []): Question {
   let i = from;
-  while (flow.steps[i]?.only_if_married && !p.married) i++;
+  const skip = (s: Step) => (s.only_if_married && !p.married) || (s.detail_of_flag && !p.flags?.includes(s.detail_of_flag));
+  while (flow.steps[i] && skip(flow.steps[i]!)) i++;
   const step = flow.steps[i];
   if (step) {
     p.stage = 'steps';
@@ -372,6 +375,7 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
       p.answers[step.key] = answer;
       if (step.sets_married) p.married = MARRIED.test(answer);
       if (step.flag_if_yes && parseYesNo(answer) === 'yes') p.flags = [...new Set([...(p.flags ?? []), step.flag_if_yes])];
+      if (step.detail_of_flag) p.flags = (p.flags ?? []).map((f) => (f === step.detail_of_flag ? `${f}: ${answer}` : f));
       return askQ(goToStep(flow, p, p.step + 1, suggestions));
     }
 

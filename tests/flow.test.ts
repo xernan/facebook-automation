@@ -758,3 +758,27 @@ describe('flow tools: an off-script question', () => {
     expect(JSON.parse(readFileSync(path.join(dir, 'state.json'), 'utf8')).handled).toContain('m_1');
   });
 });
+
+describe('detail of a flag', () => {
+  const steps = [
+    { key: 'pending', prompt: 'Pending?', validate: 'yes_no' as const, invalid_reply: 'Yes or no', flag_if_yes: 'pending_application' },
+    { key: 'pending_bank', prompt: 'Which bank?', detail_of_flag: 'pending_application' },
+    { key: 'birth', prompt: 'Where born?' },
+  ];
+  const f = { ...flow, steps };
+  const start = { ...newPerson(NOW), stage: 'steps' as const };
+
+  it('asks which bank only after a yes, and adds it to the flag', () => {
+    const yes = advance(f, start, { text: 'Oo' }, NOW, 180);
+    expect(yes.reply).toBe('Which bank?');
+    const bank = advance(f, yes.person, { text: 'Metrobank' }, NOW, 180);
+    expect(bank.reply).toBe('Where born?');
+    expect(bank.person.flags).toEqual(['pending_application: Metrobank']);
+  });
+
+  it('skips the bank question after a no', () => {
+    const no = advance(f, start, { text: 'Wala' }, NOW, 180);
+    expect(no.reply).toBe('Where born?');
+    expect(no.person.flags).toBeUndefined();
+  });
+});
