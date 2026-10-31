@@ -284,16 +284,17 @@ export const flowTools: ToolDef[] = [
           const file = await s.saveIdImage(who, r.received_id_image, now, ctx.cfg.FB_FLOW_MAX_IMAGE_MB * 1024 * 1024, ctx.cfg.FB_HTTP_TIMEOUT_MS);
           if (!file) return deliver(ctx, s, state, page_id, who, next, flow.id_photo.unclear_reply, undefined, ids);
           next.id_files = [...(next.id_files ?? []), file];
-          markHandled(state, ids);
-          state.people[who] = next;
-          await s.save(state);
-          return {
-            reply: null,
-            stage: next.stage,
+          const review = {
             needs_id_review: true,
             id_photos: next.id_files.length,
             note: 'Look at every ID photo with fb_flow_id_images, then call fb_flow_id_review.',
           };
+          // Reading the photo takes Claude about 25 s, so the client hears back right away.
+          if (flow.id_photo.received_reply) return deliver(ctx, s, state, page_id, who, next, flow.id_photo.received_reply, undefined, ids, review);
+          markHandled(state, ids);
+          state.people[who] = next;
+          await s.save(state);
+          return { reply: null, stage: next.stage, ...review };
         }
 
         if (!r.reply) {

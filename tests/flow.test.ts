@@ -880,3 +880,33 @@ describe('auto_accept', () => {
     expect(scriptCanAnswer(f, p, { text: 'Bulacan' })).toBe(false);
   });
 });
+
+describe('ID photo received', () => {
+  it('tells the client right away, saves the photo and waits for the review', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'flowid-'));
+    writeFileSync(path.join(dir, 'test-mode.json'), JSON.stringify({ on: false, ids: [] }));
+    writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ version: 1, started_at: new Date(0).toISOString(), handled: [], people: { [PSID]: { stage: 'id_photo', step: 0, answers: {}, banks: [], married: false, updated_at: new Date().toISOString() } } }));
+    const flowFile = path.join(dir, 'flow.json');
+    writeFileSync(flowFile, JSON.stringify({ ...flow, id_photo: { ...flow.id_photo, received_reply: 'Received!' } }));
+    const bodies: any[] = [];
+    const { ctx } = testCtx({ FB_WRITE_ENABLED: 'true', FB_FLOW_FILE: flowFile, FB_FLOW_DIR: dir }, (c: Call) => {
+      if (c.url.pathname.endsWith('/111/messages')) {
+        bodies.push(JSON.parse(param(c, 'message')!));
+        return { json: { message_id: 'm_out' } };
+      }
+      return { json: { id: 'm_1', message: '', from: { id: PSID }, created_time: new Date().toISOString(), attachments: { data: [{ mime_type: 'image/jpeg', image_data: { url: 'https://scontent.fbcdn.net/id.jpg' } }] } } };
+    });
+    vi.stubGlobal('fetch', async () => new Response(new Uint8Array(50), { headers: { 'content-type': 'image/jpeg' } }));
+    try {
+      const r: any = await callTool(tool('fb_flow_answer'), { page_id: '111', psid: PSID, message_ids: ['m_1'], kind: 'answer' }, ctx);
+      expect(r).toMatchObject({ reply: 'Received!', needs_id_review: true, id_photos: 1 });
+      expect(bodies.map((b) => b.text)).toEqual(['Received!']);
+      const st = JSON.parse(readFileSync(path.join(dir, 'state.json'), 'utf8'));
+      expect(st.people[PSID].id_files).toHaveLength(1);
+      expect(st.people[PSID].stage).toBe('id_photo');
+      expect(st.handled).toContain('m_1');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

@@ -87,6 +87,8 @@ export const flowSchema = z
       .object({
         prompt: msg,
         need_image_reply: msg,
+        /** Sent as soon as a photo is saved, while Claude reads it. */
+        received_reply: msg.optional(),
         /** Sent after Claude reviews the photos and the ID set is not enough yet. */
         unclear_reply: msg,
         need_back_reply: msg,
