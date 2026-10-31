@@ -83,7 +83,7 @@ Owner:
 5. Backup on the second disk is from before the 10-31 flow changes; copy flow.json again when stable. .env copy and an encrypted off-site copy are still the owner's job.
 6. Approve the exact text of the 3 post drafts. Nothing is posted yet.
 7. Decided (owner, 2026-10-31): a pending application never stops the flow while a bank among the 5 can still be applied to, and that bank still gets its PDF, as the code does today. Owner to decide, nothing changed yet: (a) cards at BPI, Metrobank, RCBC and EastWest stops the chat although China Bank is left (exclude_if_all in flow.json); (b) cards at Metrobank, EastWest and China Bank goes through every question and makes no bank PDF, since only those 3 have templates (read from the code, not run).
-8. Applicants on the dashboard: #1 is the owner's test account. #2 is flagged manual entry; only SSS/GSIS and the signature are left.
+8. Applicants on the dashboard: #1 is the owner's test account. #2 is flagged manual entry; only the signature is left. SSS/GSIS stays blank on every form (owner rule, 2026-10-31); MISSING.txt in folders made earlier still lists it until they are saved again.
 
 Claude, low:
 9. Autofill code (quickReply, autofill field) is unused: tapping sent only the words, so it was removed from flow.json. The "Email" chip still showed on the owner's phone although nothing sends it; check it on another account.

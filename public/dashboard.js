@@ -312,7 +312,6 @@ async function renderForm(a) {
     field('mobile', 'Mobile number', f.mobile, { req: 1 }) +
     field('home_phone', 'Home phone', f.home_phone) +
     field('tin_number', 'TIN', f.tin_number, { hint: 'Auto-filled when a TIN shows on the ID they sent. Otherwise ask them by call or text and type it here.' }) +
-    field('gsis_sss_number', 'SSS / GSIS number', f.gsis_sss_number) +
     `</div></div>` +
     `<div class="card"><h3>Address</h3><div class="fgrid">` +
     field('h_street', 'House no. / street', h.street, { req: 1 }) +
@@ -415,7 +414,7 @@ async function renderForm(a) {
   // Red = still empty. Required (*) fields and the ones the missing list names.
   const MARK = ['first_name', 'last_name', 'birthday', 'gender', 'nationality', 'birth_town', 'civil_status', 'mother_maiden_name', 'email', 'mobile',
     'h_street', 'h_province', 'h_city', 'h_barangay', 'h_zip', 'employer', 'position', 'department', 'industry', 'employment_type',
-    'c_street', 'c_province', 'c_city', 'c_barangay', 'c_zip', 'employer_phone', 'length_of_service', 'length_of_service_months', 'gross_income', 'tin_number', 'gsis_sss_number'];
+    'c_street', 'c_province', 'c_city', 'c_barangay', 'c_zip', 'employer_phone', 'length_of_service', 'length_of_service_months', 'gross_income', 'tin_number'];
   const markEmpty = () => {
     for (const id of MARK) $('#' + id).classList.toggle('missing', !v(id) || /^\(\d+\)\s*$/.test(v(id)));
     $('#spouse_name').classList.toggle('missing', v('civil_status') === 'Married' && !v('spouse_name'));
@@ -448,7 +447,6 @@ async function renderForm(a) {
       mobile: opt(v('mobile')),
       home_phone: opt(v('home_phone')),
       tin_number: opt(v('tin_number')),
-      gsis_sss_number: opt(v('gsis_sss_number')),
       home: { ...h, street: opt(v('h_street')), province: opt(v('h_province')), city: opt(v('h_city')), barangay: opt(v('h_barangay')), zip: opt(v('h_zip')), zip_sure: true },
       home_ownership: opt(v('home_ownership')),
       years_of_stay: opt(v('years_of_stay')),

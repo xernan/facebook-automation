@@ -234,7 +234,8 @@ export function formToData(f: AppForm): Record<string, string> {
     'first_name', 'middle_name', 'last_name', 'suffix', 'name_on_card', 'birthday', 'gender', 'nationality', 'birth_town',
     'civil_status', 'email', 'mobile', 'home_phone', 'mother_maiden_name', 'home_ownership', 'years_of_stay', 'employer',
     'position', 'department', 'industry', 'employment_type', 'employer_phone', 'length_of_service', 'length_of_service_months', 'total_years_working',
-    'date_hired', 'gross_income', 'tin_number', 'gsis_sss_number', 'other_card_company', 'other_card_number', 'ref_name',
+    // Owner rule: SSS/GSIS stays blank on every form, so it is neither filled in nor listed as missing.
+    'date_hired', 'gross_income', 'tin_number', 'other_card_company', 'other_card_number', 'ref_name',
     'ref_relationship', 'ref_mobile',
   ] as const) put(k, f[k]);
   put('full_name', [f.first_name, f.middle_name, f.last_name, f.suffix].filter(has).join(' '));
@@ -317,7 +318,6 @@ export function formMissing(f: AppForm): string[] {
   need(f.length_of_service, 'Years with employer');
   need(f.gross_income, 'Gross annual income');
   need(f.tin_number, 'TIN');
-  need(f.gsis_sss_number, 'SSS/GSIS number');
   if (f.civil_status === 'Married') need(f.spouse_name, 'Spouse name');
   // Never on the form: only the applicant can sign or answer these, on paper.
   m.push('Signature (client signs the printed form)');

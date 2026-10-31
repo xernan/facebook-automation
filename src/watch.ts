@@ -42,7 +42,7 @@ export function operatorPrompt(pageId: string): string {
     '   - lead_saved: call fb_lead_finalize with what you read on the IDs and found in public info (split addresses: unit/floor/building, street, barangay + zip,',
     '     office phone with its source URL (the branch landline from the company site or map listing), nature of business,',
     '     department, employment type, TIN only if printed on an ID). Leave out what you are not sure of; a saved office',
-    '     number for the same company and city is filled in by the code. Never invent income, TIN, SSS or phone numbers.',
+    '     number for the same company and city is filled in by the code. Never invent income, TIN or phone numbers. Leave SSS/GSIS out.',
     '     Place names: correct misspelled barangay, city, province and place of birth (birth_town) only when you are sure which',
     '     place they meant, and list each one in spelling_fixes ("Muntinlua -> Muntinlupa"). If unsure, keep what they typed; the code flags it.',
     '     A business owner (position Owner, own business): employment_type Self-employed, and WebSearch the business name',

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
-import { ageOn, buildApplication, formatTin, splitName, yearsFrom, type Lead } from '../src/application.js';
+import { ageOn, buildApplication, formatTin, formToData, splitName, yearsFrom, type Lead } from '../src/application.js';
 import { lookupPhone, rememberPhone } from '../src/phonebook.js';
 import { finalizeLead, folderName, listApplicants, saveForm, saveSettings } from '../src/leadout.js';
 import { combText, formatPdfDate, pdfDigits } from '../src/pdf.js';
@@ -140,12 +140,18 @@ describe('owner rules in buildApplication', () => {
     expect(d.other_card_company).toBe('BDO');
   });
 
-  it('never invents income, TIN or SSS: blank and listed as missing', () => {
+  it('never invents income or TIN: blank and listed as missing', () => {
     const b = buildApplication(lead(), details, NOW);
     expect(b.data.gross_income).toBeUndefined();
     expect(b.data.tin_number).toBeUndefined();
+    expect(b.missing).toEqual(expect.arrayContaining(['Gross annual income', 'TIN']));
+  });
+
+  it('SSS/GSIS stays blank and is never listed as missing, even when a saved form has one', () => {
+    const b = buildApplication(lead(), details, NOW);
     expect(b.data.gsis_sss_number).toBeUndefined();
-    expect(b.missing).toEqual(expect.arrayContaining(['Gross annual income', 'TIN', 'SSS/GSIS number']));
+    expect(b.missing.join()).not.toMatch(/SSS|GSIS/);
+    expect(formToData({ ...b.form, gsis_sss_number: '34-1234567-8' }).gsis_sss_number).toBeUndefined();
   });
 
   it('TIN read from an ID is used', () => {
