@@ -136,6 +136,19 @@ function matchName(value: string, names: string[], key: (s: string) => string): 
   return near.length === 1 ? near[0] : undefined;
 }
 
+/** A city named instead of a province ("Quezon City", "Malolos, Bulacan"), when the answer can only mean one place. */
+export function cityFromAnswer(text: string): { province: string; city: string } | undefined {
+  const data = address();
+  const place = placeOnly(text);
+  const everywhere = Object.keys(data).flatMap((p) => Object.keys(data[p]!.cities).map((c) => ({ province: p, city: c })));
+  // "Quezon City" is the exact name of one place, while several towns are just called "Quezon".
+  const exact = everywhere.filter((x) => norm(x.city) === norm(place));
+  const named = exact.length > 0 ? exact : everywhere.filter((x) => cityKey(x.city) === cityKey(place));
+  const found = named.length > 0 ? named : citiesIn(text).filter((x) => x.rest.includes(provinceKey(x.province)));
+  if (found.length !== 1) return undefined;
+  return { province: found[0]!.province.replace(/\s*\(ncr\)/i, ''), city: found[0]!.city };
+}
+
 export type PlacePart = 'province' | 'city' | 'barangay';
 
 /**

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { extractBanks, extractEmails, extractPhones } from './leads.js';
-import { checkPlacePart, clearlyComplete, placeInProvince, provinceOnly } from './placecheck.js';
+import { checkPlacePart, cityFromAnswer, clearlyComplete, placeInProvince, provinceOnly } from './placecheck.js';
 
 // Messenger application flow: a fixed script the Page follows with each person, one state per person.
 // The qualifier rules (no card -> reject with cooldown, all excluded banks -> stop) are decided here in
@@ -344,7 +344,7 @@ function goToStep(flow: Flow, p: Person, from: number, suggestions: string[] = [
     (s.only_if_married && !p.married) ||
     (s.detail_of_flag && !p.flags?.includes(s.detail_of_flag)) ||
     (s.suggest_only && suggestions.length === 0) ||
-    (s.part_of && p.answers[s.part_of]);
+    (s.part_of && (p.answers[s.part_of] || p.answers[s.key]));
   while (flow.steps[i] && skip(flow.steps[i]!)) i++;
   const step = flow.steps[i];
   if (step) {
@@ -459,6 +459,14 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
       }
       if (step.place_part) {
         const part = checkPart(flow, p, step, answer);
+        const city = !part && step.place_part === 'province' ? cityFromAnswer(answer) : undefined;
+        const cityStep = flow.steps.find((s) => s.part_of === step.part_of && s.place_part === 'city');
+        if (city && cityStep) {
+          // They gave the city, which also tells the province: no need to ask for it.
+          p.answers[step.key] = city.province;
+          p.answers[cityStep.key] = city.city;
+          return askQ(goToStep(flow, p, p.step + 1, suggestions));
+        }
         if (!part) return ask(`${step.invalid_reply}\n\n${step.prompt}`);
         answer = part.value;
       }

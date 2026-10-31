@@ -932,6 +932,25 @@ describe('office address: suggestions first, then part by part', () => {
     expect(say(inTaguig, 'Xyzzy').reply).toBe('Wrong.\n\nBarangay?');
   });
 
+  it('a city given for the province fills both and moves to the barangay', () => {
+    for (const [text, province, city] of [['quezon city', 'Metro Manila', 'Quezon City'], ['Malolos, Bulacan', 'Bulacan', 'Malolos City']] as const) {
+      expect(scriptCanAnswer(f, at('office_province'), { text })).toBe(true);
+      const r = say(at('office_province'), text);
+      expect(r.reply).toBe('Barangay?');
+      expect(r.person.answers).toMatchObject({ office_province: province, office_city: city });
+    }
+    const done = say(say(say(at('office_province'), 'quezon city').person, 'Xyzzy').person, 'Commonwealth').person;
+    expect(done.answers.office_barangay).toBe('Commonwealth');
+    const end = say(done, '1 Main St').person;
+    expect(end.answers.office_address).toBe('1 Main St, Commonwealth, Quezon City, Metro Manila');
+  });
+
+  it('a province still counts as the province, even when a city has the same name', () => {
+    const r = say(at('office_province'), 'Quezon');
+    expect(r.reply).toBe('City?');
+    expect(r.person.answers.office_province).toBe('Quezon');
+  });
+
   it('a barangay our list cannot tell goes to Claude', () => {
     expect(scriptCanAnswer(f, at('office_barangay', { office_province: 'Bulacan', office_city: 'Malolos City' }), { text: 'Sumapang Matanda' })).toBe(false);
   });
