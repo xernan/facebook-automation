@@ -119,13 +119,13 @@ async function readJson(req: http.IncomingMessage): Promise<any> {
 
 type PageGetter = { get(pageId: string, path: string, params?: Record<string, string>): Promise<any> };
 
-export function createDashboard(opts: { flowDir: string; templatesDir: string; port: number; token?: string; graph?: PageGetter; pageId?: string }) {
+export function createDashboard(opts: { flowDir: string; templatesDir: string; port: number; token?: string; graph?: PageGetter; pageId?: string; listPrinters?: () => Promise<string[]> }) {
   const token = opts.token ?? randomBytes(24).toString('hex');
   const hosts = new Set([`localhost:${opts.port}`, `127.0.0.1:${opts.port}`]);
   // Listing printers starts PowerShell (1-2 s); the page refreshes every 15 s, so keep the list for a minute.
   let printerCache: { at: number; list: Promise<string[]> } | undefined;
   const printers = () => {
-    if (!printerCache || Date.now() - printerCache.at > 60_000) printerCache = { at: Date.now(), list: listPrinters().catch(() => []) };
+    if (!printerCache || Date.now() - printerCache.at > 60_000) printerCache = { at: Date.now(), list: (opts.listPrinters ?? listPrinters)().catch(() => []) };
     return printerCache.list;
   };
   // Page posts from Facebook: kept 5 minutes so the page does not call Facebook on every refresh.

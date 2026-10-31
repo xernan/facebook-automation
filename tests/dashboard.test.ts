@@ -22,7 +22,7 @@ async function start() {
   await new Promise<void>((r) => probe.server.listen(0, '127.0.0.1', r));
   const port = (probe.server.address() as AddressInfo).port;
   probe.server.close();
-  const d = createDashboard({ flowDir: dir, templatesDir: dir, port, token: 'tok' });
+  const d = createDashboard({ flowDir: dir, templatesDir: dir, port, token: 'tok', listPrinters: async () => ['Test Printer'] });
   await new Promise<void>((r) => d.server.listen(port, '127.0.0.1', r));
   servers.push(d.server);
   const base = `http://127.0.0.1:${port}`;
@@ -50,6 +50,7 @@ describe('dashboard', () => {
     expect(s.applicants[0].name).toBe('Juan Dela Cruz');
     expect(s.applicants[0].missing_list).toEqual(['TIN']);
     expect(s.applicants[0].files).toEqual(['EastWest.pdf']);
+    expect(s.printers).toEqual(['Test Printer']);
     // Weekly stats with the default quota; the 2026-10-25 applicant is in an earlier week or month.
     expect(s.stats.this_week.quota).toBe(10);
     expect([s.stats.current_month, ...s.stats.archive].flatMap((m: any) => m.weeks.flatMap((w: any) => w.folders))).toContain('2026-10-25 Juan Dela Cruz');
