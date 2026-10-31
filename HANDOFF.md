@@ -74,10 +74,10 @@
 ## Open
 
 Next when the owner comes back:
-1. Prove PDFs through the real chat. The 2026-10-31 05:31 UTC test made none because Claude called fb_lead_hold (ids_do_not_match): the ID name differs from the test account's Facebook name and the photo looked like a screenshot. The later reset erased the hold. Owner rule: Facebook names are often aliases, so an ID is never compared with them (fixed); IDs are compared only with each other. A screenshot still holds. Finalize works in a dry run. Repeat the test with a clear photo of an ID, or use Release on the dashboard, and do not reset until the folder shows.
+1. Prove PDFs through the real chat. The 3 tests on 2026-10-31 made none because the bot held them over the ID (see 13). Owner rule since then: never hold, what the client sends is the client's decision, and doubts go in an ID note; the watcher no longer has the hold tool. Not tested live yet. Repeat the test to the end, even with a screenshot as the ID, and do not reset until the folder shows.
 2. Finish the wording review of the bank question with the owner.
 3. Stranger test: one person with no role on the Page or Meta app. Not proven yet.
-4. Staging to main PR (15 commits ahead on 2026-10-31, CI green) after the test passes.
+4. Staging to main PR (30 commits ahead on 2026-10-31, CI green at the last check) after the test passes.
 
 Owner:
 5. Backup on the second disk is from before the 10-31 flow changes; copy flow.json again when stable. .env copy and an encrypted off-site copy are still the owner's job.
