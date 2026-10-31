@@ -73,7 +73,7 @@
 ## Open
 Owner:
 1. Done: PR #7 merged 2026-10-31, main CI green.
-2. Back up the local-only files: .env, flow.json, the flow and templates folders. They are not on GitHub.
+2. Backup done 2026-10-31 on the PC's second disk: flow file, leads, templates (101 files, hashes match). Not encrypted, not off-site. Left for owner: copy .env (Claude never copies it), and an encrypted off-site copy.
 3. Finish the test PM from the start after the reset (through ID photo and PDFs).
 4. Ask one person with no role on the Page or Meta app to PM the Page. Not proven yet that strangers get replies.
 5. Dashboard applicants: one is the owner's test account. The other does not match the 2 current chats; owner confirms who it is. If real, only SSS/GSIS and the signature are left.
