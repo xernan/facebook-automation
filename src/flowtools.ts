@@ -213,7 +213,7 @@ export const flowTools: ToolDef[] = [
     description:
       'Handle new messages from one person in the application flow. kind="answer": the messages answer the current question; ' +
       'the script decides the next reply (qualifier rules are enforced in code) and sends it. kind="question": the person asked ' +
-      'something off-script; reply yourself with fb_send_message (then re-ask current_question), and this only marks the messages handled. ' +
+      'something off-script; first answer with fb_send_message (do not repeat the question), then call this: it sends the current question again with its buttons. ' +
       'If reply is null the script has nothing to say (finished, excluded or in cooldown): answer kindly yourself if needed. ' +
       'For a person at stage "new", always use kind="answer": it sends the greeting and consent question.',
     write: true,
@@ -260,6 +260,9 @@ export const flowTools: ToolDef[] = [
         const ids = msgs.map((m) => m.id);
 
         if (kind === 'question') {
+          // Quick replies only show on the newest message, so the question goes again with its buttons, after Claude's answer.
+          const q = currentQuestion(flow, person);
+          if (q && withinWindow(ctx, msgs.at(-1)!.created_time, now)) return deliver(ctx, s, state, page_id, who, person, q.reply, q.choices, ids, { current_question: currentPrompt(flow, person) });
           markHandled(state, ids);
           state.people[who] = person;
           await s.save(state);

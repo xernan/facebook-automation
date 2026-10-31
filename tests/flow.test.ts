@@ -234,7 +234,7 @@ describe('flow tools', () => {
     const r = await answer(ctx, ['m_2'], 'question');
     expect(r.stage).toBe('consent');
     expect(r.current_question).toContain('Do you agree');
-    expect(sent).toHaveLength(1);
+    expect(sent).toHaveLength(2); // the question goes again, so its buttons come back
   });
 
   it('a failed send is saved and resent exactly once, without running the script twice', async () => {
@@ -733,5 +733,28 @@ describe('fast lane (script answers without Claude)', () => {
     expect(can(at('steps', 3), 'Skip')).toBe(true);
     expect(can(at('steps', 3), '123-456-789')).toBe(true);
     expect(can(at('steps', 3), '12')).toBe(false);
+  });
+});
+
+describe('flow tools: an off-script question', () => {
+  it('sends the current question again with its buttons', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'flowq-'));
+    writeFileSync(path.join(dir, 'test-mode.json'), JSON.stringify({ on: false, ids: [] }));
+    writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ version: 1, started_at: new Date(0).toISOString(), handled: [], people: { [PSID]: { stage: 'carded', step: 0, answers: {}, banks: [], married: false, updated_at: new Date().toISOString() } } }));
+    const flowFile = path.join(dir, 'flow.json');
+    writeFileSync(flowFile, JSON.stringify({ ...flow, carded: { ...flow.carded, choices: ['Oo', 'Wala pa'] } }));
+    const bodies: any[] = [];
+    const { ctx } = testCtx({ FB_WRITE_ENABLED: 'true', FB_FLOW_FILE: flowFile, FB_FLOW_DIR: dir }, (c: Call) => {
+      if (c.method === 'POST') {
+        bodies.push(JSON.parse(new URLSearchParams(String(c.body)).get('message')!));
+        return { json: { message_id: 'm_out' } };
+      }
+      return { json: { id: 'm_1', message: 'magkano po?', from: { id: PSID }, created_time: new Date().toISOString() } };
+    });
+    const r: any = await callTool(tool('fb_flow_answer'), { page_id: '111', psid: PSID, message_ids: ['m_1'], kind: 'question' }, ctx);
+    expect(r.buttons).toEqual(['Oo', 'Wala pa']);
+    expect(bodies[0].text).toBe(flow.carded.prompt);
+    expect(bodies[0].quick_replies.map((q: any) => q.title)).toEqual(['Oo', 'Wala pa']);
+    expect(JSON.parse(readFileSync(path.join(dir, 'state.json'), 'utf8')).handled).toContain('m_1');
   });
 });
