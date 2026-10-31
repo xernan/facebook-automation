@@ -6,7 +6,7 @@ import path from 'node:path';
 import { findPendingComments } from './comments.js';
 import { ROOT_DIR, createContext } from './context.js';
 import { GraphError } from './graph.js';
-import { ClaudeBrake, takeLock, claudeFailureReason, collectOutput } from './watchguard.js';
+import { ClaudeBrake, runClaudeProcess, takeLock } from './watchguard.js';
 
 // Comment watcher: every FB_COMMENT_INTERVAL_SEC it looks for people's new comments on our recent posts (no AI).
 // When some are ready (older than FB_COMMENT_MIN_DELAY_SEC) and the hourly limit allows, it wakes Claude with
@@ -61,25 +61,16 @@ async function main() {
   const mcpConfig = path.join(tmpdir(), 'facebook-automation-comments-mcp.json');
   writeFileSync(mcpConfig, JSON.stringify({ mcpServers: { facebook: { command: process.execPath, args: [path.join(ROOT_DIR, 'dist', 'server.js')] } } }));
   const runClaude = () =>
-    new Promise<number | null>((resolve) => {
-      const child = spawn(
-        claudeBin(ctx.cfg.FB_WATCH_CLAUDE_BIN),
-        ['-p', commentPrompt(pageId, ctx.cfg.FB_COMMENT_PRIVATE_REPLY), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', '', '--allowedTools', ALLOWED.join(',')],
-        { cwd: ctx.cfg.flowDir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
-      );
-      const output = collectOutput(child);
-      const timer = setTimeout(() => child.kill(), ctx.cfg.FB_WATCH_CLAUDE_TIMEOUT_MIN * 60_000);
-      child.on('error', (err) => {
-        clearTimeout(timer);
-        log(`Could not start Claude: ${err.message}`);
-        resolve(null);
-      });
-      child.on('exit', (code) => {
-        clearTimeout(timer);
-        if (code !== 0) log(`Claude failed: ${ctx.graph.scrub(claudeFailureReason(output()))}`);
-        resolve(code);
-      });
-    });
+    runClaudeProcess(
+      () =>
+        spawn(
+          claudeBin(ctx.cfg.FB_WATCH_CLAUDE_BIN),
+          ['-p', commentPrompt(pageId, ctx.cfg.FB_COMMENT_PRIVATE_REPLY), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', '', '--allowedTools', ALLOWED.join(',')],
+          { cwd: ctx.cfg.flowDir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
+        ),
+      ctx.cfg.FB_WATCH_CLAUDE_TIMEOUT_MIN * 60_000,
+      (m) => log(ctx.graph.scrub(m)),
+    );
 
   const brake = new ClaudeBrake();
   const release = takeLock(ctx.cfg.flowDir, process.pid, 'comments.lock');

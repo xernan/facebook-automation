@@ -1,3 +1,4 @@
+import type { ChildProcess } from 'node:child_process';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -18,6 +19,35 @@ export function collectOutput(child: { stdout: NodeJS.ReadableStream | null; std
   child.stdout?.on('data', add);
   child.stderr?.on('data', add);
   return () => text;
+}
+
+// spawn can throw instead of emitting 'error' (e.g. while the program is being updated); both end as a failed run for ClaudeBrake.
+export function runClaudeProcess(start: () => ChildProcess, timeoutMs: number, log: (m: string) => void): Promise<number | null> {
+  return new Promise((resolve) => {
+    let child: ChildProcess;
+    try {
+      child = start();
+    } catch (err) {
+      log(`Could not start Claude: ${err instanceof Error ? err.message : String(err)}`);
+      resolve(null);
+      return;
+    }
+    const output = collectOutput(child);
+    const timer = setTimeout(() => {
+      log('Claude run took too long; stopped it.');
+      child.kill();
+    }, timeoutMs);
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      log(`Could not start Claude: ${err.message}`);
+      resolve(null);
+    });
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      if (code !== 0) log(`Claude failed: ${claudeFailureReason(output())}`);
+      resolve(code);
+    });
+  });
 }
 
 /** Meta: the Page may not message people for now (2022) or the message looked like spam (368). */

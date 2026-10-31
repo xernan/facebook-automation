@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { GraphError } from '../src/graph.js';
-import { ClaudeBrake, claudeFailureReason, collectOutput, isMessagingBlocked, pendingKey, takeLock } from '../src/watchguard.js';
+import { ClaudeBrake, claudeFailureReason, collectOutput, isMessagingBlocked, pendingKey, runClaudeProcess, takeLock } from '../src/watchguard.js';
 
 describe('watcher brakes', () => {
   it('a failing Claude run is not repeated every few seconds for the same chats (1, 2, 4 ... 30 min)', () => {
@@ -66,5 +66,20 @@ describe('failed Claude runs', () => {
     stdout.emit('data', 'a');
     stderr.emit('data', 'b');
     expect(output()).toBe('ab');
+  });
+});
+
+describe('starting Claude', () => {
+  it('a spawn that throws is a failed run, so the brake still counts it', async () => {
+    const logs: string[] = [];
+    const code = await runClaudeProcess(
+      () => {
+        throw new Error('spawn UNKNOWN');
+      },
+      1000,
+      (m) => logs.push(m),
+    );
+    expect(code).toBeNull();
+    expect(logs).toEqual(['Could not start Claude: spawn UNKNOWN']);
   });
 });
