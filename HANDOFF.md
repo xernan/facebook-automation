@@ -72,15 +72,15 @@
 
 ## Open
 Owner:
-1. Merge PR #7 (or tell Claude to).
+1. Done: PR #7 merged 2026-10-31, main CI green.
 2. Back up the local-only files: .env, flow.json, the flow and templates folders. They are not on GitHub.
 3. Finish the test PM from the start after the reset (through ID photo and PDFs).
 4. Ask one person with no role on the Page or Meta app to PM the Page. Not proven yet that strangers get replies.
-5. Say whether the 2 applicants on the dashboard are tests, and fill their missing fields if real.
+5. Dashboard applicants: one is the owner's test account. The other does not match the 2 current chats; owner confirms who it is. If real, only SSS/GSIS and the signature are left.
 
 Claude:
-6. After the stranger test: post drafts built around one clear offer. Owner approves before anything is posted.
-7. Remind the owner to run npm run login before the token ends (about 60 days from the last login; date not verified).
+6. 3 post drafts written and passed the content guard (2026-10-31). Owner approves the exact text before anything is posted.
+7. Done: token checked 2026-10-31, no expiry date; data access runs until 2027-01-21. Run npm run login before then.
 
 Owner decides later: Instagram, Marketing API (ads), lead alerts.
 
