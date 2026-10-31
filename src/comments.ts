@@ -4,7 +4,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { contentProblem } from './contentguard.js';
 import { replaceFile } from './files.js';
-import { currentQuestion } from './flow.js';
+import { currentQuestion, quickReply } from './flow.js';
 import { FlowStore, loadFlow } from './flowstore.js';
 import type { Ctx, ToolDef } from './tools.js';
 import { botMayAnswer, loadTestMode } from './testmode.js';
@@ -81,7 +81,7 @@ export async function resumeApplication(ctx: Ctx, pageId: string, psid: string, 
   const text = `Tuloy natin ang application mo 🙂
 
 ${q.reply}`;
-  const quick_replies = q.choices?.map((c) => ({ content_type: 'text', title: c, payload: c }));
+  const quick_replies = q.choices?.map(quickReply);
   await ctx.graph.post(pageId, `${pageId}/messages`, {
     recipient: JSON.stringify({ id: psid }),
     message: JSON.stringify(quick_replies?.length ? { text, quick_replies } : { text }),

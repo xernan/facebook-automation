@@ -63,6 +63,8 @@ export const flowSchema = z
             invalid_reply: msg.optional(),
             /** Fixed buttons shown with the question. Typing an answer still works. */
             choices,
+            /** Messenger button that offers the email or phone on their Facebook profile. Hidden when the profile has none. */
+            autofill: z.enum(['user_email', 'user_phone_number']).optional(),
             /**
              * Steps sharing a group are optional together: a skip word ("skip", "laktaw", "wala") on the
              * first one skips the whole group.
@@ -248,6 +250,14 @@ export function cleanSuggestions(list: string[] | undefined): string[] {
   return out.slice(0, 5);
 }
 
+const AUTOFILL_PREFIX = 'autofill:';
+
+/** One button for the Send API: plain text, or Messenger's profile email or phone button. */
+export function quickReply(choice: string) {
+  if (choice.startsWith(AUTOFILL_PREFIX)) return { content_type: choice.slice(AUTOFILL_PREFIX.length) };
+  return { content_type: 'text', title: choice, payload: choice };
+}
+
 interface Question {
   reply: string;
   choices?: string[];
@@ -256,7 +266,8 @@ interface Question {
 /** The question for `step`, with its buttons, or with numbered suggestions when there are any. */
 function question(flow: Flow, p: Person, step: Step, suggestions: string[]): Question {
   delete p.suggestions;
-  const base = step.optional_group && isFirstOfGroup(flow, p.step) ? [...(step.choices ?? []), flow.skip_choice] : step.choices;
+  const plain = step.optional_group && isFirstOfGroup(flow, p.step) ? [...(step.choices ?? []), flow.skip_choice] : step.choices;
+  const base = step.autofill ? [`${AUTOFILL_PREFIX}${step.autofill}`, ...(plain ?? [])] : plain;
   if (step.suggest && suggestions.length > 0) {
     p.suggestions = suggestions;
     // Short ones fit on a button (Messenger limit: 20 characters), so the words themselves are tapped.

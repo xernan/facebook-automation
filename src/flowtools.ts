@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
-import { advance, cleanSuggestions, currentPrompt, currentQuestion, ID_TYPES, idVerdict, newPerson, nextStepIf, scriptCanAnswer, type IdSeen, type Person } from './flow.js';
+import { advance, cleanSuggestions, currentPrompt, currentQuestion, ID_TYPES, idVerdict, newPerson, nextStepIf, quickReply, scriptCanAnswer, type IdSeen, type Person } from './flow.js';
 import { detailsSchema } from './application.js';
 import { FlowStore, loadFlow, type FlowState } from './flowstore.js';
 import { finalizeLead } from './leadout.js';
@@ -106,7 +106,7 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
 async function send(ctx: Ctx, page_id: string, to: string, text: string, choices?: string[]) {
   if (!botMayAnswer(await loadTestMode(ctx.cfg.flowDir), to)) throw new Error('Test mode is on and this person is not a tester.');
   const message = choices?.length
-    ? { text, quick_replies: choices.map((c) => ({ content_type: 'text', title: c, payload: c })) }
+    ? { text, quick_replies: choices.map(quickReply) }
     : { text };
   await ctx.graph.post(page_id, `${page_id}/messages`, {
     recipient: JSON.stringify({ id: to }),

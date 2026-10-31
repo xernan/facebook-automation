@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { sendNudges } from '../src/flowtools.js';
-import { advance, cleanSuggestions, flowSchema, idVerdict, newPerson, parseYesNo, scriptCanAnswer, validAnswer, type IdSeen, type Person } from '../src/flow.js';
+import { advance, cleanSuggestions, flowSchema, idVerdict, newPerson, parseYesNo, quickReply, scriptCanAnswer, validAnswer, type IdSeen, type Person } from '../src/flow.js';
 import { FlowStore, loadFlow } from '../src/flowstore.js';
 import { callTool, tools } from '../src/tools.js';
 import { param, testCtx, type Call } from './helpers.js';
@@ -830,5 +830,25 @@ describe('bank buttons: none of these', () => {
 
   it('a typed bank outside the buttons still counts', () => {
     expect(advance(f, start, { text: 'BDO' }, NOW, 180).person.banks).toEqual(['BDO']);
+  });
+});
+
+describe('autofill buttons', () => {
+  const steps = [
+    { key: 'birth', prompt: 'Where born?' },
+    { key: 'email', prompt: 'Email?', validate: 'email' as const, invalid_reply: 'Bad email', autofill: 'user_email' as const },
+  ];
+  const f = { ...flow, steps };
+  const start = { ...newPerson(NOW), stage: 'steps' as const };
+
+  it('asks with the profile email button and saves the value they send', () => {
+    const a = advance(f, start, { text: 'Manila' }, NOW, 180);
+    expect(a.choices!.map(quickReply)).toEqual([{ content_type: 'user_email' }]);
+    expect(advance(f, a.person, { text: 'a@b.co' }, NOW, 180).person.answers.email).toBe('a@b.co');
+  });
+
+  it('plain buttons keep their title', () => {
+    expect(quickReply('Oo')).toEqual({ content_type: 'text', title: 'Oo', payload: 'Oo' });
+    expect(quickReply('autofill:user_phone_number')).toEqual({ content_type: 'user_phone_number' });
   });
 });
