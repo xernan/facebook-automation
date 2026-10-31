@@ -866,6 +866,11 @@ describe('answers Claude must check', () => {
   it('the operator is told to ask for the missing part and never fill it in', async () => {
     const { operatorPrompt } = await import('../src/watch.js');
     expect(operatorPrompt('1')).toMatch(/never compare an ID with the Facebook name/);
+    // What the client sends is the client's decision: the bot cannot hold an application.
+    expect(operatorPrompt('1')).toMatch(/never hold an application/);
+    expect(operatorPrompt('1')).toMatch(/screenshot or a photo of a screen counts as clear/);
+    expect(operatorPrompt('1')).not.toContain('fb_lead_hold');
+    expect(readFileSync(path.resolve('src/watch.ts'), 'utf8')).not.toContain('fb_lead_hold');
     expect(operatorPrompt('1')).not.toMatch(/names do not match the applicant/);
     expect(operatorPrompt('1')).toMatch(/answer_check/);
     expect(operatorPrompt('1')).toMatch(/Never fill in a part yourself/);

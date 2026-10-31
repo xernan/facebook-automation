@@ -14,7 +14,7 @@ import { ChatCheck, ClaudeBrake, isMessagingBlocked, pendingKey, runClaudeProces
 // Anything else wakes Claude (headless) with only the flow and messaging tools.
 // Logs go to stderr and never include names, messages or tokens.
 
-const ALLOWED = [...['fb_flow_pending', 'fb_flow_answer', 'fb_flow_id_images', 'fb_flow_id_review', 'fb_lead_finalize', 'fb_lead_hold', 'fb_send_message', 'fb_get_messages'].map((t) => `mcp__facebook__${t}`), 'WebSearch'];
+const ALLOWED = [...['fb_flow_pending', 'fb_flow_answer', 'fb_flow_id_images', 'fb_flow_id_review', 'fb_lead_finalize', 'fb_send_message', 'fb_get_messages'].map((t) => `mcp__facebook__${t}`), 'WebSearch'];
 
 export function operatorPrompt(pageId: string): string {
   return [
@@ -33,11 +33,13 @@ export function operatorPrompt(pageId: string): string {
     '   - reply null (finished, excluded or cooldown): reply yourself only if they asked something.',
     '   - needs_id_review: call fb_flow_id_images, look at every photo, then fb_flow_id_review with one entry per photo',
     '     (type, side, clear, has_signature, and name/birthday/sex only if you can read them). The code decides if the IDs are enough.',
+    '     clear means readable and whole, nothing else: a screenshot or a photo of a screen counts as clear when you can read it.',
     '   - needs_finalize (a lead file name): the application is complete but has no PDFs yet. Call fb_flow_id_images, then',
-    '     fb_lead_finalize with lead_file = that name, as below. Do not message the person for this. If the IDs do not look',
-    "     right (the IDs name different people, not a real ID, a screenshot, edited), call fb_lead_hold instead. Facebook names",
+    '     fb_lead_finalize with lead_file = that name, as below. Do not message the person for this. Always finalize, whatever',
+    "     the IDs look like: what the client sends is the client's decision, so never hold an application. If an ID looks doubtful",
+    '     (a screenshot, a photo of a screen, the IDs name different people), say so in id_note, without refusing it. Facebook names',
     '     are often aliases: never compare an ID with the Facebook name.',
-    '   - lead_saved: (or fb_lead_hold if the IDs do not look right, see above) call fb_lead_finalize with what you read on the IDs and found in public info (split addresses: unit/floor/building, street, barangay + zip,',
+    '   - lead_saved: call fb_lead_finalize with what you read on the IDs and found in public info (split addresses: unit/floor/building, street, barangay + zip,',
     '     office phone with its source URL (the branch landline from the company site or map listing), nature of business,',
     '     department, employment type, TIN only if printed on an ID). Leave out what you are not sure of; a saved office',
     '     number for the same company and city is filled in by the code. Never invent income, TIN, SSS or phone numbers.',

@@ -84,6 +84,8 @@ export const detailsSchema = z
     birth_town: text(120).optional(),
     /** Every place name you corrected, e.g. "Muntinlua -> Muntinlupa". Shown to the owner. */
     spelling_fixes: z.array(text(200)).max(10).optional(),
+    /** Anything doubtful about the IDs, for the owner. It never stops the application. */
+    id_note: text(200).optional(),
   })
   .strict();
 export type Details = z.infer<typeof detailsSchema>;
@@ -450,6 +452,7 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
   };
   if (details.home_from_id) defaults.push('Home address taken from the ID');
   for (const fix of details.spelling_fixes ?? []) defaults.push(`Spelling corrected: ${fix}`);
+  if (details.id_note) defaults.push(`ID note: ${details.id_note}`);
   // Owner rule: a business owner is self-employed, and a self-employed applicant's position is Owner.
   if (!f.employment_type && f.position && OWNER_TITLE.test(f.position)) f.employment_type = 'Self-employed';
   if (f.employment_type === 'Self-employed' && !f.position) f.position = 'Owner';

@@ -30,7 +30,8 @@ describe('spelling fixes from finalize', () => {
   const lead: Lead = { psid: '1', completed_at: '2026-10-31T00:00:00Z', banks: [], married: false, answers: { place_of_birth: 'Malolos Bulakan' } };
 
   it('uses the corrected place of birth and shows each fix to the owner', () => {
-    const { form, defaults } = formFromLead(lead, { birth_town: 'Malolos, Bulacan', spelling_fixes: ['Bulakan -> Bulacan'] }, new Date('2026-10-31'));
+    const { form, defaults } = formFromLead(lead, { birth_town: 'Malolos, Bulacan', spelling_fixes: ['Bulakan -> Bulacan'], id_note: 'Photo of a phone screen' }, new Date('2026-10-31'));
+    expect(defaults).toContain('ID note: Photo of a phone screen');
     expect(form.birth_town).toBe('Malolos, Bulacan');
     expect(defaults).toContain('Spelling corrected: Bulakan -> Bulacan');
   });
