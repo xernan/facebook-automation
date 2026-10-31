@@ -10,6 +10,15 @@ $logDir = Join-Path $root 'logs'
 New-Item -ItemType Directory -Force $logDir | Out-Null
 $log = Join-Path $logDir "$Bot.log"
 Set-Location $root
+# Only one keeper per bot: if start-bots ran twice (sign-in task + a manual run), the second keeper
+# would retry every 30 s forever against the first one's lock/port. Leave quietly instead.
+$mutex = New-Object System.Threading.Mutex($false, "Local\fb-automation-keep-running-$Bot")
+$owned = $false
+try { $owned = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $owned = $true }
+if (-not $owned) {
+  Add-Content -Path $log -Value "[keep-running $(Get-Date -Format s)] another keeper already runs $Bot; this copy exits" -Encoding utf8
+  exit 0
+}
 while ($true) {
   Add-Content -Path $log -Value "[keep-running $(Get-Date -Format s)] starting $Bot" -Encoding utf8
   $p = Start-Process -FilePath 'node' -ArgumentList "dist/$Bot.js" -WorkingDirectory $root -NoNewWindow -PassThru `
