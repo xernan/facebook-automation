@@ -1,3 +1,4 @@
+import { loadConfig } from '../src/config.js';
 import { PassThrough } from 'node:stream';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -81,5 +82,12 @@ describe('starting Claude', () => {
     );
     expect(code).toBeNull();
     expect(logs).toEqual(['Could not start Claude: spawn UNKNOWN']);
+  });
+});
+
+describe('watch timing defaults', () => {
+  it('checks every 5 s when quiet and every 2 s while chatting', () => {
+    const cfg = loadConfig({}, '.', { requireToken: false });
+    expect([cfg.FB_WATCH_INTERVAL_SEC, cfg.FB_WATCH_ACTIVE_INTERVAL_SEC]).toEqual([5, 2]);
   });
 });
