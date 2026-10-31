@@ -63,6 +63,8 @@ export const flowSchema = z
             invalid_reply: msg.optional(),
             /** Fixed buttons shown with the question. Typing an answer still works. */
             choices,
+            /** What Claude must find in the answer before it counts (the script never accepts it alone). */
+            check: msg.optional(),
             /** Messenger button that offers the email or phone on their Facebook profile. Hidden when the profile has none. */
             autofill: z.enum(['user_email', 'user_phone_number']).optional(),
             /**
@@ -455,8 +457,8 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
       return extractBanks(text).length > 0 || (!!flow.banks.choices && banksDone(flow, p, text));
     case 'steps': {
       const step = flow.steps[p.step];
-      if (!step) return false;
-      const tapped = [...(step.choices ?? []), ...(step.optional_group ? [flow.skip_choice] : []), ...(p.suggestions?.length ? [flow.other_choice] : [])];
+      if (!step || step.check) return false;
+      const tapped =[...(step.choices ?? []), ...(step.optional_group ? [flow.skip_choice] : []), ...(p.suggestions?.length ? [flow.other_choice] : [])];
       if (tapped.some((c) => c.toLowerCase() === text.toLowerCase())) return true;
       if (p.suggestions?.length && /^\d+$/.test(text)) return true;
       if (step.validate) return validAnswer(step.validate, text);

@@ -852,3 +852,20 @@ describe('autofill buttons', () => {
     expect(quickReply('autofill:user_phone_number')).toEqual({ content_type: 'user_phone_number' });
   });
 });
+
+describe('answers Claude must check', () => {
+  const steps = [{ key: 'home_address', prompt: 'Address?', check: 'Street, barangay, city' }];
+  const f = { ...flow, steps };
+  const p = { ...newPerson(NOW), stage: 'steps' as const };
+
+  it('the script never accepts them alone', () => {
+    expect(scriptCanAnswer(f, p, { text: 'Quezon City' })).toBe(false);
+    expect(scriptCanAnswer({ ...flow, steps: [{ key: 'home_address', prompt: 'Address?' }] }, p, { text: 'Quezon City' })).toBe(true);
+  });
+
+  it('the operator is told to ask for the missing part and never fill it in', async () => {
+    const { operatorPrompt } = await import('../src/watch.js');
+    expect(operatorPrompt('1')).toMatch(/answer_check/);
+    expect(operatorPrompt('1')).toMatch(/Never fill in a part yourself/);
+  });
+});

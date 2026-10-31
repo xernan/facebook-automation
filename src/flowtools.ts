@@ -86,6 +86,7 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
       name: person.name,
       stage: cur.stage,
       current_question: currentPrompt(flow, cur),
+      answer_check: cur.stage === 'steps' ? flow.steps[cur.step]?.check : undefined,
       outbox_pending: !!p?.outbox,
       needs_id_review: needsIdReview,
       needs_finalize: needsFinalize,
