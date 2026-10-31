@@ -782,3 +782,36 @@ describe('detail of a flag', () => {
     expect(no.person.flags).toBeUndefined();
   });
 });
+
+describe('bank buttons', () => {
+  const withButtons = { ...flow, banks: { ...flow.banks, choices: ['BPI', 'Metrobank', 'RCBC', 'EastWest', 'BDO'], more_prompt: 'More?', done_choice: 'Tapos na' } };
+  const start = { ...newPerson(NOW), stage: 'banks' as const };
+
+  it('collects banks one tap at a time and shows only those not picked', () => {
+    const a = advance(withButtons, start, { text: 'BDO' }, NOW, 180);
+    expect(a.person.stage).toBe('banks');
+    expect(a.person.banks).toEqual(['BDO']);
+    expect(a.reply).toBe('More?');
+    expect(a.choices).toEqual(['BPI', 'Metrobank', 'RCBC', 'EastWest', 'Tapos na']);
+    expect(advance(withButtons, a.person, { text: 'Tapos na' }, NOW, 180).person.stage).toBe('steps');
+  });
+
+  it('still excludes a person with all four banks, only after they finish', () => {
+    let p: typeof start = start;
+    for (const text of ['BPI', 'Metrobank', 'RCBC', 'EastWest']) p = advance(withButtons, p, { text }, NOW, 180).person as typeof start;
+    expect(p.stage).toBe('banks');
+    expect(advance(withButtons, p, { text: 'Tapos na' }, NOW, 180).person.stage).toBe('excluded');
+  });
+
+  it('done does nothing before a bank is picked', () => {
+    const a = advance(withButtons, start, { text: 'Tapos na' }, NOW, 180);
+    expect(a.person.stage).toBe('banks');
+    expect(a.reply).toBe(flow.banks.unknown_reply);
+  });
+
+  it('the script answers taps by itself', () => {
+    expect(scriptCanAnswer(withButtons, start, { text: 'BDO' })).toBe(true);
+    expect(scriptCanAnswer(withButtons, { ...start, banks: ['BDO'] }, { text: 'Tapos na' })).toBe(true);
+    expect(scriptCanAnswer(withButtons, start, { text: 'Tapos na' })).toBe(false);
+  });
+});

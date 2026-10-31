@@ -37,6 +37,10 @@ export const flowSchema = z
         unknown_reply: msg,
         exclude_if_all: z.array(z.string().min(1)).min(1),
         excluded_reply: msg,
+        /** Bank buttons, tapped one at a time. At most 12: Messenger shows 13 and one is the done button. */
+        choices: z.array(z.string().trim().min(1).max(20)).min(1).max(12).optional(),
+        more_prompt: msg.optional(),
+        done_choice: z.string().trim().min(1).max(20).default('Tapos na'),
       })
       .strict(),
     steps: z
@@ -266,6 +270,19 @@ function isFirstOfGroup(flow: Flow, i: number): boolean {
   return !!g && flow.steps[i - 1]?.optional_group !== g;
 }
 
+/** Bank buttons not picked yet, plus the done button once at least one bank is picked. */
+function bankButtons(flow: Flow, p: Person): string[] | undefined {
+  if (!flow.banks.choices) return undefined;
+  const left = flow.banks.choices.filter((c) => !extractBanks(c).some((b) => p.banks.includes(b)));
+  return p.banks.length > 0 ? [...left, flow.banks.done_choice] : left;
+}
+
+/** With a bank picked: the done button, or a plain "no more" such as "wala na". */
+function banksDone(flow: Flow, p: Person, text: string): boolean {
+  if (p.banks.length === 0) return false;
+  return text.toLowerCase() === flow.banks.done_choice.toLowerCase() || parseYesNo(text) === 'no';
+}
+
 /** Moves `p` to the next question that applies from step `from` and returns it (or the ID photo prompt). */
 function goToStep(flow: Flow, p: Person, from: number, suggestions: string[] = []): Question {
   let i = from;
@@ -331,12 +348,21 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
         return ask(flow.carded.reject_reply);
       }
       p.stage = 'banks';
-      return ask(flow.banks.prompt);
+      return ask(flow.banks.prompt, bankButtons(flow, p));
     }
 
     case 'banks': {
-      const banks = extractBanks(text);
-      if (banks.length === 0) return ask(flow.banks.unknown_reply);
+      const found = extractBanks(text);
+      let banks = found;
+      if (flow.banks.choices) {
+        // Tapped one at a time: a person can hold several cards, and every one counts for the exclusion and the PDFs.
+        if (found.length > 0) {
+          p.banks = [...new Set([...p.banks, ...found])];
+          return ask(flow.banks.more_prompt ?? flow.banks.prompt, bankButtons(flow, p));
+        }
+        if (!banksDone(flow, p, text)) return ask(flow.banks.unknown_reply, bankButtons(flow, p));
+        banks = p.banks;
+      } else if (found.length === 0) return ask(flow.banks.unknown_reply);
       p.banks = banks;
       const exclude = flow.banks.exclude_if_all.map((b) => b.toLowerCase());
       if (exclude.every((b) => banks.some((x) => x.toLowerCase() === b))) {
@@ -413,7 +439,7 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
     case 'carded':
       return !!parseYesNo(text);
     case 'banks':
-      return extractBanks(text).length > 0;
+      return extractBanks(text).length > 0 || (!!flow.banks.choices && banksDone(flow, p, text));
     case 'steps': {
       const step = flow.steps[p.step];
       if (!step) return false;
@@ -460,6 +486,7 @@ export function currentQuestion(flow: Flow, p: Person): Question | undefined {
   if (!reply) return undefined;
   if (p.stage === 'consent') return { reply, choices: flow.consent.choices };
   if (p.stage === 'carded') return { reply, choices: flow.carded.choices };
+  if (p.stage === 'banks') return { reply: p.banks.length > 0 ? (flow.banks.more_prompt ?? reply) : reply, choices: bankButtons(flow, p) };
   if (p.stage !== 'steps') return { reply };
   const step = flow.steps[p.step];
   return step ? question(flow, { ...p }, step, p.suggestions ?? []) : { reply };
