@@ -73,6 +73,8 @@
 
 ## Open
 
+Owner priority (2026-10-31): finding clients comes first. Code only for real failures; no new features. The pending application question stays at 4 banks (owner). The first real client doubles as the stranger test.
+
 Next when the owner comes back:
 1. PDFs through the real chat: proven 2026-10-31 (13:24 UTC). Metrobank, EastWest, China Bank and ID photos were made with an ID note and no hold; the owner saw the China Bank PDF. Field-by-field accuracy of the 3 PDFs has not been checked by Claude.
 2. Finish the wording review of the bank question with the owner.
