@@ -4,6 +4,7 @@ import ExcelJS from 'exceljs';
 import { BANKS, buildApplication, workBoxes, WORK_BOX, type BankKey, formMissing, formSchema, formToData, settingsSchema, type AppForm, type BuiltApplication, type Details, type Lead, type Settings } from './application.js';
 import { PDFDocument } from 'pdf-lib';
 import { fillBankPdf } from './pdf.js';
+import { placeProblems } from './placecheck.js';
 import { printPdf } from './printer.js';
 import { lookupPhone, OWNER_SOURCE, rememberPhone } from './phonebook.js';
 import { applicationStats } from './stats.js';
@@ -69,6 +70,7 @@ export async function finalizeLead(
   }
   const app = buildApplication(lead, details, now);
   if (fromBook) app.defaults.push(`Office phone from our company directory (source: ${phoneSource})`);
+  app.missing.push(...placeProblems(app.form));
   const name = [details.first_name, details.last_name].filter(Boolean).join(' ');
   const folder = path.join(flowDir, 'applicants', folderName(lead.completed_at, name, lead.psid));
   await fs.mkdir(folder, { recursive: true });
@@ -181,7 +183,7 @@ export async function saveForm(flowDir: string, templatesDir: string, folderName
   if (!d.banks || !d.bank_only) throw new Error('This applicant was saved before the form existed; finalize it again.');
   const clean = formSchema.parse(form);
   const data = formToData(clean);
-  const missing = formMissing(clean);
+  const missing = [...formMissing(clean), ...placeProblems(clean)];
   const settings = await loadSettings(flowDir);
   // Office zip follows the form for the bank-only zip boxes.
   const bankOnly = structuredClone(d.bank_only);

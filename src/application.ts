@@ -80,6 +80,10 @@ export const detailsSchema = z
     /** How to split names that some forms print in First / Middle / Last columns (when the words are ambiguous). */
     mother_name_parts: nameParts.optional(),
     spouse_name_parts: nameParts.optional(),
+    /** Place of birth with the spelling corrected, when you are sure. */
+    birth_town: text(120).optional(),
+    /** Every place name you corrected, e.g. "Muntinlua -> Muntinlupa". Shown to the owner. */
+    spelling_fixes: z.array(text(200)).max(10).optional(),
   })
   .strict();
 export type Details = z.infer<typeof detailsSchema>;
@@ -421,7 +425,7 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
     birthday: details.birthday,
     gender: details.gender,
     nationality: details.nationality,
-    birth_town: a.place_of_birth,
+    birth_town: details.birth_town ?? a.place_of_birth,
     civil_status: CIVIL[norm(a.civil_status ?? '')],
     email: a.email,
     mobile: a.mobile,
@@ -447,6 +451,7 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
     ref_mobile: a.reference_mobile,
   };
   if (details.home_from_id) defaults.push('Home address taken from the ID');
+  for (const fix of details.spelling_fixes ?? []) defaults.push(`Spelling corrected: ${fix}`);
   // Owner rule: a business owner is self-employed, and a self-employed applicant's position is Owner.
   if (!f.employment_type && f.position && OWNER_TITLE.test(f.position)) f.employment_type = 'Self-employed';
   if (f.employment_type === 'Self-employed' && !f.position) f.position = 'Owner';
