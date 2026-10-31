@@ -41,6 +41,8 @@ export const flowSchema = z
         choices: z.array(z.string().trim().min(1).max(20)).min(1).max(12).optional(),
         more_prompt: msg.optional(),
         done_choice: z.string().trim().min(1).max(20).default('Tapos na'),
+        /** Shown before any pick: their cards are from other banks, so the flow moves on with none listed. */
+        none_choice: z.string().trim().min(1).max(20).default('Wala dito'),
       })
       .strict(),
     steps: z
@@ -270,17 +272,17 @@ function isFirstOfGroup(flow: Flow, i: number): boolean {
   return !!g && flow.steps[i - 1]?.optional_group !== g;
 }
 
-/** Bank buttons not picked yet, plus the done button once at least one bank is picked. */
+/** Bank buttons not picked yet, plus "done" after a pick or "none of these" before one. */
 function bankButtons(flow: Flow, p: Person): string[] | undefined {
   if (!flow.banks.choices) return undefined;
   const left = flow.banks.choices.filter((c) => !extractBanks(c).some((b) => p.banks.includes(b)));
-  return p.banks.length > 0 ? [...left, flow.banks.done_choice] : left;
+  return [...left, p.banks.length > 0 ? flow.banks.done_choice : flow.banks.none_choice];
 }
 
-/** With a bank picked: the done button, or a plain "no more" such as "wala na". */
+/** The matching button, or a plain "no more" such as "wala na". */
 function banksDone(flow: Flow, p: Person, text: string): boolean {
-  if (p.banks.length === 0) return false;
-  return text.toLowerCase() === flow.banks.done_choice.toLowerCase() || parseYesNo(text) === 'no';
+  const button = p.banks.length > 0 ? flow.banks.done_choice : flow.banks.none_choice;
+  return text.toLowerCase() === button.toLowerCase() || parseYesNo(text) === 'no';
 }
 
 /** Moves `p` to the next question that applies from step `from` and returns it (or the ID photo prompt). */

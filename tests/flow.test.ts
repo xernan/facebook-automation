@@ -815,3 +815,20 @@ describe('bank buttons', () => {
     expect(scriptCanAnswer(withButtons, start, { text: 'Tapos na' })).toBe(false);
   });
 });
+
+describe('bank buttons: none of these', () => {
+  const f = { ...flow, banks: { ...flow.banks, choices: ['BPI', 'China Bank'], more_prompt: 'More?', done_choice: 'Tapos na', none_choice: 'Wala dito' } };
+  const start = { ...newPerson(NOW), stage: 'banks' as const };
+
+  it('moves on with no bank listed, and shows it only before a pick', () => {
+    const none = advance(f, start, { text: 'Wala dito' }, NOW, 180);
+    expect(none.person.stage).toBe('steps');
+    expect(none.person.banks).toEqual([]);
+    expect(scriptCanAnswer(f, start, { text: 'Wala dito' })).toBe(true);
+    expect(advance(f, start, { text: 'BPI' }, NOW, 180).choices).toEqual(['China Bank', 'Tapos na']);
+  });
+
+  it('a typed bank outside the buttons still counts', () => {
+    expect(advance(f, start, { text: 'BDO' }, NOW, 180).person.banks).toEqual(['BDO']);
+  });
+});
