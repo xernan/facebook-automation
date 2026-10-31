@@ -56,7 +56,7 @@ export const flowSchema = z
             /** This answer is the civil status: "married"/"kasal" turns on the only_if_married questions. */
             sets_married: z.boolean().optional(),
             /** Check the answer's shape; on a bad answer send invalid_reply and ask again. */
-            validate: z.enum(['mobile', 'email', 'tin', 'sss_gsis', 'date', 'number', 'yes_no']).optional(),
+            validate: z.enum(['mobile', 'email', 'tin', 'sss_gsis', 'date', 'number', 'yes_no', 'civil_status']).optional(),
             /** A clear "yes" adds this flag to the lead (e.g. pending_application), so the client sees it. */
             flag_if_yes: z.string().regex(/^[a-z_]+$/).optional(),
             /** Asked only when the lead has this flag; the answer is added to the flag ("pending_application: BPI"). */
@@ -233,6 +233,18 @@ const isSkip = (text: string) => {
 
 const MARRIED = /\b(married|kasal|may\s+asawa)\b/i;
 
+const CIVIL: Record<string, string> = {
+  single: 'Single', binata: 'Single', dalaga: 'Single',
+  married: 'Married', kasal: 'Married', mayasawa: 'Married',
+  separated: 'Separated', hiwalay: 'Separated',
+  widowed: 'Widowed', widow: 'Widowed', widower: 'Widowed', biyuda: 'Widowed', biyudo: 'Widowed', balo: 'Widowed',
+};
+
+/** The civil status on the forms ("kasal po" -> "Married"), or undefined when the answer is not one. */
+export function parseCivilStatus(text: string): string | undefined {
+  return CIVIL[text.toLowerCase().replace(/\bpo\b/g, '').replace(/[^a-z]/g, '')];
+}
+
 const digits = (t: string) => t.replace(/\D/g, '');
 
 /** Shape checks for one-question answers. Lenient on spacing and dashes, strict on length. */
@@ -252,6 +264,8 @@ export function validAnswer(kind: NonNullable<Step['validate']>, text: string): 
       return /\d/.test(text);
     case 'yes_no':
       return parseYesNo(text) !== undefined;
+    case 'civil_status':
+      return parseCivilStatus(text) !== undefined;
   }
 }
 
@@ -422,6 +436,7 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
         const q = question(flow, p, step, p.suggestions ?? []);
         return ask(`${step.invalid_reply}\n\n${q.reply}`, q.choices);
       }
+      if (step.validate === 'civil_status') answer = parseCivilStatus(answer)!;
       if (step.province_only_reply) {
         const only = provinceOnly(answer);
         if (only) {
@@ -481,6 +496,8 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
       const tapped =[...(step.choices ?? []), ...(step.optional_group ? [flow.skip_choice] : []), ...(p.suggestions?.length ? [flow.other_choice] : [])];
       if (tapped.some((c) => c.toLowerCase() === text.toLowerCase())) return true;
       if (p.suggestions?.length && /^\d+$/.test(text)) return true;
+      // A wrong civil status gets the same reply from the script, so there is no need to wait for Claude.
+      if (step.validate === 'civil_status') return true;
       if (step.validate) return validAnswer(step.validate, text);
       // Free text (names, places, addresses): short plain answers only.
       return w.length <= 25;

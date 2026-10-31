@@ -873,6 +873,37 @@ describe('answers Claude must check', () => {
   });
 });
 
+describe('civil status check', () => {
+  const f = { ...flow, steps: [{ key: 'civil_status', prompt: 'Civil status?', sets_married: true, validate: 'civil_status' as const, invalid_reply: 'Pick one.', choices: ['Single', 'Married'] }, { key: 'next_one', prompt: 'Next?' }] };
+  const p = { ...newPerson(NOW), stage: 'steps' as const };
+  const say = (text: string) => advance(f, p, { text }, NOW, 30);
+
+  it('refuses anything that is not a civil status, at once, and asks again with the buttons', () => {
+    for (const bad of ['camarines norte', 'not married', 'asdf']) {
+      expect(scriptCanAnswer(f, p, { text: bad })).toBe(true);
+      const r = say(bad);
+      expect(r.reply).toBe('Pick one.\n\nCivil status?');
+      expect(r.choices).toEqual(['Single', 'Married']);
+      expect(r.person.step).toBe(0);
+      expect(r.person.answers.civil_status).toBeUndefined();
+      expect(r.person.married).toBe(false);
+    }
+  });
+
+  it('saves the form word for buttons and typed answers', () => {
+    expect(say('Single').person.answers.civil_status).toBe('Single');
+    expect(say('dalaga po').person.answers.civil_status).toBe('Single');
+    const married = say('may asawa').person;
+    expect(married.answers.civil_status).toBe('Married');
+    expect(married.married).toBe(true);
+    expect(say('Kasal po').person.married).toBe(true);
+  });
+
+  it('a question still goes to Claude', () => {
+    expect(scriptCanAnswer(f, p, { text: 'ano po yan?' })).toBe(false);
+  });
+});
+
 describe('auto_accept', () => {
   const f = { ...flow, steps: [{ key: 'place_of_birth', prompt: 'Where?', check: 'City', auto_accept: 'birthplace' as const }] };
   const p = { ...newPerson(NOW), stage: 'steps' as const };

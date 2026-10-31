@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { IdSeen } from './flow.js';
+import { parseCivilStatus, type IdSeen } from './flow.js';
 
 // Builds the bank-form data for one finished Messenger application: the applicant's own answers, what Claude read
 // on the ID photos and found in public info (finalize details), the owner's derived rules, and the owner's
@@ -155,8 +155,6 @@ export function ageOn(birthday: string, on: Date): number {
   if (on.getMonth() + 1 < m || (on.getMonth() + 1 === m && on.getDate() < d)) age--;
   return age;
 }
-
-const CIVIL: Record<string, string> = { single: 'Single', married: 'Married', separated: 'Separated', widowed: 'Widowed', widow: 'Widowed', kasal: 'Married' };
 
 // ---- the Default Form ---------------------------------------------------------------------------------------
 const s = (max = 300) => z.string().max(max).optional();
@@ -426,7 +424,7 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
     gender: details.gender,
     nationality: details.nationality,
     birth_town: details.birth_town ?? a.place_of_birth,
-    civil_status: CIVIL[norm(a.civil_status ?? '')],
+    civil_status: parseCivilStatus(a.civil_status ?? ''),
     email: a.email,
     mobile: a.mobile,
     mother_maiden_name: a.mothers_maiden_name,
