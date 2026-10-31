@@ -1,9 +1,54 @@
+import type { ChildProcess } from 'node:child_process';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 // Brakes for the watcher, so a problem never turns into a loop: Claude is not woken again and again for the
 // same stuck chats (each run costs usage), replies stop while Meta has the Page restricted from messaging, and
 // only one watcher runs at a time.
+
+// Keeps only the "API Error" line of a failed Claude run: other output can quote chats, and logs must not.
+export function claudeFailureReason(output: string): string {
+  return /^API Error: .{1,300}/m.exec(output)?.[0] ?? 'no API error shown';
+}
+
+export function collectOutput(child: { stdout: NodeJS.ReadableStream | null; stderr: NodeJS.ReadableStream | null }): () => string {
+  let text = '';
+  const add = (d: unknown) => {
+    text = (text + String(d)).slice(-8000);
+  };
+  child.stdout?.on('data', add);
+  child.stderr?.on('data', add);
+  return () => text;
+}
+
+// spawn can throw instead of emitting 'error' (e.g. while the program is being updated); both end as a failed run for ClaudeBrake.
+export function runClaudeProcess(start: () => ChildProcess, timeoutMs: number, log: (m: string) => void): Promise<number | null> {
+  return new Promise((resolve) => {
+    let child: ChildProcess;
+    try {
+      child = start();
+    } catch (err) {
+      log(`Could not start Claude: ${err instanceof Error ? err.message : String(err)}`);
+      resolve(null);
+      return;
+    }
+    const output = collectOutput(child);
+    const timer = setTimeout(() => {
+      log('Claude run took too long; stopped it.');
+      child.kill();
+    }, timeoutMs);
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      log(`Could not start Claude: ${err.message}`);
+      resolve(null);
+    });
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      if (code !== 0) log(`Claude failed: ${claudeFailureReason(output())}`);
+      resolve(code);
+    });
+  });
+}
 
 /** Meta: the Page may not message people for now (2022) or the message looked like spam (368). */
 export const isMessagingBlocked = (err: unknown) => {

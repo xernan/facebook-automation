@@ -1,4 +1,4 @@
-# Handoff (2026-10-24, live)
+# Handoff (updated 2026-10-31, live)
 
 ## Done
 - MCP server, 22 tools + `fb_setup_status`, Graph API v26.0: pages, posts (+schedule, photo, video),
@@ -53,20 +53,37 @@
   (FB_FLOW_DIR/company-phones.json, real numbers with source or typed by owner, per company + city): finalize fills
   blank office phone, Default Form "Find number", Settings lists/removes. Random TIN/phone from the card app NOT ported.
 
-- Verified 2026-10-31: 286 tests + secret scan pass, doctor OK. Logon task for the bots exists; watch, commentwatch and
-  dashboard are running. Staging CI green; staging is 68 commits ahead of main (last PR to main: #5).
-  Business Page, last 16 posts: 0 reactions, 1 comment, 6 shares. 2 Messenger chats; the one finished by someone other
-  than the owner is not yet confirmed as a real lead.
+- Through 2026-10-25 (48 commits since the entry above, read from git log):
+  - Page restricted from messaging by Meta (#2022, 28 days) after a greeting that listed OTP/CVV/PIN. Added: Community
+    Standards guard on every outgoing text, FB_MESSENGER_LIVE switch, no message tags, pause on block, one watcher.
+  - Comment bot (FB_COMMENTS_LIVE): human-sounding replies, hourly and daily caps, optional DM that resumes an application.
+  - Test mode (dashboard), Marketing tab (bank results, thank-you drafts with client OK, post stats, draft check),
+    weekly target and quota, funnel, source per applicant, archive.
+  - Flow: instant script replies, ID photos saved at once, one reminder after 3 quiet hours, Claude can hold doubtful IDs.
+  - PDF owner rules: name on card fit, declarations NO, best time to call, self-employed boxes, tenure, email domain, College.
+  - Bots start at Windows sign-in through a scheduled task and restart when they stop.
 
-## Open (needs owner)
-- Bot duplicates fixed 2026-10-31: logs showed hundreds of retries until 10:37; one keeper per bot now, live-tested. Staging -> main PR is open for owner review.
-- GitHub done 2026-10-24: PR #1 merged to main; old cardmaxmarketing-blip repo deleted.
-- Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
+- 2026-10-31:
+  - Bot silent: Claude CLI too old for its model. Updated to 2.1.316; failed runs now log the reason. Bot reply seen live.
+  - Fixed: duplicate keepers (one per bot), dashboard tests starting PowerShell, a spawn error skipping ClaudeBrake.
+  - PR #6 merged to main. The owner's test chat had finished the flow on 10-25; that account was reset with fb_flow_reset.
+  - Flow rules are final (see the flow code). Finished chats do not restart; the bot only answers what they ask.
+  - Business Page, last 16 posts: 0 reactions, 1 comment, 6 shares; 2 followers.
 
-## Next
-1. Claude Desktop works 2026-10-24: facebook server connected, 25 tools. Note: the Brave-installed
-   "Claude" app is the web version (no local server); use the real Desktop app (Start menu).
-   Desktop MCP log: LocalAppData Claude\logs\mcp-server-facebook.log.
-2. PRs #2-#4 merged 2026-10-24, main CI green (#4: Business Pages show as usable in fb_list_pages). Claude Desktop: facebook server added to its config
-   2026-10-24 (backup .bak-2026-10-24 beside it); owner must fully quit + reopen Desktop.
-3. Phase 2 options (owner decides): Instagram, Marketing API (ads), lead alerts.
+## Open
+Owner:
+1. Merge PR #7 (or tell Claude to).
+2. Back up the local-only files: .env, flow.json, the flow and templates folders. They are not on GitHub.
+3. Finish the test PM from the start after the reset (through ID photo and PDFs).
+4. Ask one person with no role on the Page or Meta app to PM the Page. Not proven yet that strangers get replies.
+5. Say whether the 2 applicants on the dashboard are tests, and fill their missing fields if real.
+
+Claude:
+6. After the stranger test: post drafts built around one clear offer. Owner approves before anything is posted.
+7. Remind the owner to run npm run login before the token ends (about 60 days from the last login; date not verified).
+
+Owner decides later: Instagram, Marketing API (ads), lead alerts.
+
+## Reference
+- Use the real Claude Desktop app (Start menu); the Brave-installed one is the web version. Log: LocalAppData Claude\logs\mcp-server-facebook.log.
+- Lead Ads dropped by owner: the app has no Lead Ads use case. Missing leads_retrieval and pages_manage_ads is expected.

@@ -1,9 +1,10 @@
+import { PassThrough } from 'node:stream';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { GraphError } from '../src/graph.js';
-import { ClaudeBrake, isMessagingBlocked, pendingKey, takeLock } from '../src/watchguard.js';
+import { ClaudeBrake, claudeFailureReason, collectOutput, isMessagingBlocked, pendingKey, runClaudeProcess, takeLock } from '../src/watchguard.js';
 
 describe('watcher brakes', () => {
   it('a failing Claude run is not repeated every few seconds for the same chats (1, 2, 4 ... 30 min)', () => {
@@ -49,5 +50,36 @@ describe('watcher brakes', () => {
     // A lock left by a dead process is taken over.
     writeFileSync(path.join(dir, 'watch.lock'), '999999999');
     expect(() => takeLock(dir)()).not.toThrow();
+  });
+});
+
+describe('failed Claude runs', () => {
+  it('logs the API error line and never other output', () => {
+    expect(claudeFailureReason('chat text from a client\nAPI Error: 400 version too old\nmore chat')).toBe('API Error: 400 version too old');
+    expect(claudeFailureReason('chat text from a client')).toBe('no API error shown');
+  });
+
+  it('collects both output streams', () => {
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    const output = collectOutput({ stdout, stderr });
+    stdout.emit('data', 'a');
+    stderr.emit('data', 'b');
+    expect(output()).toBe('ab');
+  });
+});
+
+describe('starting Claude', () => {
+  it('a spawn that throws is a failed run, so the brake still counts it', async () => {
+    const logs: string[] = [];
+    const code = await runClaudeProcess(
+      () => {
+        throw new Error('spawn UNKNOWN');
+      },
+      1000,
+      (m) => logs.push(m),
+    );
+    expect(code).toBeNull();
+    expect(logs).toEqual(['Could not start Claude: spawn UNKNOWN']);
   });
 });
