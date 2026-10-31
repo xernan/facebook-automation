@@ -69,18 +69,25 @@
   - PR #6 merged to main. The owner's test chat had finished the flow on 10-25; that account was reset with fb_flow_reset.
   - Flow rules are final (see the flow code). Finished chats do not restart; the bot only answers what they ask.
   - Business Page, last 16 posts: 0 reactions, 1 comment, 6 shares; 2 followers.
+  - Flow: bank and pending-bank buttons, answer checks by code then Claude (place of birth, home and office address), spelling fixes and flags, ID photo received reply, checks every 5 s quiet and 2 s active. Office address suggestions removed for speed.
 
 ## Open
-Owner:
-1. Done: PR #7 merged 2026-10-31, main CI green.
-2. Backup done 2026-10-31 on the PC's second disk: flow file, leads, templates (101 files, hashes match). Not encrypted, not off-site. Left for owner: copy .env (Claude never copies it), and an encrypted off-site copy.
-3. Finish the test PM from the start after the reset (through ID photo and PDFs).
-4. Ask one person with no role on the Page or Meta app to PM the Page. Not proven yet that strangers get replies.
-5. Dashboard applicants: one is the owner's test account. The other does not match the 2 current chats; owner confirms who it is. If real, only SSS/GSIS and the signature are left.
 
-Claude:
-6. 3 post drafts written and passed the content guard (2026-10-31). Owner approves the exact text before anything is posted.
-7. Done: token checked 2026-10-31, no expiry date; data access runs until 2027-01-21. Run npm run login before then.
+Next when the owner comes back:
+1. Find out why the 2026-10-31 05:31 UTC test finished the chat and saved a lead but made no applicant folder or PDFs. The state was reset before it was checked, so the cause is unknown. Finalize itself works (dry run in a temp folder made the PDFs). Repeat the test and do not reset until the folder shows or the hold reason is read.
+2. Finish the wording review of the bank question with the owner.
+3. Stranger test: one person with no role on the Page or Meta app. Not proven yet.
+4. Staging to main PR (13 commits ahead on 2026-10-31, CI green) after the test passes.
+
+Owner:
+5. Backup on the second disk is from before the 10-31 flow changes; copy flow.json again when stable. .env copy and an encrypted off-site copy are still the owner's job.
+6. Approve the exact text of the 3 post drafts. Nothing is posted yet.
+7. Decide: skip the PDF of a bank with a pending application? Today it is still made.
+8. Applicants on the dashboard: #1 is the owner's test account. #2 is flagged manual entry; only SSS/GSIS and the signature are left.
+
+Claude, low:
+9. Autofill code (quickReply, autofill field) is unused: tapping sent only the words, so it was removed from flow.json. The "Email" chip still showed on the owner's phone although nothing sends it; check it on another account.
+10. Run npm run login before data access ends on 2027-01-21. Keep the Claude CLI updated: an old one stops every AI reply.
 
 Owner decides later: Instagram, Marketing API (ads), lead alerts.
 
