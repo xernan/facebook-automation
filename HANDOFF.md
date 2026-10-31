@@ -74,7 +74,7 @@
 ## Open
 
 Next when the owner comes back:
-1. Prove PDFs through the real chat. The 2026-10-31 05:31 UTC test made none because Claude called fb_lead_hold (ids_do_not_match): the ID name differs from the test account's Facebook name and the photo looked like a screenshot. The hold worked as designed, and the later reset erased it. Finalize works in a dry run. Repeat the test with an ID that matches the account, or use Release on the dashboard, and do not reset until the folder shows.
+1. Prove PDFs through the real chat. The 2026-10-31 05:31 UTC test made none because Claude called fb_lead_hold (ids_do_not_match): the ID name differs from the test account's Facebook name and the photo looked like a screenshot. The later reset erased the hold. Owner rule: Facebook names are often aliases, so an ID is never compared with them (fixed); IDs are compared only with each other. A screenshot still holds. Finalize works in a dry run. Repeat the test with a clear photo of an ID, or use Release on the dashboard, and do not reset until the folder shows.
 2. Finish the wording review of the bank question with the owner.
 3. Stranger test: one person with no role on the Page or Meta app. Not proven yet.
 4. Staging to main PR (15 commits ahead on 2026-10-31, CI green) after the test passes.
