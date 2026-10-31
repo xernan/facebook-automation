@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { extractBanks, extractEmails, extractPhones } from './leads.js';
-import { clearlyComplete, placeInProvince, provinceOnly } from './placecheck.js';
+import { checkPlacePart, clearlyComplete, placeInProvince, provinceOnly } from './placecheck.js';
 
 // Messenger application flow: a fixed script the Page follows with each person, one state per person.
 // The qualifier rules (no card -> reject with cooldown, all excluded banks -> stop) are decided here in
@@ -79,8 +79,16 @@ export const flowSchema = z
             optional_group: z.string().regex(/^[a-z_]+$/).optional(),
             /** Claude may attach suggestions found in public info (e.g. a branch address) to this question. */
             suggest: z.boolean().optional(),
+            /** Asked only when Claude found suggestions; otherwise, or on the "other" button, the flow moves to the next step. */
+            suggest_only: z.boolean().optional(),
+            /** One part of the answer to this step, skipped when that answer is known. Parts are asked from largest place to smallest, and joined when the last one is answered. */
+            part_of: z.string().regex(/^[a-z_]+$/).optional(),
+            /** Check this part against the parts before it; on a bad answer send invalid_reply and ask again. */
+            place_part: z.enum(['province', 'city', 'barangay']).optional(),
           })
           .refine((s) => !s.validate || s.invalid_reply, { message: 'invalid_reply is required with validate' })
+          .refine((s) => !s.place_part || (s.invalid_reply && s.part_of), { message: 'place_part needs invalid_reply and part_of' })
+          .refine((s) => !s.suggest_only || s.suggest, { message: 'suggest_only needs suggest' })
           .refine((s) => !s.flag_if_yes || s.validate === 'yes_no', { message: 'flag_if_yes needs validate "yes_no"' })
           .strict(),
       )
@@ -323,10 +331,20 @@ function banksDone(flow: Flow, p: Person, text: string): boolean {
   return text.toLowerCase() === button.toLowerCase() || parseYesNo(text) === 'no';
 }
 
+/** This step's address part checked against the parts already answered. */
+function checkPart(flow: Flow, p: Person, step: Step, text: string) {
+  const earlier = (part: string) => p.answers[flow.steps.find((s) => s.part_of === step.part_of && s.place_part === part)?.key ?? ''];
+  return checkPlacePart(step.place_part!, text, earlier('province'), earlier('city'));
+}
+
 /** Moves `p` to the next question that applies from step `from` and returns it (or the ID photo prompt). */
 function goToStep(flow: Flow, p: Person, from: number, suggestions: string[] = []): Question {
   let i = from;
-  const skip = (s: Step) => (s.only_if_married && !p.married) || (s.detail_of_flag && !p.flags?.includes(s.detail_of_flag));
+  const skip = (s: Step) =>
+    (s.only_if_married && !p.married) ||
+    (s.detail_of_flag && !p.flags?.includes(s.detail_of_flag)) ||
+    (s.suggest_only && suggestions.length === 0) ||
+    (s.part_of && p.answers[s.part_of]);
   while (flow.steps[i] && skip(flow.steps[i]!)) i++;
   const step = flow.steps[i];
   if (step) {
@@ -422,6 +440,7 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
         const shown = p.suggestions;
         if (answer.toLowerCase() === flow.other_choice.toLowerCase()) {
           delete p.suggestions;
+          if (step.suggest_only) return askQ(goToStep(flow, p, p.step + 1));
           return ask(flow.other_reply);
         }
         // A tapped number picks that suggestion; anything else is the person's own typed answer.
@@ -438,6 +457,11 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
         const q = question(flow, p, step, p.suggestions ?? []);
         return ask(`${step.invalid_reply}\n\n${q.reply}`, q.choices);
       }
+      if (step.place_part) {
+        const part = checkPart(flow, p, step, answer);
+        if (!part) return ask(`${step.invalid_reply}\n\n${step.prompt}`);
+        answer = part.value;
+      }
       if (step.validate === 'civil_status') answer = parseCivilStatus(answer)!;
       if (step.province_only_reply) {
         const only = provinceOnly(answer);
@@ -449,6 +473,10 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
         delete p.place_province;
       }
       p.answers[step.key] = answer;
+      if (step.part_of && flow.steps[p.step + 1]?.part_of !== step.part_of) {
+        const parts = flow.steps.filter((s) => s.part_of === step.part_of).map((s) => p.answers[s.key]).filter(Boolean);
+        p.answers[step.part_of] = parts.reverse().join(', ');
+      }
       if (step.sets_married) p.married = MARRIED.test(answer);
       if (step.flag_if_yes && parseYesNo(answer) === 'yes') p.flags = [...new Set([...(p.flags ?? []), step.flag_if_yes])];
       if (step.detail_of_flag) p.flags = (p.flags ?? []).map((f) => (f === step.detail_of_flag ? `${f}: ${answer}` : f));
@@ -495,6 +523,12 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
     case 'steps': {
       const step = flow.steps[p.step];
       if (!step) return false;
+      // A picked suggestion or the "other" button needs no check: these are checked before they are shown.
+      if (p.suggestions?.length && (/^\d+$/.test(text) || [...p.suggestions, flow.other_choice].some((c) => c.toLowerCase() === text.toLowerCase()))) return true;
+      if (step.place_part) {
+        const part = checkPart(flow, p, step, text);
+        return !part || !part.unchecked; // a wrong one gets the same reply from the script; one our list cannot tell goes to Claude
+      }
       if (step.province_only_reply && (p.place_province || provinceOnly(text))) return w.length <= 25;
       if (step.check) return !!step.auto_accept && clearlyComplete(step.auto_accept, text);
       const tapped =[...(step.choices ?? []), ...(step.optional_group ? [flow.skip_choice] : []), ...(p.suggestions?.length ? [flow.other_choice] : [])];
@@ -513,7 +547,8 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
 
 /** The step a person would be asked next if `input` answered the current one (for Claude to prepare suggestions). */
 export function nextStepIf(flow: Flow, p: Person, input: Incoming, now: Date, cooldownDays: number): Step | undefined {
-  const r = advance(flow, p, input, now, cooldownDays);
+  // As if suggestions exist: a suggest_only step is the next one until Claude has looked.
+  const r = advance(flow, p, input, now, cooldownDays, ['?']);
   if (r.person.stage !== 'steps' || (p.stage === 'steps' && r.person.step === p.step)) return undefined;
   return flow.steps[r.person.step];
 }

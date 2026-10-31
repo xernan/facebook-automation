@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { sendNudges } from '../src/flowtools.js';
-import { advance, cleanSuggestions, flowSchema, idVerdict, newPerson, parseYesNo, quickReply, scriptCanAnswer, validAnswer, type IdSeen, type Person } from '../src/flow.js';
+import { advance, cleanSuggestions, flowSchema, idVerdict, newPerson, nextStepIf, parseYesNo, quickReply, scriptCanAnswer, validAnswer, type IdSeen, type Person } from '../src/flow.js';
 import { FlowStore, loadFlow } from '../src/flowstore.js';
 import { callTool, tools } from '../src/tools.js';
 import { param, testCtx, type Call } from './helpers.js';
@@ -870,6 +870,70 @@ describe('answers Claude must check', () => {
     expect(operatorPrompt('1')).toMatch(/answer_check/);
     expect(operatorPrompt('1')).toMatch(/Never fill in a part yourself/);
     expect(operatorPrompt('1')).toMatch(/send the whole answer again/);
+  });
+});
+
+describe('office address: suggestions first, then part by part', () => {
+  const parts = {
+    part_of: 'office_address',
+    invalid_reply: 'Wrong.',
+  };
+  const f = {
+    ...flow,
+    steps: [
+      { key: 'department', prompt: 'Department?' },
+      { key: 'office_address', prompt: 'Office?', suggest: true, suggest_only: true, check: 'Full address' },
+      { key: 'office_province', prompt: 'Province?', place_part: 'province' as const, ...parts },
+      { key: 'office_city', prompt: 'City?', place_part: 'city' as const, ...parts },
+      { key: 'office_barangay', prompt: 'Barangay?', place_part: 'barangay' as const, check: 'Real barangay', ...parts },
+      { key: 'office_street', prompt: 'Street?', part_of: 'office_address' },
+      { key: 'last_one', prompt: 'Last?' },
+    ],
+  };
+  const at = (key: string, answers = {}) => ({ ...newPerson(NOW), stage: 'steps' as const, step: f.steps.findIndex((s) => s.key === key), answers });
+  const say = (p: Person, text: string, s: string[] = []) => advance(f, p, { text }, NOW, 30, s);
+  const FOUND = '1 Rizal St, Bayanan, Muntinlupa, Metro Manila';
+
+  it('Claude is woken to look before the office question', () => {
+    expect(nextStepIf(f, at('department'), { text: 'HR' }, NOW, 30)?.key).toBe('office_address');
+  });
+
+  it('shows what Claude found, and a picked one skips the parts without waking Claude', () => {
+    const shown = say(at('department'), 'HR', [FOUND]);
+    expect(shown.reply).toContain(FOUND);
+    expect(shown.choices).toEqual(['1', 'Iba']);
+    expect(scriptCanAnswer(f, shown.person, { text: '1' })).toBe(true);
+    const picked = say(shown.person, '1').person;
+    expect(picked.answers.office_address).toBe(FOUND);
+    expect(f.steps[picked.step]!.key).toBe('last_one');
+  });
+
+  it('nothing found or "Iba": asks part by part, and joins them into the address', () => {
+    expect(say(at('department'), 'HR').reply).toBe('Province?');
+    const other = say(say(at('department'), 'HR', [FOUND]).person, 'Iba');
+    expect(other.reply).toBe('Province?');
+    const city = say(other.person, 'Metro Manila').person;
+    const brgy = say(city, 'Muntinlupa').person;
+    expect(brgy.answers.office_city).toBe('Muntinlupa City');
+    const street = say(brgy, 'Bayanan').person;
+    const done = say(street, '1 Rizal St').person;
+    expect(done.answers.office_address).toBe('1 Rizal St, Bayanan, Muntinlupa City, Metro Manila');
+    expect(f.steps[done.step]!.key).toBe('last_one');
+  });
+
+  it('a part that does not fit is refused at once and asked again', () => {
+    expect(scriptCanAnswer(f, at('office_province'), { text: 'Xyzzyville' })).toBe(true);
+    expect(say(at('office_province'), 'Xyzzyville').reply).toBe('Wrong.\n\nProvince?');
+    const inBulacan = at('office_city', { office_province: 'Bulacan' });
+    expect(scriptCanAnswer(f, inBulacan, { text: 'Taguig' })).toBe(true);
+    expect(say(inBulacan, 'Taguig').reply).toBe('Wrong.\n\nCity?');
+    expect(say(inBulacan, 'Malolos').person.answers.office_city).toBe('Malolos City');
+    const inTaguig = at('office_barangay', { office_province: 'Metro Manila', office_city: 'Muntinlupa City' });
+    expect(say(inTaguig, 'Xyzzy').reply).toBe('Wrong.\n\nBarangay?');
+  });
+
+  it('a barangay our list cannot tell goes to Claude', () => {
+    expect(scriptCanAnswer(f, at('office_barangay', { office_province: 'Bulacan', office_city: 'Malolos City' }), { text: 'Sumapang Matanda' })).toBe(false);
   });
 });
 

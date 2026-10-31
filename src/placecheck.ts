@@ -124,6 +124,41 @@ function citiesWithTypoIn(text: string) {
   );
 }
 
+const findProvince = (text: string) =>
+  Object.keys(address()).find((p) => provinceKey(p) === provinceKey(text) || (isMetroManila(text) && provinceKey(p) === 'metromanila'));
+
+/** The exact name, or the only name one letter away when the name is long enough to tell. */
+function matchName(value: string, names: string[], key: (s: string) => string): string | undefined {
+  const v = key(value);
+  const exact = names.find((n) => key(n) === v);
+  if (exact || v.length < 6) return exact;
+  const near = names.filter((n) => distance(v, key(n)) === 1);
+  return near.length === 1 ? near[0] : undefined;
+}
+
+export type PlacePart = 'province' | 'city' | 'barangay';
+
+/**
+ * One part of an address, checked against the parts before it: the corrected name, or undefined when it does not
+ * belong there. `unchecked`: our list has no barangays for that city, so only Claude can tell.
+ */
+export function checkPlacePart(part: PlacePart, text: string, province?: string, city?: string): { value: string; unchecked?: boolean } | undefined {
+  const place = placeOnly(text);
+  if (part === 'province') {
+    const found = findProvince(place) ?? matchName(place, Object.keys(address()), provinceKey);
+    return found ? { value: found.replace(/\s*\(ncr\)/i, '') } : undefined;
+  }
+  const inProvince = address()[findProvince(province ?? '') ?? '']?.cities ?? {};
+  if (part === 'city') {
+    const found = matchName(place, Object.keys(inProvince), cityKey);
+    return found ? { value: found } : undefined;
+  }
+  const barangays = inProvince[city ?? '']?.barangays ?? [];
+  if (barangays.length === 0) return { value: place, unchecked: true };
+  const found = matchName(place, barangays, norm);
+  return found ? { value: found } : undefined;
+}
+
 /** "sa Malolos po." -> "Malolos": the place without the words around it. */
 const placeOnly = (text: string) => text.trim().replace(/[\s.!]+$/, '').replace(/^(?:taga|sa)\s+/i, '').replace(/\s+(?:po|province|probinsya)$/i, '');
 
