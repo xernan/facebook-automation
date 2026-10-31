@@ -59,7 +59,7 @@
   than the owner is not yet confirmed as a real lead.
 
 ## Open (needs owner)
-- Uncommitted since 2026-10-31 11:08, source unconfirmed: scripts/keep-running.ps1, restart-bots.cmd, scripts/restart-bots.ps1.
+- Bot duplicates fixed 2026-10-31: logs showed hundreds of retries until 10:37; one keeper per bot now, live-tested. Staging -> main PR is open for owner review.
 - GitHub done 2026-10-24: PR #1 merged to main; old cardmaxmarketing-blip repo deleted.
 - Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
 
