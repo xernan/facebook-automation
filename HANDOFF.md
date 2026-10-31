@@ -59,7 +59,7 @@
   than the owner is not yet confirmed as a real lead.
 
 ## Open (needs owner)
-- Bot duplicates fixed 2026-10-31: logs showed hundreds of retries until 10:37; one keeper per bot now, live-tested. PR #6 merged to main on owner's instruction. Bot silence on 2026-10-31: outdated Claude CLI, updated to 2.1.316; run logs the reason on failure. Flow rules unchanged: finished chats get replies only to questions. Left for owner: backup of local-only files, fill missing fields on 2 applicants.
+- Bot duplicates fixed 2026-10-31: logs showed hundreds of retries until 10:37; one keeper per bot now, live-tested. PR #6 merged to main on owner's instruction. Bot silence on 2026-10-31: outdated Claude CLI, updated to 2.1.316; run logs the reason on failure. Flow rules unchanged: finished chats get replies only to questions. Bot reply confirmed live 2026-10-31 03:54 UTC. Open, Low: a spawn error thrown at once (seen while the CLI updated) skips ClaudeBrake and retries every few seconds. Left for owner: backup of local-only files, fill missing fields on 2 applicants.
 - GitHub done 2026-10-24: PR #1 merged to main; old cardmaxmarketing-blip repo deleted.
 - Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
 
