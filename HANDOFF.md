@@ -74,10 +74,10 @@
 ## Open
 
 Next when the owner comes back:
-1. Find out why the 2026-10-31 05:31 UTC test finished the chat and saved a lead but made no applicant folder or PDFs. The state was reset before it was checked, so the cause is unknown. Finalize itself works (dry run in a temp folder made the PDFs). Repeat the test and do not reset until the folder shows or the hold reason is read.
+1. Prove PDFs through the real chat. The 2026-10-31 05:31 UTC test made none because Claude called fb_lead_hold (ids_do_not_match): the ID name differs from the test account's Facebook name and the photo looked like a screenshot. The hold worked as designed, and the later reset erased it. Finalize works in a dry run. Repeat the test with an ID that matches the account, or use Release on the dashboard, and do not reset until the folder shows.
 2. Finish the wording review of the bank question with the owner.
 3. Stranger test: one person with no role on the Page or Meta app. Not proven yet.
-4. Staging to main PR (13 commits ahead on 2026-10-31, CI green) after the test passes.
+4. Staging to main PR (15 commits ahead on 2026-10-31, CI green) after the test passes.
 
 Owner:
 5. Backup on the second disk is from before the 10-31 flow changes; copy flow.json again when stable. .env copy and an encrypted off-site copy are still the owner's job.
