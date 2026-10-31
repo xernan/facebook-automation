@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import ExcelJS from 'exceljs';
-import { BANKS, buildApplication, workBoxes, WORK_BOX, type BankKey, formMissing, formSchema, formToData, settingsSchema, type AppForm, type BuiltApplication, type Details, type Lead, type Settings } from './application.js';
+import { BANK_NAME, BANKS, buildApplication, workBoxes, WORK_BOX, type BankKey, formMissing, formSchema, formToData, settingsSchema, type AppForm, type BuiltApplication, type Details, type Lead, type Settings } from './application.js';
 import { PDFDocument } from 'pdf-lib';
 import { fillBankPdf } from './pdf.js';
 import { placeProblems } from './placecheck.js';
@@ -14,7 +14,7 @@ import { replaceFile } from './files.js';
 //   <flowDir>/applicants/<YYYY-MM-DD> <Name>/  bank PDFs, ID photos, details.json, MISSING.txt
 //   <flowDir>/CLIENTS.xlsx                     one row per applicant, rebuilt from the applicant folders
 
-const BANK_LABEL = { metrobank: 'Metrobank', eastwest: 'EastWest', chinabank: 'China Bank' } as const;
+const BANK_LABEL = BANK_NAME;
 
 export async function loadSettings(flowDir: string): Promise<Settings> {
   try {

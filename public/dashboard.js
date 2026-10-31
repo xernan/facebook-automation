@@ -555,6 +555,9 @@ async function renderMarketing(a, fresh) {
   };
 }
 
+// Banks with a PDF form. Add a new one here too (see BANKS in src/application.ts).
+const PDF_BANKS = { metrobank: 'Metrobank', eastwest: 'EastWest', chinabank: 'China Bank' };
+
 function renderSettings(a) {
   const s = S.settings;
   const o = S.cardOptions;
@@ -562,7 +565,7 @@ function renderSettings(a) {
     `<select id="${id}"><option value="">(none)</option>${opts.map((x) => `<option${x === val ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
   a.innerHTML =
     `<div class="card"><h3>Agent</h3><label>Agent name</label><input id="agent_name" value="${esc(s.agent_name)}"><label>Agent code</label><input id="agent_code" value="${esc(s.agent_code)}"></div>` +
-    `<div class="card"><h3>Card to apply for (per bank)</h3><div class="row2"><div><label>Metrobank</label>${sel('cc_metrobank', o.metrobank || [], s.card_choice.metrobank)}</div><div><label>EastWest</label>${sel('cc_eastwest', o.eastwest || [], s.card_choice.eastwest)}</div><div><label>China Bank</label>${sel('cc_chinabank', o.chinabank || [], s.card_choice.chinabank)}</div></div></div>` +
+    `<div class="card"><h3>Card to apply for (per bank)</h3><div class="row2">${Object.entries(PDF_BANKS).map(([b, label]) => `<div><label>${esc(label)}</label>${sel('cc_' + b, o[b] || [], s.card_choice[b])}</div>`).join('')}</div></div>` +
     `<div class="card"><h3>Printing</h3><label>Printer</label>${sel('printer', S.printers, s.printer)}<label><input type="checkbox" id="auto_print" style="min-width:0"${s.auto_print ? ' checked' : ''}> Print new complete applications automatically (PC must be on)</label>${S.acrobat ? '' : '<p class="pill warn">Adobe Acrobat not found: printing will not work</p>'}</div>` +
     `<div class="card"><h3>Text on the forms</h3><div class="row2"><div><label>Answer size (pt, 0 = fit each box)</label><input id="text_uniform_size" type="number" step="0.5" min="0" max="20" value="${s.text_uniform_size}"></div><div><label><input type="checkbox" id="text_bold" style="min-width:0"${s.text_bold ? ' checked' : ''}> Bold</label></div></div></div>` +
     `<div class="card"><h3>Weekly goals</h3><div class="row2"><div><label>Target per week (what we aim for now)</label><input id="weekly_target" type="number" min="1" max="1000" step="1" value="${s.weekly_target}"></div><div><label>Quota per week (the real goal)</label><input id="weekly_quota" type="number" min="1" max="1000" step="1" value="${s.weekly_quota}"></div>` +
@@ -619,7 +622,7 @@ function renderSettings(a) {
       weekly_quota: Number(v('weekly_quota')),
       weekly_target: Number(v('weekly_target')),
       week_start_day: Number(v('week_start_day')),
-      card_choice: Object.fromEntries(['metrobank', 'eastwest', 'chinabank'].map((b) => [b, v('cc_' + b)]).filter(([, x]) => x)),
+      card_choice: Object.fromEntries(Object.keys(PDF_BANKS).map((b) => [b, v('cc_' + b)]).filter(([, x]) => x)),
     };
     if (!Number.isInteger(body.weekly_quota) || body.weekly_quota < 1 || body.weekly_quota > 1000) return msg('Weekly quota must be a whole number from 1 to 1000.');
     if (!Number.isInteger(body.weekly_target) || body.weekly_target < 1 || body.weekly_target > 1000) return msg('Weekly target must be a whole number from 1 to 1000.');

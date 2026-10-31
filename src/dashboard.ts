@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { PDFDocument } from 'pdf-lib';
-import { settingsSchema } from './application.js';
+import { BANKS, settingsSchema } from './application.js';
 import { ROOT_DIR } from './context.js';
 import { loadConfig } from './config.js';
 import { FlowStore } from './flowstore.js';
@@ -22,11 +22,9 @@ import dotenv from 'dotenv';
 // Personal data never leaves this computer. Every change needs the page's token and a localhost Host header,
 // so another website cannot drive it from the owner's browser.
 
-const BANK_FILES = ['metrobank', 'eastwest', 'chinabank'] as const;
-
 export async function cardOptions(templatesDir: string): Promise<Record<string, string[]>> {
   const out: Record<string, string[]> = {};
-  for (const bank of BANK_FILES) {
+  for (const bank of BANKS) {
     try {
       const pdf = await PDFDocument.load(await fs.readFile(path.join(templatesDir, `${bank}.pdf`)));
       out[bank] = [

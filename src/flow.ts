@@ -422,7 +422,8 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
         banks = p.banks;
       } else if (found.length === 0) return ask(flow.banks.unknown_reply);
       p.banks = banks;
-      const exclude = flow.banks.exclude_if_all.map((b) => b.toLowerCase());
+      // Owner rule: go on while any of our banks is left. A bank added to the buttons counts here too.
+      const exclude = [...flow.banks.exclude_if_all, ...(flow.banks.choices ?? [])].map((b) => b.toLowerCase());
       if (exclude.every((b) => banks.some((x) => x.toLowerCase() === b))) {
         p.stage = 'excluded';
         return ask(flow.banks.excluded_reply);

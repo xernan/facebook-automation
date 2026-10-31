@@ -73,16 +73,25 @@ describe('advance (script)', () => {
     expect(after.reply).toContain(flow.consent.prompt);
   });
 
-  it('cards from all 4 excluded banks -> excluded', () => {
-    const r = walk('yes', 'oo', 'BPI, Metro Bank, RCBC at East West');
+  it('cards from all 5 banks -> excluded', () => {
+    const r = walk('yes', 'oo', 'BPI, Metro Bank, RCBC, East West at China Bank');
     expect(r.person.stage).toBe('excluded');
     expect(r.reply).toBe(flow.banks.excluded_reply);
   });
 
-  it('3 of the 4 banks -> continues', () => {
-    const r = walk('yes', 'oo', 'BPI, Metrobank, RCBC');
-    expect(r.person.stage).toBe('steps');
-    expect(r.reply).toBe(flow.steps[0]!.prompt);
+  it('4 of the 5 banks -> continues, whichever one is left', () => {
+    for (const cards of ['BPI, Metrobank, RCBC, EastWest', 'Metrobank, EastWest, China Bank, RCBC']) {
+      const r = walk('yes', 'oo', cards);
+      expect(r.person.stage).toBe('steps');
+      expect(r.reply).toBe(flow.steps[0]!.prompt);
+    }
+  });
+
+  it('a bank added to the buttons is one more that can be applied to', () => {
+    const f = flowSchema.parse({ ...flow, banks: { ...flow.banks, choices: ['BPI', 'PNB'], more_prompt: 'More?', done_choice: 'Wala na', none_choice: 'Wala dito', exclude_if_all: ['BPI'] } });
+    let p = newPerson(NOW);
+    for (const text of ['hi', 'yes', 'oo', 'BPI', 'Wala na']) p = advance(f, p, { text }, NOW, 180).person;
+    expect(p.stage).toBe('steps');
   });
 
   it('no bank named -> asks again', () => {
@@ -796,9 +805,9 @@ describe('bank buttons', () => {
     expect(advance(withButtons, a.person, { text: 'Tapos na' }, NOW, 180).person.stage).toBe('steps');
   });
 
-  it('still excludes a person with all four banks, only after they finish', () => {
+  it('still excludes a person with every bank, only after they finish', () => {
     let p: typeof start = start;
-    for (const text of ['BPI', 'Metrobank', 'RCBC', 'EastWest']) p = advance(withButtons, p, { text }, NOW, 180).person as typeof start;
+    for (const text of ['BPI', 'Metrobank', 'RCBC', 'EastWest', 'China Bank', 'BDO']) p = advance(withButtons, p, { text }, NOW, 180).person as typeof start;
     expect(p.stage).toBe('banks');
     expect(advance(withButtons, p, { text: 'Tapos na' }, NOW, 180).person.stage).toBe('excluded');
   });

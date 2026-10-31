@@ -24,7 +24,7 @@ export const BANKS = ['metrobank', 'eastwest', 'chinabank'] as const;
 export type BankKey = (typeof BANKS)[number];
 
 /** Bank names as extractBanks() writes them (existing cards), per PDF bank. */
-const BANK_NAME: Record<BankKey, string> = { metrobank: 'Metrobank', eastwest: 'EastWest', chinabank: 'China Bank' };
+export const BANK_NAME: Record<BankKey, string> = { metrobank: 'Metrobank', eastwest: 'EastWest', chinabank: 'China Bank' };
 
 const text = (max = 200) => z.string().trim().min(1).max(max);
 const addr = z
