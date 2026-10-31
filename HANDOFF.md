@@ -71,6 +71,8 @@
   - Business Page, last 16 posts: 0 reactions, 1 comment, 6 shares; 2 followers.
   - Flow: bank and pending-bank buttons, answer checks by code then Claude (place of birth, home and office address), spelling fixes and flags, ID photo received reply, checks every 5 s quiet and 2 s active. Office address suggestions removed for speed.
 
+- 2026-10-31 PDF font (b89f2c1, 342 tests): no answer below 8 pt, others on a row stay 10 pt or more, long answers wrap instead of hitting the next one. Mall client PDFs remade; only the signature is left. Older test folder PDFs are not remade until saved.
+
 ## Open
 
 Owner priority (2026-10-31): finding clients comes first. Code only for real failures; no new features. The pending application question stays at 4 banks (owner). The first real client doubles as the stranger test.
