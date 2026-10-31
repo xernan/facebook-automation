@@ -427,6 +427,48 @@ describe('finalizeLead', () => {
     expect(await ops('chinabank')).toBe(1);
   });
 
+  it('one long answer does not shrink its row, and no answer prints below the readable size', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([608, 300]);
+    const form = pdf.getForm();
+    form.createTextField('length_of_service').addToPage(page, { x: 20, y: 100, width: 53, height: 9 });
+    form.createTextField('industry').addToPage(page, { x: 200, y: 100, width: 53, height: 7 });
+    form.createTextField('gross_income').addToPage(page, { x: 400, y: 100, width: 94, height: 11 });
+    const data = { length_of_service: '26', industry: 'Dental clinic (health care)', gross_income: '980,000' };
+    const app = { banks: ['chinabank' as const], data, bankOnly: { metrobank: {}, eastwest: {}, chinabank: {} }, missing: [], defaults: [] };
+    const { fillBankPdf, READABLE_SIZE } = await import('../src/pdf.js');
+    const { settingsSchema } = await import('../src/application.js');
+    const out = await fillBankPdf('chinabank', await pdf.save(), app, settingsSchema.parse({ text_uniform_size: 11.5 }));
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const doc = await getDocument({ data: new Uint8Array(out.bytes) }).promise;
+    const items = (await (await doc.getPage(1)).getTextContent()).items as any[];
+    const size = (t: string) => Math.abs(items.find((i) => i.str === t)?.transform[0] ?? 0);
+    expect(size('26')).toBeGreaterThanOrEqual(10);
+    expect(size('980,000')).toBeGreaterThanOrEqual(10);
+    expect(size('Dental clinic')).toBeGreaterThanOrEqual(READABLE_SIZE);
+  });
+
+  it('a long answer never runs over the next answer or off the page', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([608, 300]);
+    const form = pdf.getForm();
+    form.createTextField('industry').addToPage(page, { x: 430, y: 100, width: 53, height: 7 });
+    form.createTextField('gross_income').addToPage(page, { x: 500, y: 100, width: 94, height: 11 });
+    form.createTextField('position').addToPage(page, { x: 540, y: 200, width: 50, height: 6.5 });
+    const data = { industry: 'Telecommunications and information services', gross_income: '980,000', position: 'Senior Operations Team Manager' };
+    const app = { banks: ['chinabank' as const], data, bankOnly: { metrobank: {}, eastwest: {}, chinabank: {} }, missing: [], defaults: [] };
+    const { fillBankPdf } = await import('../src/pdf.js');
+    const { settingsSchema } = await import('../src/application.js');
+    const out = await fillBankPdf('chinabank', await pdf.save(), app, settingsSchema.parse({ text_uniform_size: 11.5 }));
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const doc = await getDocument({ data: new Uint8Array(out.bytes) }).promise;
+    const items = (await (await doc.getPage(1)).getTextContent()).items as any[];
+    const text = items.map((i) => i.str).join(' ');
+    for (const word of ['Telecommunications', 'services', 'Senior', 'Manager', '980,000']) expect(text).toContain(word);
+    for (const i of items.filter((x) => x.str.trim() && x.str !== '980,000' && Math.abs(x.transform[5] - 100) < 12)) expect(i.transform[4] + i.width).toBeLessThanOrEqual(500);
+    for (const i of items) expect(i.transform[4] + i.width).toBeLessThanOrEqual(608);
+  });
+
   it('a long address is printed in full even when the bank box has a character limit', async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([600, 200]);

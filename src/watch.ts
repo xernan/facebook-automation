@@ -47,7 +47,7 @@ export function operatorPrompt(pageId: string): string {
     '     Place names: correct misspelled barangay, city, province and place of birth (birth_town) only when you are sure which',
     '     place they meant, and list each one in spelling_fixes ("Muntinlua -> Muntinlupa"). If unsure, keep what they typed; the code flags it.',
     '     A business owner (position Owner, own business): employment_type Self-employed, and WebSearch the business name',
-    '     and city for its line of business (e.g. "Dental clinic", "Bakery") as industry. If you cannot find it, leave it out.',
+    '     and city for its line of business in 1 to 3 words (e.g. "Dental clinic", "Bakery") as industry. If you cannot find it, leave it out.',
     '     If the result lists a missing HOME or OFFICE address part (street/house no., barangay, city, province), ask the',
     '     applicant for exactly that part in one short message (only within the 24-hour window), then finalize again.',
     '   - next_question.wants_suggestions: you may WebSearch public facts for it (e.g. the branch address of the employer',

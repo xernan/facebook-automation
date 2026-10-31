@@ -104,6 +104,10 @@ function fontBytes(bold: boolean): Uint8Array {
 }
 
 const MIN_SIZE = 4;
+/** Owner rule: every answer must be readable on paper. No answer prints smaller than this (pt). */
+export const READABLE_SIZE = 8;
+/** One long answer must not shrink its row: the others on the line stay at least this big (pt). */
+const ROW_KEEP_SIZE = 10;
 /** As large as the box allows (95% of its height, text fits its width), up to `largest`. */
 export function fitFontSize(font: PDFFont, text: string, box: { width: number; height: number }, cells: number, largest: number): number {
   const room = cells ? box.width / cells - 1 : box.width - 4;
@@ -264,7 +268,7 @@ export async function fillBankPdf(
     }
   }
 
-  drawPlans(font, sameSizePerLine(plans));
+  drawPlans(font, keepInRoom(font, sameSizePerLine(plans)));
 
   // Flatten: answers become part of the page, so every viewer and printer shows them (some print form boxes blank).
   if (settings.flatten) form.flatten();
@@ -295,23 +299,56 @@ export function twoLines(text: string): [string, string] | undefined {
  * that lets it print larger than squeezing it onto one line.
  */
 function planUniform(font: PDFFont, text: string, rect: Plan['rect'], cells: number, page: PDFPage, uniform: number): Plan {
-  const one = Math.min(uniform, fitFontSize(font, text, { width: rect.width, height: 1e6 }, cells, 1e6));
+  const fit = (t: string) => Math.min(uniform, fitFontSize(font, t, { width: rect.width, height: 1e6 }, cells, 1e6));
+  // Too long for a small box: drop a note in brackets before making it hard to read.
+  if (!cells && fit(text) < READABLE_SIZE) {
+    const short = text.replace(/\s*\([^)]*\)/g, '').trim();
+    if (short) text = short;
+  }
+  const one = fit(text);
   if (!cells && one < uniform && rect.height >= 12) {
     const split = twoLines(text);
     if (split) {
-      const two = Math.min(uniform, rect.height / 2.25, ...split.map((l) => fitFontSize(font, l, { width: rect.width, height: 1e6 }, 0, 1e6)));
+      const two = Math.min(uniform, Math.max(rect.height / 2.25, READABLE_SIZE), ...split.map((l) => fitFontSize(font, l, { width: rect.width, height: 1e6 }, 0, 1e6)));
       if (two > one) return { page, rect, lines: split, cells, size: Math.floor(two * 2) / 2 };
     }
   }
-  return { page, rect, lines: [text], cells, size: one };
+  return { page, rect, lines: [text], cells, size: cells ? one : Math.max(one, READABLE_SIZE) };
 }
 
-/** Answers that share a printed line (same page and baseline) use the same size: the smallest any of them needs. */
+/**
+ * Answers that share a printed line (same page and baseline) use the same size: the smallest any of them needs,
+ * unless that is small. Then a long answer keeps its own size and the others stay at ROW_KEEP_SIZE or more.
+ */
 export function sameSizePerLine<T extends { page: unknown; rect: { y: number }; cells: number; size: number }>(plans: T[]): T[] {
+  const sizes = new Map<T, number>();
   for (const p of plans) {
     if (p.cells) continue;
     const row = plans.filter((q) => !q.cells && q.page === p.page && Math.abs(q.rect.y - p.rect.y) < 1.5);
-    p.size = Math.min(...row.map((q) => q.size));
+    sizes.set(p, Math.min(p.size, Math.max(Math.min(...row.map((q) => q.size)), ROW_KEEP_SIZE)));
+  }
+  for (const [p, size] of sizes) p.size = size;
+  return plans;
+}
+
+/**
+ * An answer kept at the readable size may run past its small box, but never over the next answer or off the page:
+ * then it wraps to two lines, or as a last resort shrinks to the room there is.
+ */
+function keepInRoom(font: PDFFont, plans: Plan[]): Plan[] {
+  for (const p of plans) {
+    if (p.cells || p.lines.length !== 1) continue;
+    const next = plans.filter((q) => q.page === p.page && q.rect.x > p.rect.x && Math.abs(q.rect.y - p.rect.y) < 6).map((q) => q.rect.x - 3);
+    const room = Math.min(p.page.getWidth() - 12, ...next) - p.rect.x - 1.5;
+    const text = p.lines[0]!;
+    if (font.widthOfTextAtSize(text, p.size) <= room) continue;
+    const fit = (t: string) => Math.floor((room / font.widthOfTextAtSize(t, 1)) * 2) / 2;
+    const split = twoLines(text);
+    const two = split ? Math.min(p.size, ...split.map(fit)) : 0;
+    if (split && two >= fit(text)) {
+      p.lines = split;
+      p.size = two;
+    } else p.size = Math.max(MIN_SIZE, fit(text));
   }
   return plans;
 }
@@ -323,7 +360,7 @@ function drawPlans(font: PDFFont, plans: Plan[]) {
       const cell = rect.width / cells;
       [...lines[0]!].forEach((ch, i) => page.drawText(ch, { x: rect.x + i * cell + (cell - font.widthOfTextAtSize(ch, size)) / 2, y, size, font }));
     } else if (lines.length === 2) {
-      page.drawText(lines[0]!, { x: rect.x + 1.5, y: rect.y + rect.height / 2 + 0.8, size, font });
+      page.drawText(lines[0]!, { x: rect.x + 1.5, y: Math.max(rect.y + rect.height / 2 + 0.8, rect.y + 1.2 + size * 0.95), size, font });
       page.drawText(lines[1]!, { x: rect.x + 1.5, y: rect.y + 1.2, size, font });
     } else {
       const x = center ? rect.x + (rect.width - font.widthOfTextAtSize(lines[0]!, size)) / 2 : rect.x + 1.5;
