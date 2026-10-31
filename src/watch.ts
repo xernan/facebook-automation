@@ -6,7 +6,7 @@ import path from 'node:path';
 import { ROOT_DIR, createContext } from './context.js';
 import { findPending, flowTools, sendNudges } from './flowtools.js';
 import { GraphError } from './graph.js';
-import { ClaudeBrake, isMessagingBlocked, pendingKey, takeLock } from './watchguard.js';
+import { ClaudeBrake, claudeFailureReason, collectOutput, isMessagingBlocked, pendingKey, takeLock } from './watchguard.js';
 
 // Watcher: checks the Page's Messenger without AI (every FB_WATCH_ACTIVE_INTERVAL_SEC while someone is chatting,
 // else every FB_WATCH_INTERVAL_SEC; slower on its own when Meta says we are calling too often). Plain answers the
@@ -78,8 +78,9 @@ async function main() {
       const child = spawn(
         claudeBin(ctx.cfg.FB_WATCH_CLAUDE_BIN),
         ['-p', operatorPrompt(pageId), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', 'WebSearch', '--allowedTools', ALLOWED.join(',')],
-        { cwd: ctx.cfg.flowDir, stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true },
+        { cwd: ctx.cfg.flowDir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
       );
+      const output = collectOutput(child);
       const timer = setTimeout(() => {
         log('Claude run took too long; stopped it.');
         child.kill();
@@ -91,6 +92,7 @@ async function main() {
       });
       child.on('exit', (code) => {
         clearTimeout(timer);
+        if (code !== 0) log(`Claude failed: ${ctx.graph.scrub(claudeFailureReason(output()))}`);
         resolve(code);
       });
     });

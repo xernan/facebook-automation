@@ -6,7 +6,22 @@ import path from 'node:path';
 // only one watcher runs at a time.
 
 /** Meta: the Page may not message people for now (2022) or the message looked like spam (368). */
-export const isMessagingBlocked = (err: unknown) => {
+// Keeps only the "API Error" line of a failed Claude run: other output can quote chats, and logs must not.
+export function claudeFailureReason(output: string): string {
+  return /^API Error: .{1,300}/m.exec(output)?.[0] ?? 'no API error shown';
+}
+
+export function collectOutput(child: { stdout: NodeJS.ReadableStream | null; stderr: NodeJS.ReadableStream | null }): () => string {
+  let text = '';
+  const add = (d: unknown) => {
+    text = (text + String(d)).slice(-8000);
+  };
+  child.stdout?.on('data', add);
+  child.stderr?.on('data', add);
+  return () => text;
+}
+
+export const isMessagingBlocked =(err: unknown) => {
   const e = err as { code?: number; message?: string } | undefined;
   return e?.code === 2022 || e?.code === 368 || /restricted from messaging/i.test(e?.message ?? '');
 };
