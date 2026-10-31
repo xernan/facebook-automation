@@ -53,7 +53,7 @@
   (FB_FLOW_DIR/company-phones.json, real numbers with source or typed by owner, per company + city): finalize fills
   blank office phone, Default Form "Find number", Settings lists/removes. Random TIN/phone from the card app NOT ported.
 
-- 2026-10-25 (72 commits since the entry above, read from git log):
+- Through 2026-10-25 (48 commits since the entry above, read from git log):
   - Page restricted from messaging by Meta (#2022, 28 days) after a greeting that listed OTP/CVV/PIN. Added: Community
     Standards guard on every outgoing text, FB_MESSENGER_LIVE switch, no message tags, pause on block, one watcher.
   - Comment bot (FB_COMMENTS_LIVE): human-sounding replies, hourly and daily caps, optional DM that resumes an application.
@@ -66,7 +66,7 @@
 - 2026-10-31:
   - Bot silent: Claude CLI too old for its model. Updated to 2.1.316; failed runs now log the reason. Bot reply seen live.
   - Fixed: duplicate keepers (one per bot), dashboard tests starting PowerShell, a spawn error skipping ClaudeBrake.
-  - PR #6 merged to main. 2 finished flow records were owner tests; the owner's account was reset with fb_flow_reset.
+  - PR #6 merged to main. The owner's test chat had finished the flow on 10-25; that account was reset with fb_flow_reset.
   - Flow rules are final (see the flow code). Finished chats do not restart; the bot only answers what they ask.
   - Business Page, last 16 posts: 0 reactions, 1 comment, 6 shares; 2 followers.
 
