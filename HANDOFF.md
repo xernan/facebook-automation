@@ -73,6 +73,8 @@
 
 - 2026-10-31 PDF font (b89f2c1, 342 tests): no answer below 8 pt, others on a row stay 10 pt or more, long answers wrap instead of hitting the next one. Mall client PDFs remade; only the signature is left. Older test folder PDFs are not remade until saved.
 
+- 2026-11-01 Ad published on the owner's order: Messenger ad on the Page, PHP 95 a day to Nov 4 from the PHP 299.99 prepaid funds (no card on file), Philippines, Financial category, PNB card image (owner says agents are authorized), text says CARD MAX is not the bank. Was Processing at last check; not yet confirmed delivering. Read results Nov 4.
+
 ## Open
 
 Owner priority (2026-10-31): finding clients comes first. Code only for real failures; no new features. The pending application question stays at 4 banks (owner). The first real client doubles as the stranger test.
