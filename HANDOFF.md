@@ -53,7 +53,13 @@
   (FB_FLOW_DIR/company-phones.json, real numbers with source or typed by owner, per company + city): finalize fills
   blank office phone, Default Form "Find number", Settings lists/removes. Random TIN/phone from the card app NOT ported.
 
+- Verified 2026-10-31: 286 tests + secret scan pass, doctor OK. Logon task for the bots exists; watch, commentwatch and
+  dashboard are running. Staging CI green; staging is 68 commits ahead of main (last PR to main: #5).
+  Business Page, last 16 posts: 0 reactions, 1 comment, 6 shares. 2 Messenger chats; the one finished by someone other
+  than the owner is not yet confirmed as a real lead.
+
 ## Open (needs owner)
+- Uncommitted since 2026-10-31 11:08, source unconfirmed: scripts/keep-running.ps1, restart-bots.cmd, scripts/restart-bots.ps1.
 - GitHub done 2026-10-24: PR #1 merged to main; old cardmaxmarketing-blip repo deleted.
 - Lead Ads dropped by owner (no Lead Ads use case; login with all scopes gave "Can't load URL").
 
