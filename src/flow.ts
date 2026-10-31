@@ -232,6 +232,8 @@ const isSkip = (text: string) => {
 };
 
 const MARRIED = /\b(married|kasal|may\s+asawa)\b/i;
+const isGreeting = (text: string) =>
+  /^(hi+|hello+|helo|hey|good\s*(morning|afternoon|evening|eve|day)|gud\s*(morning|am|pm|eve)|kumusta|musta)(\s+(po|sir|ma'?am))?[\s.!]*$/i.test(text);
 
 const CIVIL: Record<string, string> = {
   single: 'Single', binata: 'Single', dalaga: 'Single',
@@ -413,7 +415,7 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
     case 'steps': {
       const step = flow.steps[p.step];
       if (!step) return askQ(goToStep(flow, p, p.step, suggestions)); // flow file changed under this person
-      if (!text) return askQ(question(flow, p, step, p.suggestions ?? []));
+      if (!text || isGreeting(text)) return askQ(question(flow, p, step, p.suggestions ?? []));
 
       let answer = text;
       if (p.suggestions?.length) {
@@ -480,6 +482,8 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
   if (!text || text.includes('?')) return false;
   const w = words(text);
   if (w.some((x) => QUESTION_WORDS.has(x))) return false;
+  // A "hi" in the middle gets the current question again.
+  if (isGreeting(text) && ['consent', 'carded', 'banks', 'steps', 'id_photo'].includes(p.stage)) return true;
   switch (p.stage) {
     case 'new':
       return w.length > 0 && w.length <= 5 && w.every((x) => GREETING_WORDS.has(x));

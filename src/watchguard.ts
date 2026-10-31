@@ -92,6 +92,31 @@ export class ClaudeBrake {
   }
 }
 
+/**
+ * Reading all chats takes over a second, so the watcher first asks only when the newest chat changed. Meta's time has
+ * whole seconds, so a second message in the same second could look like no change: it keeps reading for `settleMs`.
+ */
+export class ChatCheck {
+  private seen: string | undefined;
+  private changedAt = 0;
+  private fullAt = 0;
+
+  constructor(
+    private readonly fullEveryMs: number,
+    private readonly settleMs = 4000,
+  ) {}
+
+  needsFull(latest: string | undefined, force: boolean, now = Date.now()): boolean {
+    if (latest !== this.seen) {
+      this.seen = latest;
+      this.changedAt = now;
+    }
+    if (!force && now - this.changedAt >= this.settleMs && now - this.fullAt < this.fullEveryMs) return false;
+    this.fullAt = now;
+    return true;
+  }
+}
+
 /** One key for the chats waiting now: who, their newest unhandled message, and a waiting outbox. */
 export function pendingKey(list: { psid: string; outbox_pending: boolean; needs_id_review?: boolean; messages: { id: string }[] }[]): string {
   return list

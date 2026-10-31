@@ -104,6 +104,17 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
   return out;
 }
 
+/** When the newest chat of the Page last changed: a quick check before reading all chats. */
+export async function latestChatTime(ctx: Ctx, page_id: string): Promise<string | undefined> {
+  const res = await ctx.graph.get(page_id, `${page_id}/conversations`, { platform: 'messenger', fields: 'updated_time', limit: 1 });
+  return res.data?.[0]?.updated_time;
+}
+
+/** Shows "typing..." while Claude works on a reply. Only a courtesy, so a failure changes nothing. */
+export async function showTyping(ctx: Ctx, page_id: string, to: string): Promise<void> {
+  await ctx.graph.post(page_id, `${page_id}/messages`, { recipient: JSON.stringify({ id: to }), sender_action: 'typing_on' }).catch(() => undefined);
+}
+
 async function send(ctx: Ctx, page_id: string, to: string, text: string, choices?: string[]) {
   if (!botMayAnswer(await loadTestMode(ctx.cfg.flowDir), to)) throw new Error('Test mode is on and this person is not a tester.');
   const message = choices?.length

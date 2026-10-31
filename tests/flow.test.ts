@@ -873,6 +873,25 @@ describe('answers Claude must check', () => {
   });
 });
 
+describe('a greeting in the middle of the flow', () => {
+  const f = { ...flow, steps: [{ key: 'email', prompt: 'Email?', validate: 'email' as const, invalid_reply: 'Bad email.' }, { key: 'next_one', prompt: 'Next?' }] };
+  const p = { ...newPerson(NOW), stage: 'steps' as const };
+
+  it('the script asks the current question again, and it is not saved as the answer', () => {
+    for (const hi of ['hi', 'Hello po', 'good morning', 'Hiii!']) {
+      expect(scriptCanAnswer(f, p, { text: hi })).toBe(true);
+      const r = advance(f, p, { text: hi }, NOW, 30);
+      expect(r.reply).toBe('Email?');
+      expect(r.person.step).toBe(0);
+      expect(r.person.answers.email).toBeUndefined();
+    }
+  });
+
+  it('a sentence that starts with a greeting is not one', () => {
+    expect(scriptCanAnswer(f, p, { text: 'hi may tanong ako' })).toBe(false);
+  });
+});
+
 describe('civil status check', () => {
   const f = { ...flow, steps: [{ key: 'civil_status', prompt: 'Civil status?', sets_married: true, validate: 'civil_status' as const, invalid_reply: 'Pick one.', choices: ['Single', 'Married'] }, { key: 'next_one', prompt: 'Next?' }] };
   const p = { ...newPerson(NOW), stage: 'steps' as const };

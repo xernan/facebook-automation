@@ -87,12 +87,32 @@ export interface PageInfo {
   tasks?: string[];
 }
 
+/** The highest percentage in Meta's usage headers, or undefined when it sent none. */
+export function metaUsagePct(appUsage?: string | null, pageUsage?: string | null): number | undefined {
+  const numbers: unknown[] = [];
+  try {
+    if (appUsage) {
+      const a = JSON.parse(appUsage);
+      numbers.push(a.call_count, a.total_cputime, a.total_time);
+    }
+    if (pageUsage) {
+      for (const list of Object.values(JSON.parse(pageUsage)) as any[]) for (const u of list) numbers.push(u.call_count, u.total_cputime, u.total_time);
+    }
+  } catch {
+    return undefined;
+  }
+  const valid = numbers.filter((n): n is number => typeof n === 'number');
+  return valid.length ? Math.max(...valid) : undefined;
+}
+
 export class GraphClient {
   private readonly readLimiter: RateLimiter;
   private readonly writeLimiter: RateLimiter;
   private pages: Map<string, PageInfo> | undefined;
   /** Page ids that were not found, with when (for the refresh cooldown). */
   private readonly missing = new Map<string, number>();
+  /** How much of its call limit Meta last reported as used (0-100). */
+  usagePct = 0;
 
   constructor(
     private readonly cfg: Config,
@@ -163,6 +183,7 @@ export class GraphClient {
     } catch (err) {
       throw networkError(method, err);
     }
+    this.usagePct = metaUsagePct(res.headers?.get('x-app-usage'), res.headers?.get('x-business-use-case-usage')) ?? this.usagePct;
     let json: any;
     try {
       json = text ? JSON.parse(text) : {};

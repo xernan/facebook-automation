@@ -4,9 +4,9 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ROOT_DIR, createContext } from './context.js';
-import { findPending, flowTools, sendNudges } from './flowtools.js';
+import { findPending, flowTools, latestChatTime, sendNudges, showTyping } from './flowtools.js';
 import { GraphError } from './graph.js';
-import { ClaudeBrake, isMessagingBlocked, pendingKey, runClaudeProcess, takeLock } from './watchguard.js';
+import { ChatCheck, ClaudeBrake, isMessagingBlocked, pendingKey, runClaudeProcess, takeLock } from './watchguard.js';
 
 // Watcher: checks the Page's Messenger without AI (every FB_WATCH_ACTIVE_INTERVAL_SEC while someone is chatting,
 // else every FB_WATCH_INTERVAL_SEC; slower on its own when Meta says we are calling too often). Plain answers the
@@ -107,42 +107,51 @@ async function main() {
   let blockedUntil = 0; // Meta restricted the Page from messaging: no replies (and no Claude runs) until then
   const BLOCK_RECHECK_MS = 6 * 3_600_000;
   log(`watching every ${ctx.cfg.FB_WATCH_ACTIVE_INTERVAL_SEC}s while chatting, ${ctx.cfg.FB_WATCH_INTERVAL_SEC}s when quiet`);
-  for (;;) {
-    try {
-      const pending = await findPending(ctx, pageId);
-      if (pending.some((p) => p.messages.length > 0)) lastChat = Date.now();
-      const fast = pending.filter((x) => x.outbox_pending || (x.script_can_answer && x.can_reply));
-      if (Date.now() >= blockedUntil) {
-        // Fast lane: the script answers plain replies (and resends a waiting reply) itself, in about a second.
-        for (const p of fast) {
-          try {
-            await answer({ page_id: pageId, psid: p.psid, message_ids: p.messages.length ? p.messages.map((m) => m.id) : ['m_resend'], kind: 'answer' }, ctx);
-          } catch (err) {
-            if (isMessagingBlocked(err)) {
-              blockedUntil = Date.now() + BLOCK_RECHECK_MS;
-              log(`Meta has restricted this Page from messaging; replies paused, next try in 6 hours. ${ctx.graph.scrub(String((err as Error).message))}`);
-              break;
-            }
-            log(`fast reply failed, Claude will handle it: ${ctx.graph.scrub(err instanceof Error ? err.message : String(err))}`);
+  const check = new ChatCheck(ctx.cfg.FB_WATCH_FULL_CHECK_SEC * 1000);
+  let again = true; // the last round left work behind: read all chats again without waiting for a change
+  const wakeUp = async () => {
+    const pending = await findPending(ctx, pageId);
+    if (pending.some((p) => p.messages.length > 0)) lastChat = Date.now();
+    const fast = pending.filter((x) => x.outbox_pending || (x.script_can_answer && x.can_reply));
+    if (Date.now() >= blockedUntil) {
+      // Fast lane: the script answers plain replies (and resends a waiting reply) itself, in about a second.
+      for (const p of fast) {
+        try {
+          await answer({ page_id: pageId, psid: p.psid, message_ids: p.messages.length ? p.messages.map((m) => m.id) : ['m_resend'], kind: 'answer' }, ctx);
+        } catch (err) {
+          if (isMessagingBlocked(err)) {
+            blockedUntil = Date.now() + BLOCK_RECHECK_MS;
+            log(`Meta has restricted this Page from messaging; replies paused, next try in 6 hours. ${ctx.graph.scrub(String((err as Error).message))}`);
+            break;
           }
+          log(`fast reply failed, Claude will handle it: ${ctx.graph.scrub(err instanceof Error ? err.message : String(err))}`);
         }
       }
-      // One reminder to people who stopped mid-application (no AI; inside Meta's 24-hour window only).
-      if (Date.now() >= blockedUntil) {
-        const n = await sendNudges(ctx, pageId);
-        if (n) log(`sent ${n} reminder(s) to people who stopped mid-application`);
-      }
-      // Whatever the fast lane did not finish goes to Claude (never while Meta blocks messaging).
-      const waiting = (list: typeof pending) => list.filter((p) => p.outbox_pending || p.needs_id_review || p.needs_finalize || (p.can_reply && p.messages.length > 0));
-      const rest = Date.now() < blockedUntil || waiting(pending).length === 0 ? [] : waiting(fast.length ? await findPending(ctx, pageId) : pending);
-      const key = pendingKey(rest);
-      if (rest.length > 0 && brake.canRun(key)) {
-        log(`${rest.length} chat(s) need Claude; waking Claude`);
-        const code = await runClaude();
-        const after = pendingKey(waiting(await findPending(ctx, pageId)));
-        const wait = brake.done(key, code === 0, after);
-        log(`Claude finished (exit ${code})${wait ? `; same chats still waiting, next Claude try in ${wait}s` : ''}`);
-      }
+    }
+    // One reminder to people who stopped mid-application (no AI; inside Meta's 24-hour window only).
+    if (Date.now() >= blockedUntil) {
+      const n = await sendNudges(ctx, pageId);
+      if (n) log(`sent ${n} reminder(s) to people who stopped mid-application`);
+    }
+    // Whatever the fast lane did not finish goes to Claude (never while Meta blocks messaging).
+    const waiting = (list: typeof pending) => list.filter((p) => p.outbox_pending || p.needs_id_review || p.needs_finalize || (p.can_reply && p.messages.length > 0));
+    // What the fast lane answered needs no new read now; the next round picks up anything it left, such as an ID photo.
+    const others = waiting(pending).filter((p) => !fast.includes(p));
+    const rest = Date.now() < blockedUntil || others.length === 0 ? [] : waiting(fast.length ? await findPending(ctx, pageId) : pending);
+    const key = pendingKey(rest);
+    again = fast.length > 0 || rest.length > 0;
+    if (rest.length > 0 && brake.canRun(key)) {
+      log(`${rest.length} chat(s) need Claude; waking Claude`);
+      for (const p of rest) if (p.can_reply && p.messages.length > 0) await showTyping(ctx, pageId, p.psid);
+      const code = await runClaude();
+      const after = pendingKey(waiting(await findPending(ctx, pageId)));
+      const wait = brake.done(key, code === 0, after);
+      log(`Claude finished (exit ${code})${wait ? `; same chats still waiting, next Claude try in ${wait}s` : ''}`);
+    }
+  };
+  for (;;) {
+    try {
+      if (check.needsFull(await latestChatTime(ctx, pageId), again)) await wakeUp();
       backoff = Math.max(0, backoff - 5);
     } catch (err) {
       if (err instanceof GraphError && [4, 17, 32, 613, 80001].includes(err.code ?? -1)) {
@@ -151,7 +160,9 @@ async function main() {
       } else log(ctx.graph.scrub(err instanceof Error ? err.message : String(err)));
     }
     const active = Date.now() - lastChat < ctx.cfg.FB_WATCH_ACTIVE_MINUTES * 60_000;
-    const wait = (active ? ctx.cfg.FB_WATCH_ACTIVE_INTERVAL_SEC : ctx.cfg.FB_WATCH_INTERVAL_SEC) + backoff;
+    // Meta reports how much of its call limit is used: slow down well before it stops us.
+    const slow = ctx.graph.usagePct >= ctx.cfg.FB_WATCH_SLOW_USAGE_PCT ? ctx.cfg.FB_WATCH_SLOW_EXTRA_SEC : 0;
+    const wait = (active ? ctx.cfg.FB_WATCH_ACTIVE_INTERVAL_SEC : ctx.cfg.FB_WATCH_INTERVAL_SEC) + backoff + slow;
     await new Promise((r) => setTimeout(r, wait * 1000));
   }
 }

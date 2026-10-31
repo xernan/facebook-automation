@@ -4,8 +4,40 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { GraphError } from '../src/graph.js';
-import { ClaudeBrake, claudeFailureReason, collectOutput, isMessagingBlocked, pendingKey, runClaudeProcess, takeLock } from '../src/watchguard.js';
+import { GraphError, metaUsagePct } from '../src/graph.js';
+import { ChatCheck, ClaudeBrake, claudeFailureReason, collectOutput, isMessagingBlocked, pendingKey, runClaudeProcess, takeLock } from '../src/watchguard.js';
+
+describe('quick check before reading all chats', () => {
+  const T = 1_000_000;
+
+  it('reads all chats on a change and while it settles, then only every so often', () => {
+    const c = new ChatCheck(30_000, 4000);
+    expect(c.needsFull('a', false, T)).toBe(true);
+    expect(c.needsFull('a', false, T + 1000)).toBe(true); // a second message can share the same second
+    expect(c.needsFull('a', false, T + 5000)).toBe(false);
+    expect(c.needsFull('b', false, T + 6000)).toBe(true);
+    expect(c.needsFull('b', false, T + 11_000)).toBe(false);
+    expect(c.needsFull('b', false, T + 40_000)).toBe(true); // the regular full read
+  });
+
+  it('work left from the last round forces a read', () => {
+    const c = new ChatCheck(30_000, 4000);
+    c.needsFull('a', false, T);
+    expect(c.needsFull('a', true, T + 5000)).toBe(true);
+  });
+});
+
+describe('Meta usage', () => {
+  it('takes the highest number from either header', () => {
+    expect(metaUsagePct('{"call_count":15,"total_cputime":0,"total_time":6}', '{"1":[{"call_count":80,"total_cputime":3,"total_time":1}]}')).toBe(80);
+    expect(metaUsagePct('{"call_count":15}', null)).toBe(15);
+  });
+
+  it('no header or a broken one changes nothing', () => {
+    expect(metaUsagePct(null, null)).toBeUndefined();
+    expect(metaUsagePct('nope', null)).toBeUndefined();
+  });
+});
 
 describe('watcher brakes', () => {
   it('a failing Claude run is not repeated every few seconds for the same chats (1, 2, 4 ... 30 min)', () => {
@@ -86,8 +118,8 @@ describe('starting Claude', () => {
 });
 
 describe('watch timing defaults', () => {
-  it('checks every 5 s when quiet and every 2 s while chatting', () => {
+  it('checks every 2 s when quiet and every 1 s while chatting', () => {
     const cfg = loadConfig({}, '.', { requireToken: false });
-    expect([cfg.FB_WATCH_INTERVAL_SEC, cfg.FB_WATCH_ACTIVE_INTERVAL_SEC]).toEqual([5, 2]);
+    expect([cfg.FB_WATCH_INTERVAL_SEC, cfg.FB_WATCH_ACTIVE_INTERVAL_SEC]).toEqual([2, 1]);
   });
 });

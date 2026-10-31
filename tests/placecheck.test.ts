@@ -45,7 +45,10 @@ describe('answers the code accepts at once', () => {
   it('address: needs a street sign, a barangay and a known city', () => {
     expect(clearlyComplete('home_address', '12 Rizal St, Brgy San Jose, Malolos, Bulacan')).toBe(true);
     expect(clearlyComplete('home_address', 'Rizal St, Bayanan, Muntinlupa')).toBe(true);
-    for (const no of ['Muntinlupa', 'Brgy Bayanan, Muntinlupa', 'Rizal St, Muntinlupa', '12 Rizal St, Bayanan, Muntinlua']) expect(clearlyComplete('home_address', no)).toBe(false);
+    for (const no of ['Muntinlupa', 'Brgy Bayanan, Muntinlupa', 'Rizal St, Muntinlupa', 'Rizal St, Muntinlua', '12 Rizal St, Bayanan, Xyzzyville']) expect(clearlyComplete('home_address', no)).toBe(false);
+    // One wrong letter in the city: complete, and the spelling is handled at finalize.
+    expect(clearlyComplete('home_address', '12 Rizal St, Bayanan, Muntinlua')).toBe(true);
+    expect(clearlyComplete('home_address', '32 san guillermo st alabang muntinlua')).toBe(true);
   });
 
   it('a building counts for the office, not for the home', () => {

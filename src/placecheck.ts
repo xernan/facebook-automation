@@ -113,6 +113,17 @@ function citiesIn(text: string) {
   );
 }
 
+/** Cities one letter away from a word in the text ("Muntinlua"). Short names are left out: too many near matches. */
+function citiesWithTypoIn(text: string) {
+  const data = address();
+  const words = text.split(/[\s,]+/).map(norm).filter((w) => w.length >= 6);
+  return Object.keys(data).flatMap((p) =>
+    Object.keys(data[p]!.cities)
+      .filter((c) => cityKey(c).length >= 6 && words.some((w) => distance(w, cityKey(c)) === 1))
+      .map((c) => ({ province: p, city: c })),
+  );
+}
+
 /** "sa Malolos po." -> "Malolos": the place without the words around it. */
 const placeOnly = (text: string) => text.trim().replace(/[\s.!]+$/, '').replace(/^(?:taga|sa)\s+/i, '').replace(/\s+(?:po|province|probinsya)$/i, '');
 
@@ -143,7 +154,8 @@ export function clearlyComplete(kind: 'birthplace' | 'home_address' | 'office_ad
   }
   const street = STREET_WORDS.test(text) || (kind === 'office_address' && BUILDING_WORDS.test(text));
   if (!street) return false;
-  return found.some((x) => {
+  // A misspelled city is still a complete address: the spelling is corrected or flagged at finalize.
+  return [...found, ...citiesWithTypoIn(text)].some((x) => {
     const barangays = address()[x.province]!.cities[x.city]!.barangays ?? [];
     return BARANGAY_WORD.test(text) || barangays.some((b) => norm(text).includes(norm(b)));
   });
