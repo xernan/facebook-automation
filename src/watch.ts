@@ -70,11 +70,13 @@ function claudeBin(configured?: string): string {
   return process.platform === 'win32' && existsSync(exe) ? exe : 'claude';
 }
 
-/** A Windows notice on the PC when the AI stops working (once per outage). Holds no chat text. */
+/** The owner saw this window on the PC (2026-11-01); a balloon notice did not show. It stays until OK. Holds no chat text. */
+export const ALERT_SCRIPT = "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('The AI of the bot stopped working. New chats only get the greeting. On this PC run: claude auth login', 'CARD MAX bot', 'OK', 'Warning', 'Button1', 'DefaultDesktopOnly')";
+
+/** A window on the PC when the AI stops working (once per outage). */
 function alertOwner() {
   if (process.platform !== 'win32') return;
-  const script = "Add-Type -AssemblyName System.Windows.Forms; $n = New-Object System.Windows.Forms.NotifyIcon; $n.Icon = [System.Drawing.SystemIcons]::Warning; $n.Visible = $true; $n.ShowBalloonTip(60000, 'CARD MAX bot', 'The AI stopped working. Open the dashboard. Run: claude auth login', 'Warning'); Start-Sleep 60; $n.Dispose()";
-  spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', script], { stdio: 'ignore', windowsHide: true, detached: true }).on('error', () => undefined).unref();
+  spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', ALERT_SCRIPT], { stdio: 'ignore', windowsHide: true, detached: true }).on('error', () => undefined).unref();
 }
 
 const log = (m: string) => console.error(`[watch ${new Date().toISOString()}] ${m}`);

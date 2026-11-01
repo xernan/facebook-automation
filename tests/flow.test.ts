@@ -456,6 +456,13 @@ describe('saveIdImage', () => {
 });
 
 describe('watcher prompt', () => {
+  it('warns the owner with a window that stays on the desktop, not a balloon notice', async () => {
+    const { ALERT_SCRIPT } = await import('../src/watch.js');
+    expect(ALERT_SCRIPT).toContain('MessageBox');
+    expect(ALERT_SCRIPT).toContain('DefaultDesktopOnly');
+    expect(ALERT_SCRIPT).not.toContain('NotifyIcon');
+  });
+
   it('names the page, limits Claude to the flow, and forbids asking for card secrets', async () => {
     const { operatorPrompt } = await import('../src/watch.js');
     const p = operatorPrompt('123');
