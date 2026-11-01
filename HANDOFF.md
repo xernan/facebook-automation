@@ -75,6 +75,8 @@
 
 - 2026-11-01 Ad published on the owner's order: Messenger ad on the Page, PHP 95 a day to Nov 4 from the PHP 299.99 prepaid funds (no card on file), Philippines, Financial category, PNB card image (owner says agents are authorized), text says CARD MAX is not the bank. Was Processing at last check; not yet confirmed delivering. Read results Nov 4.
 
+Owner decided (2026-11-01): build the no-AI script mode (keyword answers, accept unclear answers with a flag, accept ID photos, ask name and birthday in chat when AI is down) only after the ads stop. Do not change the bot while the ad runs, except for real failures. Bot protection in place: AI test every 3 hours, script greeting for new chats on failure, window alert, dashboard banner.
+
 ## Open
 
 Owner priority (2026-10-31): finding clients comes first. Code only for real failures; no new features. The pending application question stays at 4 banks (owner). The first real client doubles as the stranger test.
