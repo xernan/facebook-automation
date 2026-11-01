@@ -88,7 +88,7 @@ describe('watcher brakes', () => {
 
 describe('failed Claude runs', () => {
   it('logs the API error line and never other output', () => {
-    expect(claudeFailureReason('chat text from a client\nAPI Error: 400 version too old\nmore chat')).toBe('API Error: 400 version too old');
+    expect(claudeFailureReason('chat text\nFailed to authenticate: OAuth session expired\nmore chat')).toBe('Failed to authenticate: OAuth session expired');
     expect(claudeFailureReason('chat text from a client')).toBe('no API error shown');
   });
 
