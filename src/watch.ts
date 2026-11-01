@@ -6,7 +6,7 @@ import path from 'node:path';
 import { ROOT_DIR, createContext } from './context.js';
 import { findPending, flowTools, latestChatTime, sendNudges, showTyping } from './flowtools.js';
 import { GraphError } from './graph.js';
-import { ChatCheck, ClaudeBrake, isMessagingBlocked, pendingKey, runClaudeProcess, takeLock } from './watchguard.js';
+import { chatsToGreet, saveClaudeStatus, ChatCheck, ClaudeBrake, isMessagingBlocked, pendingKey, runClaudeProcess, takeLock } from './watchguard.js';
 
 // Watcher: checks the Page's Messenger without AI (every FB_WATCH_ACTIVE_INTERVAL_SEC while someone is chatting,
 // else every FB_WATCH_INTERVAL_SEC; slower on its own when Meta says we are calling too often). Plain answers the
@@ -70,6 +70,13 @@ function claudeBin(configured?: string): string {
   return process.platform === 'win32' && existsSync(exe) ? exe : 'claude';
 }
 
+/** A Windows notice on the PC when the AI stops working (once per outage). Holds no chat text. */
+function alertOwner() {
+  if (process.platform !== 'win32') return;
+  const script = "Add-Type -AssemblyName System.Windows.Forms; $n = New-Object System.Windows.Forms.NotifyIcon; $n.Icon = [System.Drawing.SystemIcons]::Warning; $n.Visible = $true; $n.ShowBalloonTip(60000, 'CARD MAX bot', 'The AI stopped working. Open the dashboard. Run: claude auth login', 'Warning'); Start-Sleep 60; $n.Dispose()";
+  spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', script], { stdio: 'ignore', windowsHide: true, detached: true }).on('error', () => undefined).unref();
+}
+
 const log = (m: string) => console.error(`[watch ${new Date().toISOString()}] ${m}`);
 
 async function main() {
@@ -85,6 +92,11 @@ async function main() {
     JSON.stringify({ mcpServers: { facebook: { command: process.execPath, args: [path.join(ROOT_DIR, 'dist', 'server.js')] } } }),
   );
 
+  let lastFailure = '';
+  const claudeLog = (m: string) => {
+    if (m.startsWith('Claude failed: ') || m.startsWith('Could not start Claude')) lastFailure = m.replace('Claude failed: ', '');
+    log(ctx.graph.scrub(m));
+  };
   const runClaude = () =>
     runClaudeProcess(
       () =>
@@ -94,9 +106,24 @@ async function main() {
           { cwd: ctx.cfg.flowDir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
         ),
       ctx.cfg.FB_WATCH_CLAUDE_TIMEOUT_MIN * 60_000,
-      (m) => log(ctx.graph.scrub(m)),
+      claudeLog,
     );
 
+  // A short test run, so an expired login is found before a client is left waiting.
+  const testClaude = () =>
+    runClaudeProcess(
+      () => spawn(claudeBin(ctx.cfg.FB_WATCH_CLAUDE_BIN), ['-p', 'Reply with the word ok.', '--tools', ''], { cwd: ctx.cfg.flowDir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }),
+      ctx.cfg.FB_WATCH_CLAUDE_TIMEOUT_MIN * 60_000,
+      claudeLog,
+    );
+  let lastClaudeOk: boolean | undefined;
+  const noteClaude = (code: number | null) => {
+    const ok = code === 0;
+    saveClaudeStatus(ctx.cfg.flowDir, { ok, at: new Date().toISOString(), ...(ok ? {} : { reason: lastFailure }) });
+    if (!ok && lastClaudeOk !== false) alertOwner();
+    if (ok && lastClaudeOk === false) log('Claude works again');
+    lastClaudeOk = ok;
+  };
   const answer = flowTools.find((t) => t.name === 'fb_flow_answer')!.handler;
   const brake = new ClaudeBrake();
   const release = takeLock(ctx.cfg.flowDir);
@@ -113,6 +140,7 @@ async function main() {
   const BLOCK_RECHECK_MS = 6 * 3_600_000;
   log(`watching every ${ctx.cfg.FB_WATCH_ACTIVE_INTERVAL_SEC}s while chatting, ${ctx.cfg.FB_WATCH_INTERVAL_SEC}s when quiet`);
   const check = new ChatCheck(ctx.cfg.FB_WATCH_FULL_CHECK_SEC * 1000);
+  let lastClaudeTest = 0;
   let again = true; // the last round left work behind: read all chats again without waiting for a change
   const wakeUp = async () => {
     const pending = await findPending(ctx, pageId);
@@ -149,6 +177,18 @@ async function main() {
       log(`${rest.length} chat(s) need Claude; waking Claude`);
       for (const p of rest) if (p.can_reply && p.messages.length > 0) await showTyping(ctx, pageId, p.psid);
       const code = await runClaude();
+      noteClaude(code);
+      lastClaudeTest = Date.now();
+      if (code !== 0 && Date.now() >= blockedUntil) {
+        for (const p of chatsToGreet(rest)) {
+          try {
+            await answer({ page_id: pageId, psid: p.psid, message_ids: p.messages.map((m) => m.id), kind: 'answer' }, ctx);
+            log('Claude is down; greeted a new chat with the script');
+          } catch (err) {
+            log(`greeting failed: ${ctx.graph.scrub(err instanceof Error ? err.message : String(err))}`);
+          }
+        }
+      }
       const after = pendingKey(waiting(await findPending(ctx, pageId)));
       const wait = brake.done(key, code === 0, after);
       log(`Claude finished (exit ${code})${wait ? `; same chats still waiting, next Claude try in ${wait}s` : ''}`);
@@ -157,6 +197,10 @@ async function main() {
   for (;;) {
     try {
       if (check.needsFull(await latestChatTime(ctx, pageId), again)) await wakeUp();
+      if (Date.now() - lastClaudeTest >= ctx.cfg.FB_WATCH_CLAUDE_CHECK_HOURS * 3_600_000) {
+        lastClaudeTest = Date.now();
+        noteClaude(await testClaude());
+      }
       backoff = Math.max(0, backoff - 5);
     } catch (err) {
       if (err instanceof GraphError && [4, 17, 32, 613, 80001].includes(err.code ?? -1)) {

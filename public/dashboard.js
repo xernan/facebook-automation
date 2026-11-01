@@ -56,6 +56,7 @@ function render() {
     goalBar('Target', w.complete, w.target, w.pct_target, w.target_reached) +
     goalBar('Quota', w.complete, w.quota, w.pct_quota, w.reached) +
     `<div class="stats"><div class="stat"><b>${w.complete}</b>Complete applications</div><div class="stat"><b>${w.ready}</b>Ready (nothing to check)</div><div class="stat"><b>${w.printed}</b>Printed</div><div class="stat"><b>${S.flow.waiting || 0}</b>In chat now</div></div>` +
+    (S.flow.claude && !S.flow.claude.ok ? `<p class="pill warn">The bot's AI is off since ${esc(new Date(S.flow.claude.at).toLocaleString())}. New chats only get the greeting. On this PC run: claude auth login</p>` : '') +
     ((S.flow.held || []).length ? `<p class="pill warn">On hold, IDs did not look right (no PDFs made): ${S.flow.held.map((h) => esc(h.at.slice(0, 10)) + ' (' + esc(h.reason.replace(/_/g, ' ')) + ') <button class="btn" data-release="' + esc(h.lead_file || '') + '">Make PDFs anyway</button>').join(' ')} Check the IDs in Messenger first.</p>` : '') +
     `</div>` +
     funnelCard(S.funnel) +

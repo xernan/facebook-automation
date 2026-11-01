@@ -16,6 +16,7 @@ import { contentProblem } from './contentguard.js';
 import { GraphClient } from './graph.js';
 import { postStats, proofDraft, setOutcome } from './marketing.js';
 import { loadTestMode, saveTestMode } from './testmode.js';
+import { loadClaudeStatus } from './watchguard.js';
 import dotenv from 'dotenv';
 
 // Local dashboard (this PC only, 127.0.0.1): applicants, their PDFs/IDs and missing items, print, and settings.
@@ -184,7 +185,7 @@ export function createDashboard(opts: { flowDir: string; templatesDir: string; p
           applicants,
           stats: applicationStats(rows, { quota: settings.weekly_quota, startDay: settings.week_start_day, target: settings.weekly_target }),
           funnel: funnelStats(Object.values(state.people), rows, settings.week_start_day),
-          flow: { waiting, held },
+          flow: { waiting, held, claude: loadClaudeStatus(opts.flowDir) },
           settings,
           printers: await printers(),
           cardOptions: await cardOptions(opts.templatesDir),

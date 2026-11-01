@@ -56,6 +56,7 @@ export const configSchema = z.object({
   FB_WATCH_SLOW_EXTRA_SEC: intIn(15, 5, 300),
   FB_WATCH_ACTIVE_MINUTES: intIn(15, 1, 120),
   FB_WATCH_CLAUDE_TIMEOUT_MIN: intIn(5, 1, 30),
+  FB_WATCH_CLAUDE_CHECK_HOURS: intIn(3, 1, 24),
   FB_WATCH_CLAUDE_BIN: z.string().optional(),
   FB_DASHBOARD_PORT: intIn(8790, 1024, 65535),
   // Comment replies (src/comments.ts). Off until the owner turns them on.

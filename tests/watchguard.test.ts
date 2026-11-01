@@ -5,7 +5,23 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { GraphError, metaUsagePct } from '../src/graph.js';
-import { ChatCheck, ClaudeBrake, claudeFailureReason, collectOutput, isMessagingBlocked, pendingKey, runClaudeProcess, takeLock } from '../src/watchguard.js';
+import { chatsToGreet, ChatCheck, ClaudeBrake, claudeFailureReason, collectOutput, isMessagingBlocked, loadClaudeStatus, saveClaudeStatus, pendingKey, runClaudeProcess, takeLock } from '../src/watchguard.js';
+
+describe('when Claude is down', () => {
+  it('saves the status for the dashboard, and greets only new chats that can be answered', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'status-'));
+    expect(loadClaudeStatus(dir)).toBeUndefined();
+    saveClaudeStatus(dir, { ok: false, at: '2026-11-01T00:00:00.000Z', reason: 'Failed to authenticate' });
+    expect(loadClaudeStatus(dir)).toMatchObject({ ok: false, reason: 'Failed to authenticate' });
+    const list = [
+      { stage: 'new', can_reply: true, messages: [1] },
+      { stage: 'new', can_reply: false, messages: [1] },
+      { stage: 'new', can_reply: true, messages: [] },
+      { stage: 'steps', can_reply: true, messages: [1] },
+    ];
+    expect(chatsToGreet(list)).toEqual([list[0]]);
+  });
+});
 
 describe('quick check before reading all chats', () => {
   const T = 1_000_000;

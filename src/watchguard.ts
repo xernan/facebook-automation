@@ -50,6 +50,30 @@ export function runClaudeProcess(start: () => ChildProcess, timeoutMs: number, l
   });
 }
 
+/** Is the bot's AI working? Saved by the watcher, shown on the dashboard. Holds no chat text. */
+export interface ClaudeStatus {
+  ok: boolean;
+  at: string;
+  reason?: string;
+}
+
+export function saveClaudeStatus(flowDir: string, status: ClaudeStatus): void {
+  writeFileSync(path.join(flowDir, 'claude-status.json'), JSON.stringify(status), 'utf8');
+}
+
+export function loadClaudeStatus(flowDir: string): ClaudeStatus | undefined {
+  try {
+    return JSON.parse(readFileSync(path.join(flowDir, 'claude-status.json'), 'utf8'));
+  } catch {
+    return undefined;
+  }
+}
+
+/** With the AI down, a first message still gets the script's greeting and first question: nobody waits in silence. */
+export function chatsToGreet<T extends { stage?: string; can_reply?: boolean; messages: unknown[] }>(list: T[]): T[] {
+  return list.filter((p) => p.stage === 'new' && p.can_reply && p.messages.length > 0);
+}
+
 /** Meta: the Page may not message people for now (2022) or the message looked like spam (368). */
 export const isMessagingBlocked = (err: unknown) => {
   const e = err as { code?: number; message?: string } | undefined;
