@@ -879,6 +879,13 @@ describe('answers Claude must check', () => {
     expect(scriptCanAnswer({ ...flow, steps: [{ key: 'home_address', prompt: 'Address?' }] }, p, { text: 'Quezon City' })).toBe(true);
   });
 
+  it('the operator stays on the questions: other chat goes back to the current question', async () => {
+    const { operatorPrompt } = await import('../src/watch.js');
+    expect(operatorPrompt('1')).toMatch(/stay on the questions, do not chat/);
+    expect(operatorPrompt('1')).toMatch(/Greetings, money, GCash, jokes and other topics get no reply of your own/);
+    expect(operatorPrompt('1')).not.toMatch(/short and friendly/);
+  });
+
   it('the operator never promises a follow-up to someone with no card', async () => {
     const { operatorPrompt } = await import('../src/watch.js');
     expect(operatorPrompt('1')).toMatch(/stage "rejected" \(no credit card yet\)/);

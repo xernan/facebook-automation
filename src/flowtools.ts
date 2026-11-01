@@ -224,8 +224,8 @@ export const flowTools: ToolDef[] = [
     name: 'fb_flow_answer',
     description:
       'Handle new messages from one person in the application flow. kind="answer": the messages answer the current question; ' +
-      'the script decides the next reply (qualifier rules are enforced in code) and sends it. kind="question": the person asked ' +
-      'something off-script; first answer with fb_send_message (do not repeat the question), then call this: it sends the current question again with its buttons. ' +
+      'the script decides the next reply (qualifier rules are enforced in code) and sends it. kind="question": the person said ' +
+      'something else; it sends the current question again with its buttons. Only a direct question about the application service gets one short fb_send_message first. ' +
       'If reply is null the script has nothing to say (finished, excluded or in cooldown): answer kindly yourself if needed. ' +
       'For a person at stage "new", always use kind="answer": it sends the greeting and consent question.',
     write: true,
