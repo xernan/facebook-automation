@@ -31,6 +31,9 @@ export function operatorPrompt(pageId: string): string {
     '     language they used (Taglish is fine). Do not repeat current_question. After it is sent, call fb_flow_answer',
     '     kind="question" with those message ids: it sends the current question again with its buttons.',
     '   - reply null (finished, excluded or cooldown): reply yourself only if they asked something.',
+    '   - stage "rejected" (no credit card yet): if they asked something, say once, kindly, that for now we only help people who',
+    '     already have a credit card. Never say the team will follow up. If they talk about money, GCash or a transfer, add that we',
+    '     do not give or ask for money. If you already said this and they did not ask anything new, do not reply again.',
     '   - needs_id_review: call fb_flow_id_images, look at every photo, then fb_flow_id_review with one entry per photo',
     '     (type, side, clear, has_signature, and name/birthday/sex only if you can read them). The code decides if the IDs are enough.',
     '     clear means readable and whole, nothing else: a screenshot or a photo of a screen counts as clear when you can read it.',
@@ -58,7 +61,7 @@ export function operatorPrompt(pageId: string): string {
     "     mother's maiden name).",
     '3. Never ask for a card number, CVV, OTP, PIN or passwords, and never mention them in a reply, not even as a warning',
     '   (Meta restricted the Page for that). Never promise approval, rates or promos. The code refuses such messages.',
-    '   If you do not know an answer, say the team will follow up. Never mention servers, APIs or errors.',
+    '   If you do not know an answer and they are not stage "rejected", say the team will follow up. Never mention servers, APIs or errors.',
     '4. Repeat from step 1 until fb_flow_pending returns an empty list, then stop. Do not do anything else.',
   ].join('\n');
 }

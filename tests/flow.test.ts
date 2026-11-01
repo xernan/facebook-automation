@@ -879,6 +879,14 @@ describe('answers Claude must check', () => {
     expect(scriptCanAnswer({ ...flow, steps: [{ key: 'home_address', prompt: 'Address?' }] }, p, { text: 'Quezon City' })).toBe(true);
   });
 
+  it('the operator never promises a follow-up to someone with no card', async () => {
+    const { operatorPrompt } = await import('../src/watch.js');
+    expect(operatorPrompt('1')).toMatch(/stage "rejected" \(no credit card yet\)/);
+    expect(operatorPrompt('1')).toMatch(/Never say the team will follow up/);
+    expect(operatorPrompt('1')).toMatch(/do not give or ask for money/);
+    expect(operatorPrompt('1')).toMatch(/not stage "rejected", say the team will follow up/);
+  });
+
   it('the operator is told to ask for the missing part and never fill it in', async () => {
     const { operatorPrompt } = await import('../src/watch.js');
     expect(operatorPrompt('1')).toMatch(/never compare an ID with the Facebook name/);
