@@ -18,7 +18,8 @@
       "EastWest",
       "China Bank"
     ],
-    "excluded_reply": "Thank you, and congrats on all your credit cards!"
+    "excluded_reply": "Thank you, and congrats on all your credit cards!",
+    "other_prompt": "Which bank is your credit card from? Please type it (e.g. BDO, Security Bank, Citi)."
   },
   "steps": [
     {

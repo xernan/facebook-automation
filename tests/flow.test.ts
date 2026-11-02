@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { sendNudges } from '../src/flowtools.js';
-import { advance, cleanSuggestions, flowSchema, idVerdict, newPerson, nextStepIf, parseYesNo, quickReply, scriptCanAnswer, validAnswer, type IdSeen, type Person } from '../src/flow.js';
+import { advance, cleanSuggestions, currentQuestion, flowSchema, idVerdict, newPerson, nextStepIf, parseYesNo, quickReply, scriptCanAnswer, validAnswer, type IdSeen, type Person } from '../src/flow.js';
 import { FlowStore, loadFlow } from '../src/flowstore.js';
 import { callTool, tools } from '../src/tools.js';
 import { param, testCtx, type Call } from './helpers.js';
@@ -833,10 +833,10 @@ describe('bank buttons', () => {
 });
 
 describe('bank buttons: none of these', () => {
-  const f = { ...flow, banks: { ...flow.banks, choices: ['BPI', 'China Bank'], more_prompt: 'More?', done_choice: 'Tapos na', none_choice: 'Wala dito' } };
+  const f = { ...flow, banks: { ...flow.banks, choices: ['BPI', 'China Bank'], more_prompt: 'More?', done_choice: 'Tapos na', none_choice: 'Wala dito', other_prompt: undefined } };
   const start = { ...newPerson(NOW), stage: 'banks' as const };
 
-  it('moves on with no bank listed, and shows it only before a pick', () => {
+  it('without other_prompt: moves on with no bank listed, and shows it only before a pick', () => {
     const none = advance(f, start, { text: 'Wala dito' }, NOW, 180);
     expect(none.person.stage).toBe('steps');
     expect(none.person.banks).toEqual([]);
@@ -846,6 +846,36 @@ describe('bank buttons: none of these', () => {
 
   it('a typed bank outside the buttons still counts', () => {
     expect(advance(f, start, { text: 'BDO' }, NOW, 180).person.banks).toEqual(['BDO']);
+  });
+});
+
+describe('bank buttons: none of these asks which bank', () => {
+  const f = { ...flow, banks: { ...flow.banks, choices: ['BPI', 'China Bank'], more_prompt: 'More?', done_choice: 'Tapos na', none_choice: 'Wala dito', other_prompt: 'Which bank?' } };
+  const start = { ...newPerson(NOW), stage: 'banks' as const };
+  const asked = advance(f, start, { text: 'Wala dito' }, NOW, 180);
+
+  it('asks for the bank instead of moving on', () => {
+    expect(asked.reply).toBe('Which bank?');
+    expect(asked.choices).toBeUndefined();
+    expect(asked.person.stage).toBe('banks');
+    expect(currentQuestion(f, asked.person)).toEqual({ reply: 'Which bank?' });
+    expect(scriptCanAnswer(f, asked.person, { text: 'Landbank' })).toBe(true);
+    expect(scriptCanAnswer(f, asked.person, { text: 'Ano po ibig sabihin?' })).toBe(false);
+  });
+
+  it('keeps a known bank, or the name as typed, then goes to the questions', () => {
+    const known = advance(f, asked.person, { text: 'BDO po' }, NOW, 180).person;
+    expect(known.banks).toEqual(['BDO']);
+    expect(known.stage).toBe('steps');
+    expect(known.asked_other_bank).toBeUndefined();
+    expect(advance(f, asked.person, { text: 'Landbank' }, NOW, 180).person.banks).toEqual(['Landbank']);
+  });
+
+  it('no bank named: flags it for the client and goes on', () => {
+    const none = advance(f, asked.person, { text: 'wala po' }, NOW, 180).person;
+    expect(none.banks).toEqual([]);
+    expect(none.flags).toContain('card_bank_not_given');
+    expect(none.stage).toBe('steps');
   });
 });
 
@@ -882,7 +912,14 @@ describe('answers Claude must check', () => {
   it('the operator stays on the questions: other chat goes back to the current question', async () => {
     const { operatorPrompt } = await import('../src/watch.js');
     expect(operatorPrompt('1')).toMatch(/stay on the questions, do not chat/);
-    expect(operatorPrompt('1')).toMatch(/Greetings, money, GCash, jokes and other topics get no reply of your own/);
+    expect(operatorPrompt('1')).toMatch(/Greetings and jokes with no question get no reply of your own/);
+  });
+
+  it('the operator answers every question, also in the first message', async () => {
+    const { operatorPrompt } = await import('../src/watch.js');
+    expect(operatorPrompt('1')).toMatch(/If a stage "new" message also asks something, first answer it/);
+    expect(operatorPrompt('1')).toMatch(/If they asked any question/);
+    expect(operatorPrompt('1')).toMatch(/Money, GCash or loans: say we do not give or/);
     expect(operatorPrompt('1')).not.toMatch(/short and friendly/);
   });
 

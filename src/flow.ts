@@ -44,6 +44,8 @@ export const flowSchema = z
         done_choice: z.string().trim().min(1).max(20).default('Tapos na'),
         /** Shown before any pick: their cards are from other banks, so the flow moves on with none listed. */
         none_choice: z.string().trim().min(1).max(20).default('Wala dito'),
+        /** Asked after none_choice: which bank their card is from (typed). Without it the flow moves on with none listed. */
+        other_prompt: msg.optional(),
       })
       .strict(),
     steps: z
@@ -164,6 +166,8 @@ export interface Person {
   suggestions?: string[];
   /** The province they answered with; the next answer says where in it (see province_only_reply). */
   place_province?: string;
+  /** They tapped none_choice and were asked banks.other_prompt; the next answer names their card's bank. */
+  asked_other_bank?: boolean;
   updated_at: string;
   /** When they first wrote (for the funnel stats). Older records may not have it. */
   started_at?: string;
@@ -412,13 +416,25 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
     case 'banks': {
       const found = extractBanks(text);
       let banks = found;
-      if (flow.banks.choices) {
+      if (p.asked_other_bank) {
+        // Owner: we must know which card they hold. A name we do not know is kept as they typed it.
+        delete p.asked_other_bank;
+        if (found.length > 0) p.banks = [...new Set([...p.banks, ...found])];
+        // "wala", "hindi ko alam", "oo" name no bank: the client sees the flag instead of a bank.
+        else if (parseYesNo(text) || words(text).length === 0) p.flags = [...new Set([...(p.flags ?? []), 'card_bank_not_given'])];
+        else p.banks = [text.slice(0, 40)];
+        banks = p.banks;
+      } else if (flow.banks.choices) {
         // Tapped one at a time: a person can hold several cards, and every one counts for the exclusion and the PDFs.
         if (found.length > 0) {
           p.banks = [...new Set([...p.banks, ...found])];
           return ask(flow.banks.more_prompt ?? flow.banks.prompt, bankButtons(flow, p));
         }
         if (!banksDone(flow, p, text)) return ask(flow.banks.unknown_reply, bankButtons(flow, p));
+        if (p.banks.length === 0 && flow.banks.other_prompt) {
+          p.asked_other_bank = true;
+          return ask(flow.banks.other_prompt);
+        }
         banks = p.banks;
       } else if (found.length === 0) return ask(flow.banks.unknown_reply);
       p.banks = banks;
@@ -528,6 +544,7 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
     case 'carded':
       return !!parseYesNo(text);
     case 'banks':
+      if (p.asked_other_bank) return w.length <= 6;
       return extractBanks(text).length > 0 || (!!flow.banks.choices && banksDone(flow, p, text));
     case 'steps': {
       const step = flow.steps[p.step];
@@ -570,7 +587,7 @@ export function currentPrompt(flow: Flow, p: Person): string | undefined {
     case 'carded':
       return flow.carded.prompt;
     case 'banks':
-      return flow.banks.prompt;
+      return p.asked_other_bank && flow.banks.other_prompt ? flow.banks.other_prompt : flow.banks.prompt;
     case 'steps':
       return flow.steps[p.step]?.prompt;
     case 'id_photo':
@@ -586,6 +603,7 @@ export function currentQuestion(flow: Flow, p: Person): Question | undefined {
   if (!reply) return undefined;
   if (p.stage === 'consent') return { reply, choices: flow.consent.choices };
   if (p.stage === 'carded') return { reply, choices: flow.carded.choices };
+  if (p.stage === 'banks' && p.asked_other_bank && flow.banks.other_prompt) return { reply };
   if (p.stage === 'banks') return { reply: p.banks.length > 0 ? (flow.banks.more_prompt ?? reply) : reply, choices: bankButtons(flow, p) };
   if (p.stage !== 'steps') return { reply };
   const step = flow.steps[p.step];
