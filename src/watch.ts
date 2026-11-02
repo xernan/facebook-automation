@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ROOT_DIR, createContext } from './context.js';
 import { findPending, flowTools, latestChatTime, sendNudges, showTyping } from './flowtools.js';
+import { loadFlow } from './flowstore.js';
 import { GraphError } from './graph.js';
 import { chatsToGreet, saveClaudeStatus, ChatCheck, ClaudeBrake, isMessagingBlocked, pendingKey, runClaudeProcess, takeLock } from './watchguard.js';
 
@@ -16,9 +17,16 @@ import { chatsToGreet, saveClaudeStatus, ChatCheck, ClaudeBrake, isMessagingBloc
 
 const ALLOWED = [...['fb_flow_pending', 'fb_flow_answer', 'fb_flow_id_images', 'fb_flow_id_review', 'fb_lead_finalize', 'fb_send_message', 'fb_get_messages'].map((t) => `mcp__facebook__${t}`), 'WebSearch'];
 
-export function operatorPrompt(pageId: string): string {
+export function operatorPrompt(pageId: string, ourBanks: string[] = []): string {
   return [
     `You answer Messenger chats for Facebook Page ${pageId} using the application flow tools.`,
+    'Answer like a real person on our team: natural, kind, short, in their language. Answer every question they ask.',
+    ...(ourBanks.length
+      ? [
+          `We apply for cards at these ${ourBanks.length} banks only for now: ${ourBanks.join(', ')}. If they already have cards from all of`,
+          '  them, there is nothing left we can apply for; if even one is left, we go on with the application.',
+        ]
+      : []),
     `1. Call fb_flow_pending with page_id ${pageId}.`,
     '2. For each person in the list (skip anyone with can_reply=false, except to resend an outbox_pending reply):',
     '   - outbox_pending: call fb_flow_answer kind="answer" with their message ids; it resends the saved reply first.',
@@ -105,12 +113,21 @@ async function main() {
     if (m.startsWith('Claude failed: ') || m.startsWith('Could not start Claude')) lastFailure = m.replace('Claude failed: ', '');
     log(ctx.graph.scrub(m));
   };
+  // Read on every run, so a bank added to the flow file is known at once.
+  const ourBanks = () => {
+    try {
+      const f = loadFlow(ctx.cfg.flowFile);
+      return f.banks.choices ?? f.banks.exclude_if_all;
+    } catch {
+      return [];
+    }
+  };
   const runClaude = () =>
     runClaudeProcess(
       () =>
         spawn(
           claudeBin(ctx.cfg.FB_WATCH_CLAUDE_BIN),
-          ['-p', operatorPrompt(pageId), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', 'WebSearch', '--allowedTools', ALLOWED.join(',')],
+          ['-p', operatorPrompt(pageId, ourBanks()), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', 'WebSearch', '--allowedTools', ALLOWED.join(',')],
           { cwd: ctx.cfg.flowDir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
         ),
       ctx.cfg.FB_WATCH_CLAUDE_TIMEOUT_MIN * 60_000,

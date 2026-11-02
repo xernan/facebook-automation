@@ -920,6 +920,15 @@ describe('answers Claude must check', () => {
     expect(operatorPrompt('1')).toMatch(/If a stage "new" message also asks something, first answer it/);
     expect(operatorPrompt('1')).toMatch(/If they asked any question/);
     expect(operatorPrompt('1')).toMatch(/Money, GCash or loans: say we do not give or/);
+    expect(operatorPrompt('1')).toMatch(/like a real person on our team/);
+  });
+
+  it('the operator knows our banks: nothing to apply only when they hold all of them', async () => {
+    const { operatorPrompt } = await import('../src/watch.js');
+    const p = operatorPrompt('1', ['Metrobank', 'BPI', 'EastWest', 'RCBC', 'China Bank']);
+    expect(p).toMatch(/these 5 banks only for now: Metrobank, BPI, EastWest, RCBC, China Bank/);
+    expect(p).toMatch(/if even one is left, we go on/);
+    expect(operatorPrompt('1')).not.toMatch(/banks only for now/);
     expect(operatorPrompt('1')).not.toMatch(/short and friendly/);
   });
 
@@ -1189,5 +1198,16 @@ describe('ID photo received', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('owner rule: our 5 banks', () => {
+  const ours = ['Metrobank', 'BPI', 'EastWest', 'RCBC', 'China Bank'];
+  const f = { ...flow, banks: { ...flow.banks, choices: ours, exclude_if_all: ours, done_choice: 'Wala na', none_choice: 'Wala dito' } };
+  const holding = (banks: string[]) => ({ ...newPerson(NOW), stage: 'banks' as const, banks });
+
+  it('stops only when they hold all 5; with one left the application goes on', () => {
+    expect(advance(f, holding(ours), { text: 'Wala na' }, NOW, 180).person.stage).toBe('excluded');
+    expect(advance(f, holding(ours.slice(0, 4)), { text: 'Wala na' }, NOW, 180).person.stage).toBe('steps');
   });
 });
