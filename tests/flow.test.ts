@@ -1299,6 +1299,8 @@ describe('Claude reads the bank answer and passes the cards', () => {
     expect(p).toMatch(/stage "banks": read what they wrote/);
     expect(p).toMatch(/never tell them which button to press/);
     expect(p).toMatch(/ask them once with fb_send_message, then fb_flow_answer kind="asked"/);
+    expect(p).toMatch(/does not fit the question/);
+    expect(p).toMatch(/agreed_answer set to that answer/);
   });
 });
 

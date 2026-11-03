@@ -249,8 +249,18 @@ export const flowTools: ToolDef[] = [
             'Leave out debit cards, wallets, pay-later and loan cards. The code applies the owner rules and moves on.',
         ),
       no_credit_card: z.boolean().optional().describe('Only at stage "banks", with kind="answer": they made clear they have no bank credit card at all.'),
+      agreed_answer: z
+        .string()
+        .trim()
+        .min(1)
+        .max(200)
+        .optional()
+        .describe(
+          'With kind="answer": the answer they agreed to after you checked with them (e.g. you asked "Widowed po ba?" and they said "tama": "Widowed"). ' +
+            'Only what they said or confirmed; never fill in an answer yourself.',
+        ),
     },
-    handler: async ({ page_id, psid: who, message_ids, kind, suggestions, cards, no_credit_card }, ctx) => {
+    handler: async ({ page_id, psid: who, message_ids, kind, suggestions, cards, no_credit_card, agreed_answer }, ctx) => {
       const now = new Date();
       const s = store(ctx);
       const flow = loadFlow(ctx.cfg.flowFile);
@@ -305,7 +315,9 @@ export const flowTools: ToolDef[] = [
           return { reply: null, note: 'Outside the 24-hour reply window. Not sent.' };
         }
 
-        const input = { text: msgs.map((m) => m.text).filter(Boolean).join('\n'), image_url: msgs.find((m) => m.image_url)?.image_url };
+        const typed = msgs.map((m) => m.text).filter(Boolean).join('\n');
+        // A short "tama"/"oo" to Claude's check stands for the answer they agreed to; the script still checks it.
+        const input = { text: agreed_answer ?? typed, image_url: msgs.find((m) => m.image_url)?.image_url };
         // Claude read the bank answer: its list of cards (or "none") goes to the owner rules in code.
         const r =
           person.stage === 'banks' && (cards?.length || no_credit_card)
