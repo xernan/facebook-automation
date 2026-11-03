@@ -19,7 +19,14 @@
       "China Bank"
     ],
     "excluded_reply": "Thank you, and congrats on all your credit cards!",
-    "other_prompt": "Which bank is your credit card from? Please type it (e.g. BDO, Security Bank, Citi)."
+    "other_prompt": "Which bank is your credit card from? Please type it (e.g. BDO, Security Bank, Citi).",
+    "not_credit": [
+      "Atome"
+    ],
+    "not_credit_reply": "{name} is not a bank credit card. Which bank is your credit card from? If none, type None.",
+    "verify": {
+      "Maya": "Is your Maya card a credit card (with a credit limit and a monthly bill)? A Maya debit card or wallet does not count. (Yes / No)"
+    }
   },
   "steps": [
     {

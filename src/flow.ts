@@ -46,6 +46,11 @@ export const flowSchema = z
         none_choice: z.string().trim().min(1).max(20).default('Wala dito'),
         /** Asked after none_choice: which bank their card is from (typed). Without it the flow moves on with none listed. */
         other_prompt: msg.optional(),
+        /** Cards that are not bank credit cards (owner: Atome). Named alone, they get not_credit_reply ({name} filled in). */
+        not_credit: z.array(z.string().trim().min(1)).default([]),
+        not_credit_reply: msg.default('Hindi po kasama ang {name}. Bank credit card lang po. Anong bangko ang credit card mo? Kung wala, i-type ang Wala.'),
+        /** Cards that need a yes/no check that they are really credit cards (owner: Maya), bank name -> question. */
+        verify: z.record(z.string(), msg).default({}),
       })
       .strict(),
     steps: z
@@ -168,6 +173,9 @@ export interface Person {
   place_province?: string;
   /** They tapped none_choice and were asked banks.other_prompt; the next answer names their card's bank. */
   asked_other_bank?: boolean;
+  /** The bank whose card we asked them to confirm is a credit card (banks.verify), and whether they typed it after none_choice. */
+  verify_bank?: string;
+  verify_after_other?: boolean;
   updated_at: string;
   /** When they first wrote (for the funnel stats). Older records may not have it. */
   started_at?: string;
@@ -384,11 +392,27 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
     return ask(flow.carded.reject_reply);
   };
 
+  const afterBanks = (banks: string[]): Advance => {
+    p.banks = banks;
+    // Owner rule: go on while any of our banks is left. A bank added to the buttons counts here too.
+    const exclude = [...flow.banks.exclude_if_all, ...(flow.banks.choices ?? [])].map((b) => b.toLowerCase());
+    if (exclude.every((b) => banks.some((x) => x.toLowerCase() === b))) {
+      p.stage = 'excluded';
+      return ask(flow.banks.excluded_reply);
+    }
+    return askQ(goToStep(flow, p, 0, suggestions));
+  };
+
   // "Wala pa akong credit card" at any later question: same as answering Wala pa to the card question.
   if (['banks', 'steps', 'id_photo'].includes(p.stage) && cardedStatus(text) === 'no' && extractBanks(text).length === 0) return reject();
 
   switch (p.stage) {
     case 'rejected':
+      // Owner: a person who later names a bank credit card ("ay meron pala akong BDO") goes on from the bank question.
+      if (p.consent_at && extractBanks(text).length > 0 && !/\bdebit\b/i.test(text) && cardedStatus(text) !== 'no') {
+        delete p.cooldown_until;
+        return advance(flow, { ...p, stage: 'banks', banks: [] }, input, now, cooldownDays, suggestions);
+      }
       if (p.cooldown_until && now < new Date(p.cooldown_until)) return { person: prev };
       // Cooldown over: start again.
       return advance(flow, newPerson(now), input, now, cooldownDays, suggestions);
@@ -419,7 +443,34 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
     }
 
     case 'banks': {
+      if (p.verify_bank) {
+        const bank = p.verify_bank;
+        const a = parseYesNo(text);
+        if (!a) return ask(`${flow.yes_no_reply}\n\n${flow.banks.verify[bank] ?? ''}`.trim(), flow.consent.choices);
+        const afterOther = p.verify_after_other;
+        delete p.verify_bank;
+        delete p.verify_after_other;
+        if (a === 'yes') p.banks = [...new Set([...p.banks, bank])];
+        if (!afterOther) return ask(p.banks.length > 0 ? (flow.banks.more_prompt ?? flow.banks.prompt) : flow.banks.prompt, bankButtons(flow, p));
+        // Owner rule: their only card is not a credit card.
+        if (p.banks.length === 0) return reject();
+        return afterBanks(p.banks);
+      }
       const found = extractBanks(text);
+      const notCredit = flow.banks.not_credit.find((n) => (words(text) as string[]).includes(n.toLowerCase()));
+      if (notCredit && found.length === 0) {
+        if (flow.banks.other_prompt) p.asked_other_bank = true;
+        return ask(flow.banks.not_credit_reply.replace('{name}', notCredit));
+      }
+      // Owner: some cards (Maya) can be a debit card or a wallet, so ask before counting them.
+      const toVerify = found.find((b) => flow.banks.verify[b] && !p.banks.includes(b));
+      if (toVerify) {
+        p.banks = [...new Set([...p.banks, ...found.filter((b) => b !== toVerify)])];
+        p.verify_bank = toVerify;
+        p.verify_after_other = !!p.asked_other_bank;
+        delete p.asked_other_bank;
+        return ask(flow.banks.verify[toVerify]!, flow.consent.choices);
+      }
       let banks = found;
       if (p.asked_other_bank) {
         // Owner: we must know which card they hold. A name we do not know is kept as they typed it.
@@ -444,14 +495,7 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
         }
         banks = p.banks;
       } else if (found.length === 0) return ask(flow.banks.unknown_reply);
-      p.banks = banks;
-      // Owner rule: go on while any of our banks is left. A bank added to the buttons counts here too.
-      const exclude = [...flow.banks.exclude_if_all, ...(flow.banks.choices ?? [])].map((b) => b.toLowerCase());
-      if (exclude.every((b) => banks.some((x) => x.toLowerCase() === b))) {
-        p.stage = 'excluded';
-        return ask(flow.banks.excluded_reply);
-      }
-      return askQ(goToStep(flow, p, 0, suggestions));
+      return afterBanks(banks);
     }
 
     case 'steps': {
@@ -550,11 +594,15 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
   switch (p.stage) {
     case 'new':
       return w.length > 0 && w.length <= 5 && w.every((x) => GREETING_WORDS.has(x));
+    case 'rejected':
+      // A bank credit card named after all: the script goes on from the bank question.
+      return !!p.consent_at && extractBanks(text).length > 0 && !/\bdebit\b/i.test(text) && w.length <= 10;
     case 'consent':
     case 'carded':
       // Only a plain yes/no; a longer reply may say more ("oo pero...") and Claude reads it.
       return w.length <= SHORT_YES_NO && !!parseYesNo(text);
     case 'banks':
+      if (p.verify_bank) return w.length <= SHORT_YES_NO && !!parseYesNo(text);
       if (p.asked_other_bank) return w.length <= 6;
       return extractBanks(text).length > 0 || (!!flow.banks.choices && banksDone(flow, p, text));
     case 'steps': {
@@ -599,6 +647,7 @@ export function currentPrompt(flow: Flow, p: Person): string | undefined {
     case 'carded':
       return flow.carded.prompt;
     case 'banks':
+      if (p.verify_bank) return flow.banks.verify[p.verify_bank] ?? flow.banks.prompt;
       return p.asked_other_bank && flow.banks.other_prompt ? flow.banks.other_prompt : flow.banks.prompt;
     case 'steps':
       return flow.steps[p.step]?.prompt;
@@ -615,6 +664,7 @@ export function currentQuestion(flow: Flow, p: Person): Question | undefined {
   if (!reply) return undefined;
   if (p.stage === 'consent') return { reply, choices: flow.consent.choices };
   if (p.stage === 'carded') return { reply, choices: flow.carded.choices };
+  if (p.stage === 'banks' && p.verify_bank) return { reply, choices: flow.consent.choices };
   if (p.stage === 'banks' && p.asked_other_bank && flow.banks.other_prompt) return { reply };
   if (p.stage === 'banks') return { reply: p.banks.length > 0 ? (flow.banks.more_prompt ?? reply) : reply, choices: bankButtons(flow, p) };
   if (p.stage !== 'steps') return { reply };

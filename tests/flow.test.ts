@@ -1236,3 +1236,36 @@ describe('the script takes only plain answers; Claude reads the rest', () => {
     expect(scriptCanAnswer(f, { ...mid, stage: 'consent' }, { text: 'oo pero para saan po ito' })).toBe(false);
   });
 });
+
+describe('owner rules: Atome is not a credit card, Maya is checked first, a card named later goes on', () => {
+  const f = flowSchema.parse({
+    ...flow,
+    banks: { ...flow.banks, choices: ['BPI', 'China Bank'], more_prompt: 'More?', done_choice: 'Tapos na', none_choice: 'Wala dito', other_prompt: 'Which bank?', not_credit: ['Atome'], verify: { Maya: 'Maya credit card ba? (Oo / Hindi)' } },
+  });
+  const asked = advance(f, { ...newPerson(NOW), stage: 'banks', consent_at: NOW.toISOString() }, { text: 'Wala dito' }, NOW, 180).person;
+
+  it('Atome gets the not-credit reply and the bank question stays', () => {
+    const r = advance(f, asked, { text: 'atome' }, NOW, 180);
+    expect(r.reply).toBe(f.banks.not_credit_reply.replace('{name}', 'Atome'));
+    expect(r.person.stage).toBe('banks');
+    expect(advance(f, r.person, { text: 'wala' }, NOW, 180).person.stage).toBe('rejected');
+  });
+
+  it('Maya asks if it is a credit card: yes goes on, no (only card) rejects', () => {
+    const r = advance(f, asked, { text: 'maya' }, NOW, 180);
+    expect(r.reply).toBe('Maya credit card ba? (Oo / Hindi)');
+    expect(currentQuestion(f, r.person)?.choices).toEqual(f.consent.choices);
+    const yes = advance(f, r.person, { text: 'Oo' }, NOW, 180).person;
+    expect(yes.banks).toEqual(['Maya']);
+    expect(yes.stage).toBe('steps');
+    expect(advance(f, r.person, { text: 'Hindi' }, NOW, 180).person.stage).toBe('rejected');
+  });
+
+  it('rejected, then names a bank credit card: goes on; debit does not', () => {
+    const rejected = advance(f, asked, { text: 'wala pa' }, NOW, 180).person;
+    expect(rejected.stage).toBe('rejected');
+    expect(scriptCanAnswer(f, rejected, { text: 'ay meron pala akong BDO' })).toBe(true);
+    expect(advance(f, rejected, { text: 'ay meron pala akong BDO' }, NOW, 180).person.banks).toEqual(['BDO']);
+    expect(advance(f, rejected, { text: 'BDO debit card lang' }, NOW, 180).person.stage).toBe('rejected');
+  });
+});

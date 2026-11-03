@@ -39,6 +39,7 @@ const BANKS: [string, RegExp][] = [
   ['HSBC', /\bhsbc\b/i],
   ['Maybank', /\bmaybank\b/i],
   ['PSBank', /\bpsbank\b/i],
+  ['Maya', /\bmaya\b/i],
 ];
 
 export function extractBanks(text: string): string[] {
