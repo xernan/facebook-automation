@@ -1339,3 +1339,16 @@ describe('profile phone button refused by Meta', () => {
     expect(bodies[1]).toEqual({ text: 'Mobile?' });
   });
 });
+
+describe('kind "asked" needs a real message first', () => {
+  it('without a message to them, the current question goes again; after one, nothing more is sent', async () => {
+    const { noteSent } = await import('../src/sentlog.js');
+    const { ctx, sent, dir } = setup({ m_1: { text: '632 8972 6712' }, m_2: { text: 'hmm' } });
+    writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ version: 1, started_at: new Date(0).toISOString(), handled: [], people: { [PSID]: { stage: 'consent', step: 0, answers: {}, banks: [], married: false, updated_at: new Date().toISOString() } } }));
+    await answer(ctx, ['m_1'], 'asked' as never);
+    expect(sent).toEqual([flow.consent.prompt]);
+    noteSent(PSID);
+    await answer(ctx, ['m_2'], 'asked' as never);
+    expect(sent).toHaveLength(1);
+  });
+});

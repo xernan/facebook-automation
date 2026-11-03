@@ -8,6 +8,7 @@ import { finalizeLead } from './leadout.js';
 import type { Ctx, ToolDef } from './tools.js';
 import { botMayAnswer, loadTestMode } from './testmode.js';
 import { GraphError } from './graph.js';
+import { sentRecently } from './sentlog.js';
 
 // Tools that run the Messenger application flow. Claude is the operator: fb_flow_pending shows who
 // wrote, Claude decides whether each message answers the current question (the script replies) or is
@@ -299,14 +300,15 @@ export const flowTools: ToolDef[] = [
         const ids = msgs.map((m) => m.id);
 
         // Claude already asked them a follow-up itself (e.g. "credit card ba yan o ATM?"): nothing more to send now.
-        if (kind === 'asked') {
+        // Only after Claude really sent them something; otherwise they would be left with no reply at all.
+        if (kind === 'asked' && sentRecently(who, ctx.cfg.FB_WATCH_CLAUDE_TIMEOUT_MIN * 60_000)) {
           markHandled(state, ids);
           state.people[who] = person;
           await s.save(state);
           return { stage: person.stage, note: 'Marked handled. Their next message comes back to you.' };
         }
 
-        if (kind === 'question') {
+        if (kind === 'question' || kind === 'asked') {
           // Quick replies only show on the newest message, so the question goes again with its buttons, after Claude's answer.
           const q = currentQuestion(flow, person);
           if (q && withinWindow(ctx, msgs.at(-1)!.created_time, now)) return deliver(ctx, s, state, page_id, who, person, q.reply, q.choices, ids, { current_question: currentPrompt(flow, person) });

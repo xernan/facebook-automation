@@ -9,6 +9,7 @@ import { flowTools } from './flowtools.js';
 import { commentTools } from './comments.js';
 import { toScheduleTimestamp } from './schedule.js';
 import { botMayAnswer, loadTestMode } from './testmode.js';
+import { noteSent } from './sentlog.js';
 
 export interface Ctx {
   cfg: Config;
@@ -315,7 +316,9 @@ export const tools: ToolDef[] = [
         message: JSON.stringify({ text: body }),
         messaging_type: 'RESPONSE',
       };
-      return ctx.graph.post(page_id, `${page_id}/messages`, params);
+      const res = await ctx.graph.post(page_id, `${page_id}/messages`, params);
+      if (recipient_psid) noteSent(recipient_psid);
+      return res;
     },
   },
 
