@@ -175,6 +175,8 @@ export interface Person {
   asked_other_bank?: boolean;
   /** The bank whose card we asked them to confirm is a credit card (banks.verify), and whether they typed it after none_choice. */
   verify_bank?: string;
+  /** The script's reply would have been the same text a third time today (send guard): Claude says it in its own words. */
+  repeat_hold?: boolean;
   verify_after_other?: boolean;
   updated_at: string;
   /** When they first wrote (for the funnel stats). Older records may not have it. */

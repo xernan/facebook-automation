@@ -1463,6 +1463,14 @@ describe('send guard with the flow', () => {
       const state = await new FlowStore((ctx.cfg as any).flowDir).load(new Date());
       expect(state.people[PSID]!.outbox).toBeUndefined();
       expect(state.handled).toContain('m_4');
+      // Claude is asked to say it in its own words; after it does, the chat goes on as usual.
+      const pend = async () => ((await callTool(tool('fb_flow_pending'), { page_id: '111' }, ctx)) as any[]).find((p) => p.psid === PSID);
+      expect(await pend()).toMatchObject({ say_in_own_words: true });
+      const asked = (ids: string[]) => callTool(tool('fb_flow_answer'), { page_id: '111', psid: PSID, message_ids: ids, kind: 'asked' }, ctx) as Promise<any>;
+      vi.setSystemTime(Date.now() + 2_000);
+      await callTool(tools.find((t) => t.name === 'fb_send_message')!, { page_id: '111', recipient_psid: PSID, text: 'Para po makapagsimula, pumapayag po ba kayo sa Data Privacy Act? Oo o Hindi lang po.', idempotency_key: 'own-say-1' }, ctx);
+      expect((await asked(['m_resend'])).note).toMatch(/^Done/);
+      expect(await pend()).toBeUndefined();
     } finally {
       vi.useRealTimers();
     }

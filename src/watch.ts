@@ -41,6 +41,8 @@ export function operatorPrompt(pageId: string, ourBanks: string[] = [], cardNote
     '   - In your own messages never tell them which button to press: the code sends the question again with the right buttons.',
     '   - The code caps how many messages one person gets: send only your answer, then let the script ask. A tool result that starts',
     '     with "Not sent" or "Sending paused" is final for this round: do not send again, rephrase or retry; go to the next person.',
+    '     The one exception is say_in_own_words=true: ask current_question once in your own words (same meaning, short) with',
+    '     fb_send_message, then fb_flow_answer kind="asked" with their message ids (or ["m_resend"] when there are none).',
     '   - An answer that does not fit the question (an address when we asked for the email, "patay na" for civil status): say',
     '     kindly in one line what we need now, with an example, or check what they mean ("Widowed po ba?") and call',
     '     fb_flow_answer kind="asked". When they agree ("tama", "oo"), call kind="answer" with agreed_answer set to that answer.',
@@ -214,7 +216,7 @@ async function main() {
       if (n) log(`sent ${n} reminder(s) to people who stopped mid-application`);
     }
     // Whatever the fast lane did not finish goes to Claude (never while Meta blocks messaging).
-    const waiting = (list: typeof pending) => list.filter((p) => p.outbox_pending || p.needs_id_review || p.needs_finalize || (p.can_reply && p.messages.length > 0));
+    const waiting = (list: typeof pending) => list.filter((p) => p.outbox_pending || p.needs_id_review || p.needs_finalize || (p.can_reply && (p.messages.length > 0 || p.say_in_own_words)));
     // What the fast lane answered needs no new read now; the next round picks up anything it left, such as an ID photo.
     const others = waiting(pending).filter((p) => !fast.includes(p));
     const rest = Date.now() < blockedUntil || others.length === 0 ? [] : waiting(fast.length ? await findPending(ctx, pageId) : pending);

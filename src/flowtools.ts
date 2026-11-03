@@ -82,7 +82,7 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
     const needsIdReview = p?.stage === 'id_photo' && (p.id_files?.length ?? 0) > (p.id_review?.length ?? 0);
     // Complete but no PDFs yet (Claude stopped before fb_lead_finalize): keep asking until it is done.
     const needsFinalize = p?.stage === 'done' && p.lead_file && !p.finalized_at && !p.hold ? p.lead_file : undefined;
-    if (msgs.length === 0 && !p?.outbox && !needsIdReview && !needsFinalize) continue;
+    if (msgs.length === 0 && !p?.outbox && !needsIdReview && !needsFinalize && !p?.repeat_hold) continue;
     const cur = p ?? newPerson(now);
     const joined = { text: msgs.map((m) => m.text).filter(Boolean).join('\n'), image_url: msgs.find((m) => m.image_url)?.image_url };
     const next = msgs.length ? nextStepIf(flow, cur, joined, now, ctx.cfg.FB_FLOW_COOLDOWN_DAYS) : undefined;
@@ -95,6 +95,8 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
       // A reply the send guard holds (too many since their last message, or this minute) waits; no retry every second.
       outbox_pending: !!p?.outbox && !(await ctx.graph.messages.holding(person.id, now.getTime())),
       needs_id_review: needsIdReview,
+      // The script's question would have gone a third time today word for word: ask it once in your own words.
+      say_in_own_words: !!p?.repeat_hold,
       needs_finalize: needsFinalize,
       can_reply: !!lastIn && withinWindow(ctx, lastIn, now),
       messages: msgs.map((m) => ({ id: m.id, text: m.text, has_image: !!m.image_url, created_time: m.created_time })),
@@ -196,7 +198,8 @@ function guardOutcome(state: FlowState, person: Person, err: unknown): string | 
   if (err.rule === 'same_text' && person.outbox) {
     markHandled(state, person.outbox.for_messages);
     delete person.outbox;
-    return `${err.message} The repeat was dropped; answer in your own words only if they need it.`;
+    person.repeat_hold = true;
+    return `${err.message} Ask them once in your own words with fb_send_message, then call fb_flow_answer kind="asked".`;
   }
   return `${err.message} The reply is kept and goes after their next message. Send nothing else now.`;
 }
@@ -231,6 +234,7 @@ async function deliver(
     return { reply: text, stage: person.stage, ...extra, note: 'Send may not have gone through. Check the chat with fb_get_messages.' };
   }
   delete person.outbox;
+  delete person.repeat_hold;
   markHandled(state, ids);
   await s.save(state);
   return { reply: text, buttons: choices, stage: person.stage, ...extra };
@@ -332,6 +336,15 @@ export const flowTools: ToolDef[] = [
           state.people[who] = person;
           await s.save(state);
           return { resent_earlier_reply: sent, note: 'Call fb_flow_pending again for newer messages.' };
+        }
+
+        // Claude said the held question in its own words (repeat_hold): the chat goes on normally.
+        if (kind === 'asked' && person.repeat_hold && sentRecently(who, ctx.cfg.FB_WATCH_CLAUDE_TIMEOUT_MIN * 60_000)) {
+          delete person.repeat_hold;
+          markHandled(state, message_ids.filter((m: string) => m !== 'm_resend'));
+          state.people[who] = person;
+          await s.save(state);
+          return { stage: person.stage, note: 'Done. Their next message comes back to you.' };
         }
 
         // Read each message from Meta: only this person's own, unhandled messages count.
