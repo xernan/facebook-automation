@@ -149,3 +149,14 @@ describe('model for the bot runs', () => {
     expect(modelArgs('')).toEqual([]);
   });
 });
+
+describe('Meta temporary messaging restriction', () => {
+  it('code 10 / subcode 1893063 stops all sending', async () => {
+    const { isMessagingBlocked } = await import('../src/watchguard.js');
+    const { GraphError, explainGraphError } = await import('../src/graph.js');
+    const msg = explainGraphError(10, 1893063, 'Application does not have permission for this action');
+    expect(msg).toMatch(/restricted this Page from messaging/);
+    expect(isMessagingBlocked(new GraphError(msg, 10, 1893063))).toBe(true);
+    expect(isMessagingBlocked(new GraphError('x', 10, 2018278))).toBe(false);
+  });
+});

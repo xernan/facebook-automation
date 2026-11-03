@@ -79,8 +79,8 @@ export function chatsToGreet<T extends { stage?: string; can_reply?: boolean; me
 
 /** Meta: the Page may not message people for now (2022) or the message looked like spam (368). */
 export const isMessagingBlocked = (err: unknown) => {
-  const e = err as { code?: number; message?: string } | undefined;
-  return e?.code === 2022 || e?.code === 368 || /restricted from messaging/i.test(e?.message ?? '');
+  const e = err as { code?: number; subcode?: number; message?: string } | undefined;
+  return e?.code === 2022 || e?.code === 368 || (e?.code === 10 && e?.subcode === 1893063) || /restricted (this Page )?from messaging/i.test(e?.message ?? '');
 };
 
 export class ClaudeBrake {

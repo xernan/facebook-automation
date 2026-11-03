@@ -26,6 +26,8 @@ export function explainGraphError(code: number | undefined, subcode: number | un
   if (code === 190) return `Access token is invalid or expired. Make a new token (see docs/SETUP.md). (${raw})`;
   if (code === 4 || code === 17 || code === 32 || code === 613 || code === 80001)
     return `Meta rate limit reached. Wait a few minutes before retrying. (${raw})`;
+  if (code === 10 && subcode === 1893063)
+    return `Meta has restricted this Page from messaging for now (Messaging Policies). Stop all sending. (${raw})`;
   if (code === 551 || (code === 10 && subcode === 2018278))
     return `This person cannot be messaged right now (outside the 24-hour window or blocked). (${raw})`;
   if (code === 10 || (code !== undefined && code >= 200 && code <= 299))
