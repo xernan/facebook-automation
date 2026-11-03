@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ROOT_DIR, createContext } from './context.js';
@@ -17,7 +17,7 @@ import { chatsToGreet, saveClaudeStatus, ChatCheck, ClaudeBrake, isMessagingBloc
 
 const ALLOWED = [...['fb_flow_pending', 'fb_flow_answer', 'fb_flow_id_images', 'fb_flow_id_review', 'fb_lead_finalize', 'fb_send_message', 'fb_get_messages'].map((t) => `mcp__facebook__${t}`), 'WebSearch'];
 
-export function operatorPrompt(pageId: string, ourBanks: string[] = []): string {
+export function operatorPrompt(pageId: string, ourBanks: string[] = [], cardNotes = ''): string {
   return [
     `You answer Messenger chats for Facebook Page ${pageId} using the application flow tools.`,
     'Answer like a real person on our team: natural, kind, short, in their language. Answer every question they ask.',
@@ -27,11 +27,17 @@ export function operatorPrompt(pageId: string, ourBanks: string[] = []): string 
           '  them, there is nothing left we can apply for; if even one is left, we go on with the application.',
         ]
       : []),
+    ...(cardNotes ? [cardNotes.trim()] : []),
     `1. Call fb_flow_pending with page_id ${pageId}.`,
     '2. For each person in the list (skip anyone with can_reply=false, except to resend an outbox_pending reply):',
     '   - outbox_pending: call fb_flow_answer kind="answer" with their message ids; it resends the saved reply first.',
     '   - stage "new", or the messages answer current_question: fb_flow_answer kind="answer" with all their message ids.',
     '     If a stage "new" message also asks something, first answer it with fb_send_message as below, then fb_flow_answer.',
+    '   - stage "banks": read what they wrote as a person would. If they said which cards they hold, call fb_flow_answer',
+    '     kind="answer" with cards = every bank credit card they hold (WebSearch a card you are not sure of). If they asked about',
+    '     a card ("Home Credit ok ba?"), answer it first with fb_send_message, then fb_flow_answer kind="question". If they made clear',
+    '     they have no bank credit card at all, kind="answer" with no_credit_card=true.',
+    '   - In your own messages never tell them which button to press: the code sends the question again with the right buttons.',
     '   - answer_check is set and their message tries to answer: it counts only if it meets answer_check and the parts fit',
     '     together (a real barangay in that city, as far as you can tell). In an address outside Metro Manila, a sitio or purok can',
     '     stand in for the street. Complete: fb_flow_answer kind="answer". Not complete: use fb_send_message to say exactly which',
@@ -123,12 +129,19 @@ async function main() {
       return [];
     }
   };
+  const cardNotes = () => {
+    try {
+      return readFileSync(path.join(ROOT_DIR, 'card-notes.md'), 'utf8');
+    } catch {
+      return '';
+    }
+  };
   const runClaude = () =>
     runClaudeProcess(
       () =>
         spawn(
           claudeBin(ctx.cfg.FB_WATCH_CLAUDE_BIN),
-          ['-p', operatorPrompt(pageId, ourBanks()), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', 'WebSearch', '--allowedTools', ALLOWED.join(',')],
+          ['-p', operatorPrompt(pageId, ourBanks(), cardNotes()), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', 'WebSearch', '--allowedTools', ALLOWED.join(',')],
           { cwd: ctx.cfg.flowDir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
         ),
       ctx.cfg.FB_WATCH_CLAUDE_TIMEOUT_MIN * 60_000,

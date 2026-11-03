@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
-import { advance, cleanSuggestions, currentPrompt, currentQuestion, ID_TYPES, idVerdict, newPerson, nextStepIf, quickReply, scriptCanAnswer, type IdSeen, type Person } from './flow.js';
+import { advance, cleanSuggestions, setCards, currentPrompt, currentQuestion, ID_TYPES, idVerdict, newPerson, nextStepIf, quickReply, scriptCanAnswer, type IdSeen, type Person } from './flow.js';
 import { detailsSchema } from './application.js';
 import { FlowStore, loadFlow, type FlowState } from './flowstore.js';
 import { finalizeLead } from './leadout.js';
@@ -225,7 +225,7 @@ export const flowTools: ToolDef[] = [
     description:
       'Handle new messages from one person in the application flow. kind="answer": the messages answer the current question; ' +
       'the script decides the next reply (qualifier rules are enforced in code) and sends it. kind="question": the person said ' +
-      'something else; it sends the current question again with its buttons. Only a direct question about the application service gets one short fb_send_message first. ' +
+      'something else; it sends the current question again with its buttons. A question they asked gets a short answer with fb_send_message first.' +
       'If reply is null the script has nothing to say (finished, excluded or in cooldown): answer kindly yourself if needed. ' +
       'For a person at stage "new", always use kind="answer": it sends the greeting and consent question.',
     write: true,
@@ -239,8 +239,17 @@ export const flowTools: ToolDef[] = [
         .max(5)
         .optional()
         .describe('For the next question only, when fb_flow_pending says wants_suggestions. Public facts you are sure of; never guess.'),
+      cards: z
+        .array(z.string().trim().min(1).max(40))
+        .max(15)
+        .optional()
+        .describe(
+          'Only at stage "banks", with kind="answer": every bank credit card they say they hold, by bank name (e.g. "AUB", "Bank of Commerce"). ' +
+            'Leave out debit cards, wallets, pay-later and loan cards. The code applies the owner rules and moves on.',
+        ),
+      no_credit_card: z.boolean().optional().describe('Only at stage "banks", with kind="answer": they made clear they have no bank credit card at all.'),
     },
-    handler: async ({ page_id, psid: who, message_ids, kind, suggestions }, ctx) => {
+    handler: async ({ page_id, psid: who, message_ids, kind, suggestions, cards, no_credit_card }, ctx) => {
       const now = new Date();
       const s = store(ctx);
       const flow = loadFlow(ctx.cfg.flowFile);
@@ -288,7 +297,11 @@ export const flowTools: ToolDef[] = [
         }
 
         const input = { text: msgs.map((m) => m.text).filter(Boolean).join('\n'), image_url: msgs.find((m) => m.image_url)?.image_url };
-        const r = advance(flow, person, input, now, ctx.cfg.FB_FLOW_COOLDOWN_DAYS, cleanSuggestions(suggestions));
+        // Claude read the bank answer: its list of cards (or "none") goes to the owner rules in code.
+        const r =
+          person.stage === 'banks' && (cards?.length || no_credit_card)
+            ? setCards(flow, person, cards ?? [], now, ctx.cfg.FB_FLOW_COOLDOWN_DAYS)
+            : advance(flow, person, input, now, ctx.cfg.FB_FLOW_COOLDOWN_DAYS, cleanSuggestions(suggestions));
         const next: Person = r.person;
 
         if (r.received_id_image) {

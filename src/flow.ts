@@ -582,6 +582,29 @@ const GREETING_WORDS = new Set(['hi', 'hello', 'helo', 'hey', 'good', 'gud', 'mo
  * a clear yes/no, bank names, a tapped button, a valid number/email/TIN, or a plain answer to a free-text question.
  * Anything that may be a question, an image, or a reply at the ID step goes to Claude.
  */
+/** Claude's reading of the bank answer: the bank credit cards they hold, or none. The owner rules still decide here. */
+export function setCards(flow: Flow, prev: Person, cards: string[], now: Date, cooldownDays: number): Advance {
+  const p: Person = { ...prev, answers: { ...prev.answers }, banks: [...prev.banks], flags: prev.flags && [...prev.flags], updated_at: now.toISOString() };
+  delete p.asked_other_bank;
+  delete p.verify_bank;
+  delete p.verify_after_other;
+  const notCredit = flow.banks.not_credit.map((n) => n.toLowerCase());
+  const named = cards.flatMap((c) => (extractBanks(c).length > 0 ? extractBanks(c) : [c]));
+  p.banks = [...new Set([...p.banks, ...named])].filter((b) => !notCredit.includes(b.toLowerCase()));
+  if (p.banks.length === 0) {
+    p.stage = 'rejected';
+    p.cooldown_until = new Date(now.getTime() + cooldownDays * 86_400_000).toISOString();
+    return { person: p, reply: flow.carded.reject_reply };
+  }
+  const exclude = [...flow.banks.exclude_if_all, ...(flow.banks.choices ?? [])].map((b) => b.toLowerCase());
+  if (exclude.every((b) => p.banks.some((x) => x.toLowerCase() === b))) {
+    p.stage = 'excluded';
+    return { person: p, reply: flow.banks.excluded_reply };
+  }
+  const q = goToStep(flow, p, 0);
+  return { person: p, reply: q.reply, choices: q.choices };
+}
+
 export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean {
   // An ID photo is downloaded to our folder at once (nothing is sent); Claude reads it right after.
   if (input.image_url) return p.stage === 'id_photo';
@@ -603,8 +626,10 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
       return w.length <= SHORT_YES_NO && !!parseYesNo(text);
     case 'banks':
       if (p.verify_bank) return w.length <= SHORT_YES_NO && !!parseYesNo(text);
-      if (p.asked_other_bank) return w.length <= 6;
-      return extractBanks(text).length > 0 || (!!flow.banks.choices && banksDone(flow, p, text));
+      // Owner: a tapped button only. Anything typed ("aub at boc lang", "home credit ok ba?") is read by Claude,
+      // who checks unknown cards and passes the list (fb_flow_answer cards).
+      if (p.asked_other_bank) return false;
+      return (bankButtons(flow, p) ?? []).some((c) => c.toLowerCase() === text.toLowerCase());
     case 'steps': {
       const step = flow.steps[p.step];
       if (!step) return false;

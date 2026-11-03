@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { sendNudges } from '../src/flowtools.js';
-import { advance, cleanSuggestions, currentQuestion, flowSchema, idVerdict, newPerson, nextStepIf, parseYesNo, quickReply, scriptCanAnswer, validAnswer, type IdSeen, type Person } from '../src/flow.js';
+import { advance, cleanSuggestions, currentQuestion, setCards, flowSchema, idVerdict, newPerson, nextStepIf, parseYesNo, quickReply, scriptCanAnswer, validAnswer, type IdSeen, type Person } from '../src/flow.js';
 import { FlowStore, loadFlow } from '../src/flowstore.js';
 import { callTool, tools } from '../src/tools.js';
 import { param, testCtx, type Call } from './helpers.js';
@@ -721,7 +721,7 @@ describe('fast lane (script answers without Claude)', () => {
     expect(can(at('new'), 'Good evening po')).toBe(true);
     expect(can(at('consent'), 'Oo')).toBe(true);
     expect(can(at('carded'), 'meron')).toBe(true);
-    expect(can(at('banks'), 'BDO at BPI')).toBe(true);
+    expect(can(at('banks'), 'BDO at BPI')).toBe(false); // typed: Claude reads it
   });
 
   it('questions, unclear replies and images go to Claude', () => {
@@ -859,7 +859,7 @@ describe('bank buttons: none of these asks which bank', () => {
     expect(asked.choices).toBeUndefined();
     expect(asked.person.stage).toBe('banks');
     expect(currentQuestion(f, asked.person)).toEqual({ reply: 'Which bank?' });
-    expect(scriptCanAnswer(f, asked.person, { text: 'Landbank' })).toBe(true);
+    expect(scriptCanAnswer(f, asked.person, { text: 'Landbank' })).toBe(false);
     expect(scriptCanAnswer(f, asked.person, { text: 'Ano po ibig sabihin?' })).toBe(false);
   });
 
@@ -1267,5 +1267,36 @@ describe('owner rules: Atome is not a credit card, Maya is checked first, a card
     expect(scriptCanAnswer(f, rejected, { text: 'ay meron pala akong BDO' })).toBe(true);
     expect(advance(f, rejected, { text: 'ay meron pala akong BDO' }, NOW, 180).person.banks).toEqual(['BDO']);
     expect(advance(f, rejected, { text: 'BDO debit card lang' }, NOW, 180).person.stage).toBe('rejected');
+  });
+});
+
+describe('Claude reads the bank answer and passes the cards', () => {
+  const f = flowSchema.parse({ ...flow, banks: { ...flow.banks, choices: ['BPI', 'China Bank'], exclude_if_all: ['BPI', 'China Bank'], done_choice: 'Wala na', none_choice: 'Wala dito', not_credit: ['Atome'] } });
+  const at = { ...newPerson(NOW), stage: 'banks' as const, consent_at: NOW.toISOString() };
+
+  it('a tapped button is the script; anything typed goes to Claude', () => {
+    expect(scriptCanAnswer(f, at, { text: 'BPI' })).toBe(true);
+    expect(scriptCanAnswer(f, at, { text: 'aub at boc lang' })).toBe(false);
+    expect(scriptCanAnswer(f, at, { text: 'home credit ok ba yun' })).toBe(false);
+  });
+
+  it('cards from Claude go on to the questions; none or only Atome rejects', () => {
+    const r = setCards(f, at, ['AUB', 'Bank of Commerce'], NOW, 180);
+    expect(r.person.banks).toEqual(['AUB', 'Bank of Commerce']);
+    expect(r.person.stage).toBe('steps');
+    expect(setCards(f, at, [], NOW, 180).person.stage).toBe('rejected');
+    expect(setCards(f, at, ['Atome'], NOW, 180).person.stage).toBe('rejected');
+  });
+
+  it('holding all our banks still stops', () => {
+    expect(setCards(f, at, ['BPI', 'China Bank'], NOW, 180).person.stage).toBe('excluded');
+  });
+
+  it('the operator gets the card notes and the bank instructions', async () => {
+    const { operatorPrompt } = await import('../src/watch.js');
+    const p = operatorPrompt('1', [], 'Atome does not count.');
+    expect(p).toContain('Atome does not count.');
+    expect(p).toMatch(/stage "banks": read what they wrote/);
+    expect(p).toMatch(/never tell them which button to press/);
   });
 });
