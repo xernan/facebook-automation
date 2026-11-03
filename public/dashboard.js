@@ -410,7 +410,17 @@ async function renderForm(a) {
     $('#' + id).oninput = () => {
       if (!cardManual) $('#name_on_card').value = autoCardName(v('first_name'), v('middle_name'), v('last_name'));
     };
-  $('#civil_status').onchange = () => ($('#spouse_wrap').hidden = v('civil_status') !== 'Married');
+  // Spouse mobile follows the client's mobile until a different number is typed (owner rule; the server does the same).
+  let spouseManual = !!f.spouse_mobile && f.spouse_mobile !== f.mobile;
+  $('#spouse_mobile').oninput = () => (spouseManual = v('spouse_mobile') !== '' && v('spouse_mobile') !== v('mobile'));
+  const followSpouse = () => {
+    if (!spouseManual && v('civil_status') === 'Married') $('#spouse_mobile').value = v('mobile');
+  };
+  $('#mobile').oninput = followSpouse;
+  $('#civil_status').onchange = () => {
+    $('#spouse_wrap').hidden = v('civil_status') !== 'Married';
+    followSpouse();
+  };
 
   // Red = still empty. Required (*) fields and the ones the missing list names.
   const MARK = ['first_name', 'last_name', 'birthday', 'gender', 'nationality', 'birth_town', 'civil_status', 'mother_maiden_name', 'email', 'mobile',

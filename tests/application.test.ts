@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
-import { ageOn, buildApplication, formatTin, formToData, splitName, yearsFrom, type Lead } from '../src/application.js';
+import { ageOn, buildApplication, formatTin, formToData, settingsSchema, splitName, yearsFrom, type Lead } from '../src/application.js';
 import { lookupPhone, rememberPhone } from '../src/phonebook.js';
 import { finalizeLead, folderName, listApplicants, saveForm, saveSettings } from '../src/leadout.js';
 import { combText, formatPdfDate, pdfDigits } from '../src/pdf.js';
@@ -563,6 +563,24 @@ describe('finalizeLead', () => {
     writeFileSync(path.join(dir, 'lead-777-z.json'), JSON.stringify(lead({ psid: '777', banks: ['BDO'] })));
     const r2 = await finalizeLead(dir, tpl, 'lead-777-z.json', { ...details, first_name: 'Ben', company: { ...company, city: 'Cebu City' } }, NOW);
     expect(r2.missing).toContain('Office phone (not found)');
+  });
+
+  it('saved married client: default reference from settings; spouse mobile follows an edited mobile, a typed spouse number stays', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'sp-'));
+    const tpl = mkdtempSync(path.join(tmpdir(), 'tpl-'));
+    writeFileSync(path.join(dir, 'lead-999-x.json'), JSON.stringify(lead({ banks: ['BDO'], married: true, answers: { ...lead().answers, civil_status: 'married' } })));
+    await saveSettings(dir, settingsSchema.parse({ default_ref_name: 'Pedro Santos', default_ref_mobile: '09170000000' }));
+    const r = await finalizeLead(dir, tpl, 'lead-999-x.json', details, NOW);
+    const folder = path.basename(r.folder);
+    const read = () => JSON.parse(readFileSync(path.join(dir, r.folder, 'details.json'), 'utf8'));
+    const before = read();
+    expect([before.form.ref_name, before.form.ref_mobile, before.form.spouse_mobile]).toEqual(['Pedro Santos', '09170000000', '0917 123 1586']);
+    expect(before.missing).toContain('Spouse name');
+    await saveForm(dir, tpl, folder, { ...before.form, mobile: '0918 222 3333' });
+    expect(read().data.spouse_mobile).toBe('0918 222 3333');
+    await saveForm(dir, tpl, folder, { ...read().form, spouse_mobile: '0919 444 5555' });
+    await saveForm(dir, tpl, folder, { ...read().form, mobile: '0920 666 7777' });
+    expect(read().data.spouse_mobile).toBe('0919 444 5555');
   });
 
   it('a number the owner types in the Default Form is kept for the next client', async () => {

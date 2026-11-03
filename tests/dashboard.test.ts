@@ -144,6 +144,10 @@ describe('dashboard', () => {
     expect(JSON.parse(readFileSync(path.join(dir, 'applicants', folder, 'details.json'), 'utf8')).printed).toBe(true);
     const bad = await fetch(`${base}/api/settings`, { method: 'POST', body: JSON.stringify({ text_uniform_size: 99 }), headers: { 'x-token': 'tok' } });
     expect(bad.status).toBe(400);
+    const badRef = await fetch(`${base}/api/settings`, { method: 'POST', body: JSON.stringify({ default_ref_mobile: '<script>' }), headers: { 'x-token': 'tok' } });
+    expect(badRef.status).toBe(400);
+    const noToken = await fetch(`${base}/api/settings`, { method: 'POST', body: JSON.stringify({ default_ref_name: 'X' }) });
+    expect(noToken.status).not.toBe(200);
   });
 
   it('safeFile stays inside applicants/<folder>/', () => {

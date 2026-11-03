@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import ExcelJS from 'exceljs';
-import { BANK_NAME, BANKS, buildApplication, workBoxes, WORK_BOX, type BankKey, formMissing, formSchema, formToData, settingsSchema, type AppForm, type BuiltApplication, type Details, type Lead, type Settings } from './application.js';
+import { BANK_NAME, BANKS, buildApplication, followSpouseMobile, workBoxes, WORK_BOX, type BankKey, formMissing, formSchema, formToData, settingsSchema, type AppForm, type BuiltApplication, type Details, type Lead, type Settings } from './application.js';
 import { PDFDocument } from 'pdf-lib';
 import { fillBankPdf } from './pdf.js';
 import { placeProblems } from './placecheck.js';
@@ -181,7 +181,7 @@ export async function saveForm(flowDir: string, templatesDir: string, folderName
   const file = path.join(dir, 'details.json');
   const d = JSON.parse(await fs.readFile(file, 'utf8'));
   if (!d.banks || !d.bank_only) throw new Error('This applicant was saved before the form existed; finalize it again.');
-  const clean = formSchema.parse(form);
+  const clean = followSpouseMobile(d.form, formSchema.parse(form));
   const data = formToData(clean);
   const missing = [...formMissing(clean), ...placeProblems(clean)];
   const settings = await loadSettings(flowDir);

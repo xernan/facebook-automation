@@ -284,6 +284,16 @@ export function formToData(f: AppForm): Record<string, string> {
   return d;
 }
 
+/**
+ * A spouse mobile that was the client's own number follows the client's mobile when the owner edits it; one typed
+ * by hand (a different number) stays.
+ */
+export function followSpouseMobile(prev: AppForm | undefined, next: AppForm): AppForm {
+  if (next.civil_status !== 'Married') return next;
+  const wasOwn = !has(next.spouse_mobile) || (prev !== undefined && next.spouse_mobile === prev.mobile);
+  return wasOwn && has(next.mobile) ? { ...next, spouse_mobile: next.mobile } : next;
+}
+
 /** What is still missing on the form (shown to the owner and followed up), same idea as the card app's checks. */
 export function formMissing(f: AppForm): string[] {
   const m: string[] = [];
