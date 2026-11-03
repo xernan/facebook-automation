@@ -58,6 +58,8 @@ export const configSchema = z.object({
   FB_WATCH_CLAUDE_TIMEOUT_MIN: intIn(5, 1, 30),
   FB_WATCH_CLAUDE_CHECK_HOURS: intIn(3, 1, 24),
   FB_WATCH_CLAUDE_BIN: z.string().optional(),
+  /** Model for the chat and comment runs (owner: fast and very smart). Blank = the Claude program's default. */
+  FB_WATCH_CLAUDE_MODEL: z.string().regex(/^[a-z0-9.\-]*$/).default('sonnet'),
   FB_DASHBOARD_PORT: intIn(8790, 1024, 65535),
   // Comment replies (src/comments.ts). Off until the owner turns them on.
   FB_COMMENTS_LIVE: boolFlag(false),

@@ -7,7 +7,7 @@ import { ROOT_DIR, createContext } from './context.js';
 import { findPending, flowTools, latestChatTime, sendNudges, showTyping } from './flowtools.js';
 import { loadFlow } from './flowstore.js';
 import { GraphError } from './graph.js';
-import { chatsToGreet, saveClaudeStatus, ChatCheck, ClaudeBrake, isMessagingBlocked, pendingKey, runClaudeProcess, takeLock } from './watchguard.js';
+import { chatsToGreet, saveClaudeStatus, ChatCheck, ClaudeBrake, isMessagingBlocked, modelArgs, pendingKey, runClaudeProcess, takeLock } from './watchguard.js';
 
 // Watcher: checks the Page's Messenger without AI (every FB_WATCH_ACTIVE_INTERVAL_SEC while someone is chatting,
 // else every FB_WATCH_INTERVAL_SEC; slower on its own when Meta says we are calling too often). Plain answers the
@@ -142,7 +142,7 @@ async function main() {
       () =>
         spawn(
           claudeBin(ctx.cfg.FB_WATCH_CLAUDE_BIN),
-          ['-p', operatorPrompt(pageId, ourBanks(), cardNotes()), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', 'WebSearch', '--allowedTools', ALLOWED.join(',')],
+          ['-p', operatorPrompt(pageId, ourBanks(), cardNotes()), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', 'WebSearch', '--allowedTools', ALLOWED.join(','), ...modelArgs(ctx.cfg.FB_WATCH_CLAUDE_MODEL)],
           { cwd: ctx.cfg.flowDir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
         ),
       ctx.cfg.FB_WATCH_CLAUDE_TIMEOUT_MIN * 60_000,

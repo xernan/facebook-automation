@@ -6,7 +6,7 @@ import path from 'node:path';
 import { findPendingComments } from './comments.js';
 import { ROOT_DIR, createContext } from './context.js';
 import { GraphError } from './graph.js';
-import { ClaudeBrake, runClaudeProcess, takeLock } from './watchguard.js';
+import { ClaudeBrake, modelArgs, runClaudeProcess, takeLock } from './watchguard.js';
 
 // Comment watcher: every FB_COMMENT_INTERVAL_SEC it looks for people's new comments on our recent posts (no AI).
 // When some are ready (older than FB_COMMENT_MIN_DELAY_SEC) and the hourly limit allows, it wakes Claude with
@@ -65,7 +65,7 @@ async function main() {
       () =>
         spawn(
           claudeBin(ctx.cfg.FB_WATCH_CLAUDE_BIN),
-          ['-p', commentPrompt(pageId, ctx.cfg.FB_COMMENT_PRIVATE_REPLY), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', '', '--allowedTools', ALLOWED.join(',')],
+          ['-p', commentPrompt(pageId, ctx.cfg.FB_COMMENT_PRIVATE_REPLY), '--mcp-config', mcpConfig, '--strict-mcp-config', '--tools', '', '--allowedTools', ALLOWED.join(','), ...modelArgs(ctx.cfg.FB_WATCH_CLAUDE_MODEL)],
           { cwd: ctx.cfg.flowDir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
         ),
       ctx.cfg.FB_WATCH_CLAUDE_TIMEOUT_MIN * 60_000,

@@ -22,6 +22,9 @@ export function collectOutput(child: { stdout: NodeJS.ReadableStream | null; std
 }
 
 // spawn can throw instead of emitting 'error' (e.g. while the program is being updated); both end as a failed run for ClaudeBrake.
+/** The --model flag for a Claude run, or nothing to use the program's default. */
+export const modelArgs = (model: string): string[] => (model ? ['--model', model] : []);
+
 export function runClaudeProcess(start: () => ChildProcess, timeoutMs: number, log: (m: string) => void): Promise<number | null> {
   return new Promise((resolve) => {
     let child: ChildProcess;

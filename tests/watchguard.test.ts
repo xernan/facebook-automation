@@ -139,3 +139,13 @@ describe('watch timing defaults', () => {
     expect([cfg.FB_WATCH_INTERVAL_SEC, cfg.FB_WATCH_ACTIVE_INTERVAL_SEC]).toEqual([2, 1]);
   });
 });
+
+describe('model for the bot runs', () => {
+  it('owner: a fast, smart model by default; blank uses the default of the Claude program', async () => {
+    const { modelArgs } = await import('../src/watchguard.js');
+    const { configSchema } = await import('../src/config.js');
+    expect(configSchema.parse({}).FB_WATCH_CLAUDE_MODEL).toBe('sonnet');
+    expect(modelArgs('sonnet')).toEqual(['--model', 'sonnet']);
+    expect(modelArgs('')).toEqual([]);
+  });
+});
