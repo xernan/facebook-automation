@@ -1315,3 +1315,27 @@ describe('civil status: only a real one is the script', () => {
     expect(scriptCanAnswer(f, at, { text: 'ulit' })).toBe(false);
   });
 });
+
+describe('profile phone button refused by Meta', () => {
+  it('sends the question once more without that button, no retry loop', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'flow-'));
+    writeFileSync(path.join(dir, 'test-mode.json'), JSON.stringify({ on: false, ids: [] }));
+    writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ version: 1, started_at: new Date(0).toISOString(), handled: [], people: { [PSID]: { stage: 'steps', step: 0, answers: {}, banks: [], married: false, updated_at: new Date().toISOString() } } }));
+    const flowFile = path.join(dir, 'flow.json');
+    writeFileSync(flowFile, JSON.stringify({ ...flow, steps: [{ key: 'email', prompt: 'Email?', validate: 'email', invalid_reply: 'Bad' }, { key: 'mobile', prompt: 'Mobile?', autofill: 'user_phone_number' }] }));
+    const bodies: any[] = [];
+    const { ctx } = testCtx({ FB_WRITE_ENABLED: 'true', FB_FLOW_FILE: flowFile, FB_FLOW_DIR: dir }, (c: Call) => {
+      if (c.url.pathname.endsWith('/111/messages')) {
+        const m = JSON.parse(param(c, 'message')!);
+        bodies.push(m);
+        if (m.quick_replies?.some((q: any) => q.content_type === 'user_phone_number')) return { status: 400, json: { error: { code: 10, message: 'Application does not have permission for this action' } } };
+        return { json: { message_id: 'm_out' } };
+      }
+      return { json: { id: 'm_1', message: 'a@b.co', from: { id: PSID }, created_time: new Date().toISOString() } };
+    });
+    const r: any = await callTool(tool('fb_flow_answer'), { page_id: '111', psid: PSID, message_ids: ['m_1'], kind: 'answer' }, ctx);
+    expect(r.reply).toBe('Mobile?');
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toEqual({ text: 'Mobile?' });
+  });
+});

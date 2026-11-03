@@ -7,6 +7,7 @@ import { FlowStore, loadFlow, type FlowState } from './flowstore.js';
 import { finalizeLead } from './leadout.js';
 import type { Ctx, ToolDef } from './tools.js';
 import { botMayAnswer, loadTestMode } from './testmode.js';
+import { GraphError } from './graph.js';
 
 // Tools that run the Messenger application flow. Claude is the operator: fb_flow_pending shows who
 // wrote, Claude decides whether each message answers the current question (the script replies) or is
@@ -117,14 +118,20 @@ export async function showTyping(ctx: Ctx, page_id: string, to: string): Promise
 
 async function send(ctx: Ctx, page_id: string, to: string, text: string, choices?: string[]) {
   if (!botMayAnswer(await loadTestMode(ctx.cfg.flowDir), to)) throw new Error('Test mode is on and this person is not a tester.');
-  const message = choices?.length
-    ? { text, quick_replies: choices.map(quickReply) }
-    : { text };
-  await ctx.graph.post(page_id, `${page_id}/messages`, {
-    recipient: JSON.stringify({ id: to }),
-    message: JSON.stringify(message),
-    messaging_type: 'RESPONSE',
-  });
+  const post = (buttons?: string[]) =>
+    ctx.graph.post(page_id, `${page_id}/messages`, {
+      recipient: JSON.stringify({ id: to }),
+      message: JSON.stringify(buttons?.length ? { text, quick_replies: buttons.map(quickReply) } : { text }),
+      messaging_type: 'RESPONSE',
+    });
+  try {
+    await post(choices);
+  } catch (err) {
+    // Meta refuses the profile phone/email button for this app (#10): the question goes once more without it.
+    const plain = choices?.filter((c) => !c.startsWith('autofill:'));
+    if (!(err instanceof GraphError && err.code === 10) || plain?.length === choices?.length) throw err;
+    await post(plain);
+  }
 }
 
 /**
