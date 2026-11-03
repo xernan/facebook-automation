@@ -68,7 +68,7 @@ export async function finalizeLead(
       fromBook = true;
     }
   }
-  const app = buildApplication(lead, details, now);
+  const app = buildApplication(lead, details, now, settings);
   if (fromBook) app.defaults.push(`Office phone from our company directory (source: ${phoneSource})`);
   app.missing.push(...placeProblems(app.form));
   const name = [details.first_name, details.last_name].filter(Boolean).join(' ');

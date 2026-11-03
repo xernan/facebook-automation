@@ -111,6 +111,9 @@ export const settingsSchema = z
     weekly_target: z.number().int().min(1).max(1000).default(10),
     /** First day of the submit week: 0 = Sunday, 1 = Monday ... 6 = Saturday. */
     week_start_day: z.number().int().min(0).max(6).default(1),
+    /** Owner rule: the reference put on the Default Form when the client gave none (set in the dashboard). */
+    default_ref_name: z.string().max(120).default(''),
+    default_ref_mobile: z.string().regex(/^[0-9+\-\s()]*$/).max(30).default(''),
   })
   .strict();
 export type Settings = z.infer<typeof settingsSchema>;
@@ -184,6 +187,7 @@ export const formSchema = z
     mother_name_parts: nameParts.optional(),
     spouse_name: s(120),
     spouse_name_parts: nameParts.optional(),
+    spouse_mobile: s(30),
     home: formAddr.optional(),
     home_ownership: s(30),
     years_of_stay: s(10),
@@ -261,7 +265,11 @@ export function formToData(f: AppForm): Record<string, string> {
   put('company_address', join(c.unit, c.street, c.barangay, c.city, c.province));
   // China Bank ticks Employed / Self-Employed (Business); a self-employed applicant here owns a business.
   if (f.employment_type) put('employment_status', f.employment_type === 'Self-employed' ? 'Self-employed Business' : 'Employed');
-  if (f.civil_status === 'Married') put('spouse_name', f.spouse_name);
+  if (f.civil_status === 'Married') {
+    put('spouse_name', f.spouse_name);
+    // Owner rule: a married client's spouse mobile box gets the client's own mobile when no spouse number was given.
+    put('spouse_mobile', has(f.spouse_mobile) ? f.spouse_mobile : f.mobile);
+  }
   for (const [key, given] of [
     ['mother_maiden_name', f.mother_name_parts],
     ['spouse_name', f.spouse_name_parts],
@@ -413,7 +421,10 @@ export function formatTin(raw: string): string | undefined {
 
 const OWNER_TITLE = /\b(owner|co-?owner|proprietor|proprietress|founder|business\s*owner|may-?ari)\b/i;
 
-export function formFromLead(lead: Lead, details: Details, now: Date): { form: AppForm; defaults: string[] } {
+type RefDefault = Pick<Settings, 'default_ref_name' | 'default_ref_mobile'>;
+const NO_REF_DEFAULT: RefDefault = { default_ref_name: '', default_ref_mobile: '' };
+
+export function formFromLead(lead: Lead, details: Details, now: Date, ref: RefDefault = NO_REF_DEFAULT): { form: AppForm; defaults: string[] } {
   const a = lead.answers;
   const defaults: string[] = [];
   const f: AppForm = {
@@ -450,6 +461,16 @@ export function formFromLead(lead: Lead, details: Details, now: Date): { form: A
     ref_relationship: a.reference_relationship,
     ref_mobile: a.reference_mobile,
   };
+  if (f.civil_status === 'Married') {
+    f.spouse_mobile = f.mobile;
+    defaults.push("Spouse mobile = client's own mobile (owner rule)");
+  }
+  // Owner rule: no reference from the client = the owner's set reference (dashboard Settings).
+  if (!has(f.ref_name) && !has(f.ref_mobile) && has(ref.default_ref_name)) {
+    f.ref_name = ref.default_ref_name;
+    f.ref_mobile = has(ref.default_ref_mobile) ? ref.default_ref_mobile : undefined;
+    defaults.push('Personal reference = owner default (client gave none)');
+  }
   if (details.home_from_id) defaults.push('Home address taken from the ID');
   for (const fix of details.spelling_fixes ?? []) defaults.push(`Spelling corrected: ${fix}`);
   if (details.id_note) defaults.push(`ID note: ${details.id_note}`);
@@ -492,8 +513,8 @@ export function banksFor(lead: Lead): BankKey[] {
   return BANKS.filter((b) => !owned.has(norm(BANK_NAME[b])));
 }
 
-export function buildApplication(lead: Lead, details: Details, now: Date): BuiltApplication {
-  const { form, defaults } = formFromLead(lead, details, now);
+export function buildApplication(lead: Lead, details: Details, now: Date, ref?: RefDefault): BuiltApplication {
+  const { form, defaults } = formFromLead(lead, details, now, ref);
   return {
     banks: banksFor(lead),
     form,

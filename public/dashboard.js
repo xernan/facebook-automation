@@ -307,7 +307,7 @@ async function renderForm(a) {
     field('nationality', 'Nationality', f.nationality || 'Filipino', { req: 1 }) +
     field('birth_town', 'Place of birth', f.birth_town, { req: 1 }) +
     select('civil_status', 'Civil status', f.civil_status, ['Single', 'Married', 'Separated', 'Widowed'], 1) +
-    `<div id="spouse_wrap"${married ? '' : ' hidden'}>${field('spouse_name', 'Spouse full name', f.spouse_name, { req: 1 })}</div>` +
+    `<div id="spouse_wrap"${married ? '' : ' hidden'}>${field('spouse_name', 'Spouse full name', f.spouse_name, { req: 1 })}${field('spouse_mobile', 'Spouse mobile', f.spouse_mobile, { hint: "Rule: client's own mobile when no spouse number was given." })}</div>` +
     field('mother_maiden_name', "Mother's full maiden name", f.mother_maiden_name, { req: 1 }) +
     field('email', 'Email', f.email, { type: 'email', req: 1 }) +
     field('mobile', 'Mobile number', f.mobile, { req: 1 }) +
@@ -443,6 +443,7 @@ async function renderForm(a) {
       birth_town: opt(v('birth_town')),
       civil_status: opt(v('civil_status')),
       spouse_name: opt(v('spouse_name')),
+      spouse_mobile: opt(v('spouse_mobile')),
       mother_maiden_name: opt(v('mother_maiden_name')),
       email: opt(v('email')),
       mobile: opt(v('mobile')),
@@ -566,6 +567,7 @@ function renderSettings(a) {
     `<select id="${id}"><option value="">(none)</option>${opts.map((x) => `<option${x === val ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
   a.innerHTML =
     `<div class="card"><h3>Agent</h3><label>Agent name</label><input id="agent_name" value="${esc(s.agent_name)}"><label>Agent code</label><input id="agent_code" value="${esc(s.agent_code)}"></div>` +
+    `<div class="card"><h3>Default reference</h3><p class="muted">Put on the Default Form when the client gives no reference.</p><div class="row2"><div><label>Reference full name</label><input id="default_ref_name" maxlength="120" value="${esc(s.default_ref_name)}"></div><div><label>Reference mobile</label><input id="default_ref_mobile" maxlength="30" value="${esc(s.default_ref_mobile)}"></div></div></div>` +
     `<div class="card"><h3>Card to apply for (per bank)</h3><div class="row2">${Object.entries(PDF_BANKS).map(([b, label]) => `<div><label>${esc(label)}</label>${sel('cc_' + b, o[b] || [], s.card_choice[b])}</div>`).join('')}</div></div>` +
     `<div class="card"><h3>Printing</h3><label>Printer</label>${sel('printer', S.printers, s.printer)}<label><input type="checkbox" id="auto_print" style="min-width:0"${s.auto_print ? ' checked' : ''}> Print new complete applications automatically (PC must be on)</label>${S.acrobat ? '' : '<p class="pill warn">Adobe Acrobat not found: printing will not work</p>'}</div>` +
     `<div class="card"><h3>Text on the forms</h3><div class="row2"><div><label>Answer size (pt, 0 = fit each box)</label><input id="text_uniform_size" type="number" step="0.5" min="0" max="20" value="${s.text_uniform_size}"></div><div><label><input type="checkbox" id="text_bold" style="min-width:0"${s.text_bold ? ' checked' : ''}> Bold</label></div></div></div>` +
@@ -616,6 +618,8 @@ function renderSettings(a) {
       ...s,
       agent_name: v('agent_name'),
       agent_code: v('agent_code'),
+      default_ref_name: v('default_ref_name').trim(),
+      default_ref_mobile: v('default_ref_mobile').trim(),
       printer: v('printer'),
       auto_print: $('#auto_print').checked,
       text_bold: $('#text_bold').checked,
@@ -625,6 +629,7 @@ function renderSettings(a) {
       week_start_day: Number(v('week_start_day')),
       card_choice: Object.fromEntries(Object.keys(PDF_BANKS).map((b) => [b, v('cc_' + b)]).filter(([, x]) => x)),
     };
+    if (!/^[0-9+\-\s()]*$/.test(body.default_ref_mobile)) return msg('Reference mobile: numbers only.');
     if (!Number.isInteger(body.weekly_quota) || body.weekly_quota < 1 || body.weekly_quota > 1000) return msg('Weekly quota must be a whole number from 1 to 1000.');
     if (!Number.isInteger(body.weekly_target) || body.weekly_target < 1 || body.weekly_target > 1000) return msg('Weekly target must be a whole number from 1 to 1000.');
     try {

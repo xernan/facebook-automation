@@ -196,6 +196,31 @@ describe('owner rules in buildApplication', () => {
     expect(m.defaults.join()).toMatch(/Education = College/);
   });
 
+  it("married: spouse mobile = client's mobile, with or without a spouse name; no name is flagged", () => {
+    const married = (spouse_name?: string) => lead({ married: true, answers: { ...lead().answers, civil_status: 'married', spouse_name } });
+    const named = buildApplication(married('Ana'), details, NOW);
+    expect(named.form.spouse_mobile).toBe('0917 123 1586');
+    expect(named.data.spouse_mobile).toBe('0917 123 1586');
+    const noName = buildApplication(married(), details, NOW);
+    expect(noName.data.spouse_mobile).toBe('0917 123 1586');
+    expect(noName.missing).toContain('Spouse name');
+    // A spouse number typed in the Default Form wins; single = no spouse box.
+    expect(formToData({ ...named.form, spouse_mobile: '0918 000 0000' }).spouse_mobile).toBe('0918 000 0000');
+    expect(formToData({ ...named.form, spouse_mobile: undefined }).spouse_mobile).toBe('0917 123 1586');
+    expect(buildApplication(lead(), details, NOW).data.spouse_mobile).toBeUndefined();
+  });
+
+  it("no reference from the client = the owner's default reference; the client's own reference is kept", () => {
+    const ref = { default_ref_name: 'Pedro Santos', default_ref_mobile: '09170000000' };
+    const none = buildApplication(lead(), details, NOW, ref);
+    expect([none.data.ref_name, none.data.ref_mobile]).toEqual(['Pedro Santos', '09170000000']);
+    expect(none.defaults.join()).toMatch(/Personal reference = owner default/);
+    const own = buildApplication(lead({ answers: { ...lead().answers, reference_name: 'Ana Reyes', reference_mobile: '09181111111' } }), details, NOW, ref);
+    expect([own.data.ref_name, own.data.ref_mobile]).toEqual(['Ana Reyes', '09181111111']);
+    // No default set = left empty.
+    expect(buildApplication(lead(), details, NOW).data.ref_name).toBeUndefined();
+  });
+
   it.each([
     ['5', 5],
     ['<1', 0],
