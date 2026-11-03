@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { extractBanks, extractEmails, extractPhones } from './leads.js';
+import { cardedStatus, extractBanks, extractEmails, extractPhones } from './leads.js';
 import { checkPlacePart, cityFromAnswer, clearlyComplete, placeInProvince, provinceOnly } from './placecheck.js';
 
 // Messenger application flow: a fixed script the Page follows with each person, one state per person.
@@ -377,6 +377,15 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
   const text = input.text.trim();
   const ask = (reply: string, choices?: string[]): Advance => ({ person: p, reply, choices });
   const askQ = (q: Question): Advance => ({ person: p, reply: q.reply, choices: q.choices });
+  // Owner rule: help is for people who already have a credit card.
+  const reject = (): Advance => {
+    p.stage = 'rejected';
+    p.cooldown_until = new Date(now.getTime() + cooldownDays * 86_400_000).toISOString();
+    return ask(flow.carded.reject_reply);
+  };
+
+  // "Wala pa akong credit card" at any later question: same as answering Wala pa to the card question.
+  if (['banks', 'steps', 'id_photo'].includes(p.stage) && cardedStatus(text) === 'no' && extractBanks(text).length === 0) return reject();
 
   switch (p.stage) {
     case 'rejected':
@@ -404,11 +413,7 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
     case 'carded': {
       const a = parseYesNo(text);
       if (!a) return ask(`${flow.yes_no_reply}\n\n${flow.carded.prompt}`, flow.carded.choices);
-      if (a === 'no') {
-        p.stage = 'rejected';
-        p.cooldown_until = new Date(now.getTime() + cooldownDays * 86_400_000).toISOString();
-        return ask(flow.carded.reject_reply);
-      }
+      if (a === 'no') return reject();
       p.stage = 'banks';
       return ask(flow.banks.prompt, bankButtons(flow, p));
     }
@@ -420,7 +425,9 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
         // Owner: we must know which card they hold. A name we do not know is kept as they typed it.
         delete p.asked_other_bank;
         if (found.length > 0) p.banks = [...new Set([...p.banks, ...found])];
-        // "wala", "hindi ko alam", "oo" name no bank: the client sees the flag instead of a bank.
+        // "Wala (pa)" to "which bank is your card from" means no card yet.
+        else if (parseYesNo(text) === 'no' && !/\b(alam|know|sure|maalala)\b/i.test(text)) return reject();
+        // "hindi ko alam", "oo" name no bank: the client sees the flag instead of a bank.
         else if (parseYesNo(text) || words(text).length === 0) p.flags = [...new Set([...(p.flags ?? []), 'card_bank_not_given'])];
         else p.banks = [text.slice(0, 40)];
         banks = p.banks;
@@ -519,6 +526,9 @@ export function advance(flow: Flow, prev: Person, input: Incoming, now: Date, co
   }
 }
 
+/** A yes/no the script takes alone has at most this many words ("wala po", "oo meron"); longer ones go to Claude. */
+const SHORT_YES_NO = 3;
+
 // Words that make a message a question for Claude, even without a "?".
 const QUESTION_WORDS = new Set(['magkano', 'paano', 'pano', 'bakit', 'kailan', 'ano', 'anong', 'saan', 'sino', 'pwede', 'puwede', 'gaano', 'ilan', 'how', 'what', 'why', 'when', 'where', 'who', 'can', 'fee', 'bayad', 'scam', 'legit', 'requirements']);
 const GREETING_WORDS = new Set(['hi', 'hello', 'helo', 'hey', 'good', 'gud', 'morning', 'afternoon', 'evening', 'eve', 'po', 'sir', 'maam', 'ma', 'am', 'interested', 'apply', 'credit', 'card', 'cards', 'info', 'pm', 'pa', 'yes', 'oo', 'kumusta', 'musta']);
@@ -542,7 +552,8 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
       return w.length > 0 && w.length <= 5 && w.every((x) => GREETING_WORDS.has(x));
     case 'consent':
     case 'carded':
-      return !!parseYesNo(text);
+      // Only a plain yes/no; a longer reply may say more ("oo pero...") and Claude reads it.
+      return w.length <= SHORT_YES_NO && !!parseYesNo(text);
     case 'banks':
       if (p.asked_other_bank) return w.length <= 6;
       return extractBanks(text).length > 0 || (!!flow.banks.choices && banksDone(flow, p, text));
@@ -562,6 +573,7 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
       if (p.suggestions?.length && /^\d+$/.test(text)) return true;
       // A wrong civil status gets the same reply from the script, so there is no need to wait for Claude.
       if (step.validate === 'civil_status') return true;
+      if (step.validate === 'yes_no') return w.length <= SHORT_YES_NO && validAnswer('yes_no', text);
       if (step.validate) return validAnswer(step.validate, text);
       // Free text (names, places, addresses): short plain answers only.
       return w.length <= 25;

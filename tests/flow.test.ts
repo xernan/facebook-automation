@@ -871,11 +871,23 @@ describe('bank buttons: none of these asks which bank', () => {
     expect(advance(f, asked.person, { text: 'Landbank' }, NOW, 180).person.banks).toEqual(['Landbank']);
   });
 
-  it('no bank named: flags it for the client and goes on', () => {
-    const none = advance(f, asked.person, { text: 'wala po' }, NOW, 180).person;
+  it('"wala pa" to which bank: no card yet, so rejected like Wala pa', () => {
+    const r = advance(f, asked.person, { text: 'wala pa' }, NOW, 180);
+    expect(r.person.stage).toBe('rejected');
+    expect(r.reply).toBe(f.carded.reject_reply);
+  });
+
+  it('does not know the bank: flags it for the client and goes on', () => {
+    const none = advance(f, asked.person, { text: 'hindi ko alam' }, NOW, 180).person;
     expect(none.banks).toEqual([]);
     expect(none.flags).toContain('card_bank_not_given');
     expect(none.stage).toBe('steps');
+  });
+
+  it('"wala pa akong credit card" in the middle of the questions rejects', () => {
+    const mid = { ...newPerson(NOW), stage: 'steps' as const, step: 0 };
+    expect(advance(f, mid, { text: 'wala pa akong creditcard' }, NOW, 180).person.stage).toBe('rejected');
+    expect(advance(f, mid, { text: 'wala pa akong credit card sa BPI' }, NOW, 180).person.stage).not.toBe('rejected');
   });
 });
 
@@ -1209,5 +1221,18 @@ describe('owner rule: our 5 banks', () => {
   it('stops only when they hold all 5; with one left the application goes on', () => {
     expect(advance(f, holding(ours), { text: 'Wala na' }, NOW, 180).person.stage).toBe('excluded');
     expect(advance(f, holding(ours.slice(0, 4)), { text: 'Wala na' }, NOW, 180).person.stage).toBe('steps');
+  });
+});
+
+describe('the script takes only plain answers; Claude reads the rest', () => {
+  const steps = [{ key: 'pending', prompt: 'Pending application? (Oo / Wala)', validate: 'yes_no' as const, invalid_reply: 'Oo o Wala lang' }];
+  const f = { ...flow, steps };
+  const mid = { ...newPerson(NOW), stage: 'steps' as const, step: 0 };
+
+  it('a short yes/no is answered by the script, a long reply goes to Claude', () => {
+    expect(scriptCanAnswer(f, mid, { text: 'wala po' })).toBe(true);
+    expect(scriptCanAnswer(f, mid, { text: 'wala pero may application ako dati sa BPI' })).toBe(false);
+    expect(scriptCanAnswer(f, { ...mid, stage: 'consent' }, { text: 'Oo' })).toBe(true);
+    expect(scriptCanAnswer(f, { ...mid, stage: 'consent' }, { text: 'oo pero para saan po ito' })).toBe(false);
   });
 });
