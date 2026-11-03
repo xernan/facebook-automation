@@ -1103,9 +1103,9 @@ describe('civil status check', () => {
   const p = { ...newPerson(NOW), stage: 'steps' as const };
   const say = (text: string) => advance(f, p, { text }, NOW, 30);
 
-  it('refuses anything that is not a civil status, at once, and asks again with the buttons', () => {
+  it('refuses anything that is not a civil status, and Claude reads it first; the script still asks again with the buttons', () => {
     for (const bad of ['camarines norte', 'not married', 'asdf']) {
-      expect(scriptCanAnswer(f, p, { text: bad })).toBe(true);
+      expect(scriptCanAnswer(f, p, { text: bad })).toBe(false);
       const r = say(bad);
       expect(r.reply).toBe('Pick one.\n\nCivil status?');
       expect(r.choices).toEqual(['Single', 'Married']);
@@ -1299,5 +1299,17 @@ describe('Claude reads the bank answer and passes the cards', () => {
     expect(p).toMatch(/stage "banks": read what they wrote/);
     expect(p).toMatch(/never tell them which button to press/);
     expect(p).toMatch(/ask them once with fb_send_message, then fb_flow_answer kind="asked"/);
+  });
+});
+
+describe('civil status: only a real one is the script', () => {
+  const steps = [{ key: 'civil_status', prompt: 'Civil status?', validate: 'civil_status' as const, invalid_reply: 'Pakipindot po ang isa sa mga button.' }];
+  const f = { ...flow, steps };
+  const at = { ...newPerson(NOW), stage: 'steps' as const, step: 0 };
+
+  it('"kasal po" is the script; "patay na" or "ulit" goes to Claude', () => {
+    expect(scriptCanAnswer(f, at, { text: 'kasal po' })).toBe(true);
+    expect(scriptCanAnswer(f, at, { text: 'patay na' })).toBe(false);
+    expect(scriptCanAnswer(f, at, { text: 'ulit' })).toBe(false);
   });
 });

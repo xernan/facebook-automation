@@ -644,8 +644,8 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
       const tapped =[...(step.choices ?? []), ...(step.optional_group ? [flow.skip_choice] : []), ...(p.suggestions?.length ? [flow.other_choice] : [])];
       if (tapped.some((c) => c.toLowerCase() === text.toLowerCase())) return true;
       if (p.suggestions?.length && /^\d+$/.test(text)) return true;
-      // A wrong civil status gets the same reply from the script, so there is no need to wait for Claude.
-      if (step.validate === 'civil_status') return true;
+      // Owner: a reply that is not a civil status ("patay na", "ulit") is read by Claude, not answered with the same line.
+      if (step.validate === 'civil_status') return validAnswer('civil_status', text);
       if (step.validate === 'yes_no') return w.length <= SHORT_YES_NO && validAnswer('yes_no', text);
       if (step.validate) return validAnswer(step.validate, text);
       // Free text (names, places, addresses): short plain answers only.
