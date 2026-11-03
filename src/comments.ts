@@ -82,11 +82,17 @@ export async function resumeApplication(ctx: Ctx, pageId: string, psid: string, 
 
 ${q.reply}`;
   const quick_replies = q.choices?.map(quickReply);
-  await ctx.graph.post(pageId, `${pageId}/messages`, {
-    recipient: JSON.stringify({ id: psid }),
-    message: JSON.stringify(quick_replies?.length ? { text, quick_replies } : { text }),
-    messaging_type: 'RESPONSE',
-  });
+  await ctx.graph.post(
+    pageId,
+    `${pageId}/messages`,
+    {
+      recipient: JSON.stringify({ id: psid }),
+      message: JSON.stringify(quick_replies?.length ? { text, quick_replies } : { text }),
+      messaging_type: 'RESPONSE',
+    },
+    undefined,
+    { followUp: true },
+  );
   return true;
 }
 

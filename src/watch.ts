@@ -39,6 +39,8 @@ export function operatorPrompt(pageId: string, ourBanks: string[] = [], cardNote
     '     a card ("Home Credit ok ba?"), answer it first with fb_send_message, then fb_flow_answer kind="question". If they made clear',
     '     they have no bank credit card at all, kind="answer" with no_credit_card=true.',
     '   - In your own messages never tell them which button to press: the code sends the question again with the right buttons.',
+    '   - The code caps how many messages one person gets: send only your answer, then let the script ask. A tool result that starts',
+    '     with "Not sent" or "Sending paused" is final for this round: do not send again, rephrase or retry; go to the next person.',
     '   - An answer that does not fit the question (an address when we asked for the email, "patay na" for civil status): say',
     '     kindly in one line what we need now, with an example, or check what they mean ("Widowed po ba?") and call',
     '     fb_flow_answer kind="asked". When they agree ("tama", "oo"), call kind="answer" with agreed_answer set to that answer.',
@@ -187,6 +189,8 @@ async function main() {
   let again = true; // the last round left work behind: read all chats again without waiting for a change
   const wakeUp = async () => {
     const pending = await findPending(ctx, pageId);
+    // Any process that got Meta's restriction paused all sending (send guard): no replies or Claude runs until then.
+    blockedUntil = Math.max(blockedUntil, (await ctx.graph.messages.pausedUntil()) ?? 0);
     if (pending.some((p) => p.messages.length > 0)) lastChat = Date.now();
     const fast = pending.filter((x) => x.outbox_pending || (x.script_can_answer && x.can_reply));
     if (Date.now() >= blockedUntil) {

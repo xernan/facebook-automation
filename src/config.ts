@@ -60,6 +60,11 @@ export const configSchema = z.object({
   FB_WATCH_CLAUDE_BIN: z.string().optional(),
   /** Model for the chat and comment runs (owner: fast and very smart). Blank = the Claude program's default. */
   FB_WATCH_CLAUDE_MODEL: z.string().regex(/^[a-z0-9.\-]*$/).default('sonnet'),
+  // Send guard (src/sendguard.ts): brakes on every Messenger message to one person.
+  FB_SEND_MAX_PER_MESSAGE: intIn(2, 1, 5),
+  FB_SEND_MAX_PER_MIN: intIn(4, 1, 20),
+  FB_SEND_SAME_TEXT_PER_DAY: intIn(2, 1, 5),
+  FB_SEND_PAUSE_HOURS: intIn(6, 1, 72),
   FB_DASHBOARD_PORT: intIn(8790, 1024, 65535),
   // Comment replies (src/comments.ts). Off until the owner turns them on.
   FB_COMMENTS_LIVE: boolFlag(false),

@@ -144,10 +144,10 @@ ${flow.steps[2]!.prompt}`);
 const PSID = '999';
 const tool = (name: string) => tools.find((t) => t.name === name)!;
 
-function setup(messages: Record<string, { text?: string; from?: string; image?: string; time?: string }>, opts: { failSend?: 'error' | 'uncertain' } = {}) {
+function setup(messages: Record<string, { text?: string; from?: string; image?: string; time?: string }>, opts: { failSend?: 'error' | 'uncertain'; env?: Record<string, string> } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'flow-'));
   writeFileSync(path.join(dir, 'test-mode.json'), JSON.stringify({ on: false, ids: [] })); // live behavior
-  const env = { FB_WRITE_ENABLED: 'true', FB_FLOW_FILE: EXAMPLE, FB_FLOW_DIR: dir };
+  const env = { FB_WRITE_ENABLED: 'true', FB_FLOW_FILE: EXAMPLE, FB_FLOW_DIR: dir, ...opts.env };
   const sent: string[] = [];
   const msg = (mid: string) => {
     const m = messages[mid]!;
@@ -1350,5 +1350,121 @@ describe('kind "asked" needs a real message first', () => {
     noteSent(PSID);
     await answer(ctx, ['m_2'], 'asked' as never);
     expect(sent).toHaveLength(1);
+  });
+});
+
+// ---- send guard in the real flow (owner-approved limits) ----------------------------------------
+describe('send guard with the flow', () => {
+  const REAL = { FB_SEND_MAX_PER_MESSAGE: '2', FB_SEND_MAX_PER_MIN: '4', FB_SEND_SAME_TEXT_PER_DAY: '2' };
+  const review = (ctx: any, photos: any[]) => callTool(tool('fb_flow_id_review'), { page_id: '111', psid: PSID, photos }, ctx) as Promise<any>;
+
+  it('full application simulation: a real-paced chat from hi to done is never blocked, at most 2 replies per client message', async () => {
+    const msgs = {
+      m_1: { text: 'hi' },
+      m_2: { text: 'yes' },
+      m_3: { text: 'oo' },
+      m_4: { text: 'BDO' },
+      m_5: { text: 'Juan' },
+      m_6: { text: 'single' },
+      m_7: { text: '09171234567' },
+      m_8: { image: 'https://scontent.fbcdn.net/prc-front.jpg' },
+      m_9: { image: 'https://scontent.fbcdn.net/prc-back.jpg' },
+    };
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-03T08:00:00Z'));
+    vi.stubGlobal('fetch', async () => new Response(new Uint8Array(50), { headers: { 'content-type': 'image/jpeg' } }));
+    try {
+      const { ctx, sent } = setup(msgs, { env: REAL });
+      const results: any[] = [];
+      const front = { type: 'prc', side: 'front', clear: true, has_signature: true };
+      const back = { type: 'prc', side: 'back', clear: true, has_signature: false };
+      for (const mid of Object.keys(msgs)) {
+        vi.setSystemTime(Date.now() + 20_000); // a person takes some seconds to answer
+        results.push(await answer(ctx, [mid]));
+        if (mid === 'm_8') results.push(await review(ctx, [front]));
+      }
+      results.push(await review(ctx, [front, back]));
+      expect(results.filter((r) => /^(Not sent|Sending paused)/.test(r?.note ?? ''))).toEqual([]);
+      expect(results.at(-1).stage).toBe('id_photo'); // flow.example needs a second ID; reply asks for it
+      expect(results.at(-1).reply).toBe(flow.id_photo.need_second_reply);
+      expect(sent.length).toBeLessThanOrEqual(2 * Object.keys(msgs).length);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it('a third message to one client message is refused before it reaches Meta; their next message opens new replies', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-03T08:00:00Z'));
+    try {
+      const msgs: Record<string, { text?: string }> = { m_1: { text: 'hi' } };
+      const { ctx, sent } = setup(msgs, { env: REAL });
+      await answer(ctx, ['m_1']); // greeting: 1
+      vi.setSystemTime(Date.now() + 3_000);
+      // Claude answered two questions on its own (2 more would be 3): the second is refused.
+      const say = (text: string) => callTool(tools.find((t) => t.name === 'fb_send_message')!, { page_id: '111', recipient_psid: PSID, text, idempotency_key: `k-${text}` }, ctx);
+      await say('Libre po ang serbisyo namin.');
+      await expect(say('Ilang araw po ang approval?')).rejects.toThrow(/^Not sent/);
+      expect(sent).toHaveLength(2);
+      vi.setSystemTime(Date.now() + 20_000);
+      msgs.m_2 = { text: 'yes' };
+      const r: any = await answer(ctx, ['m_2']);
+      expect(r.reply).not.toBeNull();
+      expect(sent).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the script's reply over the cap waits in the outbox (hidden from the retry loop) and goes right after their next message", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-03T08:00:00Z'));
+    try {
+      const msgs: Record<string, { text?: string }> = { m_1: { text: 'hi' } };
+      const { ctx, sent } = setup(msgs, { env: REAL });
+      await answer(ctx, ['m_1']);
+      vi.setSystemTime(Date.now() + 20_000);
+      msgs.m_2 = { text: 'libre ba? magkano?' };
+      const say = (text: string) => callTool(tools.find((t) => t.name === 'fb_send_message')!, { page_id: '111', recipient_psid: PSID, text, idempotency_key: `k-${text}` }, ctx);
+      const pend = async () => ((await callTool(tool('fb_flow_pending'), { page_id: '111' }, ctx)) as any[]).find((p) => p.psid === PSID);
+      await pend(); // the watcher sees m_2
+      vi.setSystemTime(Date.now() + 1_000);
+      await say('Libre po.');
+      await say('Wala pong bayad kahit kailan.');
+      const held: any = await answer(ctx, ['m_2'], 'question');
+      expect(held.note).toMatch(/^Not sent: already 2 messages since their last message.*kept/);
+      expect(sent).toHaveLength(3);
+      expect((await pend())?.outbox_pending).toBe(false); // no resend every second
+      vi.setSystemTime(Date.now() + 20_000);
+      msgs.m_3 = { text: 'ok' };
+      const r: any = await answer(ctx, ['m_3']);
+      expect(r.resent_earlier_reply).toBe(held.current_question ?? sent.at(-1));
+      expect(sent).toHaveLength(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the same question a third time in a day is dropped, and the chat goes on (no stuck outbox)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-03T08:00:00Z'));
+    try {
+      const msgs: Record<string, { text?: string }> = { m_1: { text: 'hi' }, m_2: { text: 'ano to?' }, m_3: { text: 'ha?' }, m_4: { text: 'ano nga?' } };
+      const { ctx } = setup(msgs, { env: REAL });
+      await answer(ctx, ['m_1']);
+      vi.setSystemTime(Date.now() + 20_000);
+      await answer(ctx, ['m_2'], 'question'); // the consent question alone: 1st time (the greeting had more text)
+      vi.setSystemTime(Date.now() + 20_000);
+      await answer(ctx, ['m_3'], 'question'); // 2nd time
+      vi.setSystemTime(Date.now() + 20_000);
+      const third: any = await answer(ctx, ['m_4'], 'question');
+      expect(third.note).toMatch(/^Not sent: they already got this exact message 2 times today/);
+      const state = await new FlowStore((ctx.cfg as any).flowDir).load(new Date());
+      expect(state.people[PSID]!.outbox).toBeUndefined();
+      expect(state.handled).toContain('m_4');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

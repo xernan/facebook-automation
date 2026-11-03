@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { loadConfig, type Config } from '../src/config.js';
 import { GraphClient } from '../src/graph.js';
 import { IdempotencyStore } from '../src/idempotency.js';
@@ -11,7 +14,12 @@ export const APP_SECRET = 'fake-app-secret-for-tests'; // gitleaks:allow
 
 export function testConfig(env: Record<string, string> = {}, root = process.cwd()): Config {
   // Tests exercise sending, so Messenger is live here; the real default is off (see contentguard test).
-  return loadConfig({ FB_USER_ACCESS_TOKEN: USER_TOKEN, FB_APP_SECRET: APP_SECRET, FB_MESSENGER_LIVE: 'true', ...env }, root);
+  // Each test gets its own flow folder, so state such as the send guard's counts never leaks between tests.
+  const flowDir = mkdtempSync(path.join(tmpdir(), 'flow-'));
+  // Flow tests play a whole chat in milliseconds, so the send guard runs at its loosest here; tests/sendguard.test.ts
+  // checks the real limits.
+  const loose = { FB_SEND_MAX_PER_MESSAGE: '5', FB_SEND_MAX_PER_MIN: '20', FB_SEND_SAME_TEXT_PER_DAY: '5' };
+  return loadConfig({ FB_USER_ACCESS_TOKEN: USER_TOKEN, FB_APP_SECRET: APP_SECRET, FB_MESSENGER_LIVE: 'true', FB_FLOW_DIR: flowDir, ...loose, ...env }, root);
 }
 
 export interface Call {

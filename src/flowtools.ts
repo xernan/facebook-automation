@@ -8,6 +8,7 @@ import { finalizeLead } from './leadout.js';
 import type { Ctx, ToolDef } from './tools.js';
 import { botMayAnswer, loadTestMode } from './testmode.js';
 import { GraphError } from './graph.js';
+import { SendGuardError } from './sendguard.js';
 import { sentRecently } from './sentlog.js';
 
 // Tools that run the Messenger application flow. Claude is the operator: fb_flow_pending shows who
@@ -74,6 +75,8 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
       .map(toInMsg)
       .filter((m: InMsg) => new Date(m.created_time).getTime() >= start && !state.handled.includes(m.id))
       .reverse();
+    // A new message from them opens a new allowance of replies (send guard).
+    if (lastIn) await ctx.graph.messages.noteIncoming(person.id, new Date(lastIn).getTime());
     const p = state.people[person.id];
     // ID photos saved (right away, by the watcher) but not read by Claude yet.
     const needsIdReview = p?.stage === 'id_photo' && (p.id_files?.length ?? 0) > (p.id_review?.length ?? 0);
@@ -89,7 +92,8 @@ export async function findPending(ctx: Ctx, page_id: string, now = new Date()) {
       stage: cur.stage,
       current_question: currentPrompt(flow, cur),
       answer_check: cur.stage === 'steps' ? flow.steps[cur.step]?.check : undefined,
-      outbox_pending: !!p?.outbox,
+      // A reply the send guard holds (too many since their last message, or this minute) waits; no retry every second.
+      outbox_pending: !!p?.outbox && !(await ctx.graph.messages.holding(person.id, now.getTime())),
       needs_id_review: needsIdReview,
       needs_finalize: needsFinalize,
       can_reply: !!lastIn && withinWindow(ctx, lastIn, now),
@@ -117,14 +121,20 @@ export async function showTyping(ctx: Ctx, page_id: string, to: string): Promise
   await ctx.graph.post(page_id, `${page_id}/messages`, { recipient: JSON.stringify({ id: to }), sender_action: 'typing_on' }).catch(() => undefined);
 }
 
-async function send(ctx: Ctx, page_id: string, to: string, text: string, choices?: string[]) {
+async function send(ctx: Ctx, page_id: string, to: string, text: string, choices?: string[], followUp = false) {
   if (!botMayAnswer(await loadTestMode(ctx.cfg.flowDir), to)) throw new Error('Test mode is on and this person is not a tester.');
   const post = (buttons?: string[]) =>
-    ctx.graph.post(page_id, `${page_id}/messages`, {
-      recipient: JSON.stringify({ id: to }),
-      message: JSON.stringify(buttons?.length ? { text, quick_replies: buttons.map(quickReply) } : { text }),
-      messaging_type: 'RESPONSE',
-    });
+    ctx.graph.post(
+      page_id,
+      `${page_id}/messages`,
+      {
+        recipient: JSON.stringify({ id: to }),
+        message: JSON.stringify(buttons?.length ? { text, quick_replies: buttons.map(quickReply) } : { text }),
+        messaging_type: 'RESPONSE',
+      },
+      undefined,
+      { followUp },
+    );
   try {
     await post(choices);
   } catch (err) {
@@ -166,7 +176,7 @@ export async function sendNudges(ctx: Ctx, page_id: string, now = new Date()): P
       try {
         await send(ctx, page_id, who, `${flow.nudge}
 
-${q.reply}`, q.choices);
+${q.reply}`, q.choices, true);
         sent++;
       } catch {
         // Window closed, blocked, or no connection: no second try for this stop.
@@ -174,6 +184,21 @@ ${q.reply}`, q.choices);
     }
     return sent;
   });
+}
+
+/**
+ * A reply the send guard stopped. Too many since their last message, or this minute: it stays in the outbox and goes
+ * when allowed (after their next message). The same text again: dropped, so a repeat never blocks the chat.
+ * Returns a note for Claude, or undefined when the error is not the guard's (or is Meta's restriction: stop all).
+ */
+function guardOutcome(state: FlowState, person: Person, err: unknown): string | undefined {
+  if (!(err instanceof SendGuardError) || err.rule === 'paused') return undefined;
+  if (err.rule === 'same_text' && person.outbox) {
+    markHandled(state, person.outbox.for_messages);
+    delete person.outbox;
+    return `${err.message} The repeat was dropped; answer in your own words only if they need it.`;
+  }
+  return `${err.message} The reply is kept and goes after their next message. Send nothing else now.`;
 }
 
 async function deliver(
@@ -194,6 +219,11 @@ async function deliver(
   try {
     await send(ctx, page_id, who, text, choices);
   } catch (err: any) {
+    const held = guardOutcome(state, person, err);
+    if (held) {
+      await s.save(state);
+      return { reply: null, stage: person.stage, ...extra, note: held };
+    }
     if (!err?.uncertain) throw err;
     delete person.outbox;
     markHandled(state, ids);
@@ -278,7 +308,24 @@ export const flowTools: ToolDef[] = [
 
         // A reply that failed to send earlier goes first, exactly once.
         if (person.outbox) {
-          await send(ctx, page_id, who, person.outbox.text, person.outbox.choices);
+          // Their new messages open a new allowance first, so a held reply goes now (send guard).
+          for (const mid of message_ids) {
+            if (state.handled.includes(mid) || mid === 'm_resend') continue;
+            const m = await ctx.graph.get(page_id, mid, { fields: 'from,created_time' }).catch(() => undefined);
+            if (m?.from?.id === who && m.created_time) await ctx.graph.messages.noteIncoming(who, new Date(m.created_time).getTime());
+          }
+          try {
+            await send(ctx, page_id, who, person.outbox.text, person.outbox.choices);
+          } catch (err) {
+            const held = guardOutcome(state, person, err);
+            if (!held) throw err;
+            state.people[who] = person;
+            await s.save(state);
+            // A dropped repeat frees the chat: their new messages are handled now.
+            if (person.outbox) return { reply: null, stage: person.stage, note: held };
+          }
+        }
+        if (person.outbox) {
           markHandled(state, person.outbox.for_messages);
           const sent = person.outbox.text;
           delete person.outbox;
@@ -297,6 +344,7 @@ export const flowTools: ToolDef[] = [
         }
         if (msgs.length === 0) return { note: 'Already handled.', stage: person.stage };
         msgs.sort((a, b) => a.created_time.localeCompare(b.created_time));
+        await ctx.graph.messages.noteIncoming(who, new Date(msgs.at(-1)!.created_time).getTime());
         const ids = msgs.map((m) => m.id);
 
         // Claude already asked them a follow-up itself (e.g. "credit card ba yan o ATM?"): nothing more to send now.

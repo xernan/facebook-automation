@@ -3,6 +3,7 @@ import { createHmac } from 'node:crypto';
 import type { Config } from './config.js';
 import { RateLimiter } from './ratelimit.js';
 import { redact } from './redact.js';
+import { SendGuard } from './sendguard.js';
 
 export type Params = Record<string, string | number | boolean | undefined>;
 type FetchFn = typeof fetch;
@@ -283,15 +284,34 @@ export class GraphClient {
     return this.request('GET', path, await this.pageToken(pageId), params);
   }
 
-  async post(pageId: string, path: string, params?: Params, form?: FormData) {
+  /** `followUp`: a reminder or comment follow-up the person did not just ask for (exempt from the per-message cap only). */
+  async post(pageId: string, path: string, params?: Params, form?: FormData, opts: { followUp?: boolean } = {}) {
+    const isMessage = /\/messages$/.test(path);
     // Messenger stays off until the owner turns it on (FB_MESSENGER_LIVE=true): no message, bot or by hand, before that.
-    if (/\/messages$/.test(path) && !this.cfg.FB_MESSENGER_LIVE) {
+    if (isMessage && !this.cfg.FB_MESSENGER_LIVE) {
       throw new Error('Messenger sending is off (owner rule: not live until our wording is checked against Meta standards). Set FB_MESSENGER_LIVE=true in .env only with the owner OK.');
     }
     // Community Standards guard: nothing that reads like phishing or a credit scam reaches Facebook.
     assertSafeContent(params as Record<string, unknown> | undefined);
     if (form) assertSafeContent(Object.fromEntries([...form.entries()].filter(([, v]) => typeof v === 'string')));
-    return this.request('POST', path, await this.pageToken(pageId), params, form);
+    const token = await this.pageToken(pageId);
+    const go = () => this.request('POST', path, token, params, form);
+    // Every message (not "typing...") passes the send guard, whoever sends it.
+    if (!isMessage || params?.message === undefined) return go();
+    const to = JSON.parse(String(params.recipient ?? '{}')) as { id?: string };
+    const text = (JSON.parse(String(params.message)) as { text?: string }).text ?? String(params.message);
+    return this.messages.send(to.id, text, !!opts.followUp, go);
+  }
+
+  private guard: SendGuard | undefined;
+  /** The send guard every Messenger message goes through (also tells the watcher when sending is paused). */
+  get messages(): SendGuard {
+    return (this.guard ??= new SendGuard(this.cfg.flowDir, {
+      perMessage: this.cfg.FB_SEND_MAX_PER_MESSAGE,
+      perMinute: this.cfg.FB_SEND_MAX_PER_MIN,
+      sameTextPerDay: this.cfg.FB_SEND_SAME_TEXT_PER_DAY,
+      pauseHours: this.cfg.FB_SEND_PAUSE_HOURS,
+    }));
   }
 
   async del(pageId: string, path: string) {
