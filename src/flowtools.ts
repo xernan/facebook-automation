@@ -227,13 +227,14 @@ export const flowTools: ToolDef[] = [
       'the script decides the next reply (qualifier rules are enforced in code) and sends it. kind="question": the person said ' +
       'something else; it sends the current question again with its buttons. A question they asked gets a short answer with fb_send_message first.' +
       'If reply is null the script has nothing to say (finished, excluded or in cooldown): answer kindly yourself if needed. ' +
-      'For a person at stage "new", always use kind="answer": it sends the greeting and consent question.',
+      'For a person at stage "new", always use kind="answer": it sends the greeting and consent question. ' +
+      'kind="asked": you already sent them a follow-up question yourself with fb_send_message; nothing more is sent.',
     write: true,
     input: {
       page_id: pageId,
       psid,
       message_ids: z.array(z.string().regex(/^m_[A-Za-z0-9_-]+$/)).min(1).max(20),
-      kind: z.enum(['answer', 'question']),
+      kind: z.enum(['answer', 'question', 'asked']),
       suggestions: z
         .array(z.string().max(200))
         .max(5)
@@ -279,6 +280,14 @@ export const flowTools: ToolDef[] = [
         if (msgs.length === 0) return { note: 'Already handled.', stage: person.stage };
         msgs.sort((a, b) => a.created_time.localeCompare(b.created_time));
         const ids = msgs.map((m) => m.id);
+
+        // Claude already asked them a follow-up itself (e.g. "credit card ba yan o ATM?"): nothing more to send now.
+        if (kind === 'asked') {
+          markHandled(state, ids);
+          state.people[who] = person;
+          await s.save(state);
+          return { stage: person.stage, note: 'Marked handled. Their next message comes back to you.' };
+        }
 
         if (kind === 'question') {
           // Quick replies only show on the newest message, so the question goes again with its buttons, after Claude's answer.

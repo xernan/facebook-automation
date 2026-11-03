@@ -1,6 +1,6 @@
 Owner rules on which cards count as a bank credit card (read by the AI on every run; edit freely):
-- Counts: a credit card issued by a bank, e.g. BDO, BPI, Metrobank, RCBC, EastWest, China Bank, PNB, Security Bank, UnionBank (and old Citi cards), AUB, Bank of Commerce (BOC), HSBC, Maybank, PSBank, Landbank, Robinsons Bank.
-- Maya: only a Maya credit card counts (credit limit, monthly bill). A Maya debit card or the Maya wallet does not. If unclear, ask once.
+- Counts without asking: a credit card from BDO, BPI, Metrobank, RCBC, EastWest, China Bank, PNB, Security Bank, UnionBank (and old Citi cards), HSBC, AUB, Maybank, PSBank.
+- Confirm first: when they name a bank or app most people know for ATM, debit or savings (Landbank, DBP, Maya, GoTyme, CIMB, Tonik, SeaBank, Bank of Commerce, any rural or digital bank), or any name not listed here: WebSearch "<name> credit card Philippines" to see if a credit card exists, then ask them once with fb_send_message whether theirs is a credit card with a credit limit and a monthly bill, not an ATM or debit card, and call fb_flow_answer kind="asked". Pass it in cards only after they say yes.
+- Maya: only a Maya credit card counts. A Maya debit card or the Maya wallet does not.
 - Does not count: Atome, any debit or ATM card, GCash or GCredit, pay-later accounts (BillEase, SPayLater, Lazada PayLater), loan accounts.
-- Home Credit: a loan or pay-later account does not count. If they say it is a Home Credit credit card, WebSearch whether it is a real credit card before counting it.
-- Any other card you do not know: WebSearch it first ("<name> credit card Philippines").
+- Home Credit: a loan or pay-later account does not count. If they say it is a Home Credit credit card, WebSearch and confirm as above.
