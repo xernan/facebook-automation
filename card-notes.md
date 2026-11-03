@@ -15,4 +15,6 @@ Owner rules on which cards count as a bank credit card (read by the AI on every 
 
 4. NEVER COUNTS: Atome, any debit or ATM card, prepaid cards, pay-later (BillEase, SPayLater, Lazada PayLater, Maya Pay in 4), loan accounts.
 
-5. A name not in these lists: WebSearch "<name> credit card Philippines" first. If it has no credit card, treat it as list 2. If it has both, list 3. Only a real bank credit card counts.
+5. Mixed answer ("bdo at gcash"): first tell them in one short line which ones do not count ("Hindi po credit card ang GCash, kaya BDO lang ang bibilangin natin."), then pass only the credit cards.
+
+6. A name not in these lists: WebSearch "<name> credit card Philippines" first. If it has no credit card, treat it as list 2. If it has both, list 3. Only a real bank credit card counts.
