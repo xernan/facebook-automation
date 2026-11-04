@@ -66,6 +66,28 @@ describe('comment replies', () => {
     expect(r.comments[0].author).toBe('Ana');
   });
 
+  it('also lists comments on ad posts, which /posts never returns (Nov 4 "Legit?" on the ad)', async () => {
+    const { ctx, dir } = setup();
+    await primeState(dir);
+    const base = ctx.graph.get;
+    const adPost = { id: `${PAGE_ID}_ad`, message: 'PNB ad', created_time: ago(3600), comments: { data: [{ id: '21', from: { id: '903', name: 'Uni' }, message: 'Legit?', created_time: ago(400) }] } };
+    ctx.graph.get = async (p: string, path: string, q?: any) => (path.endsWith('/ads_posts') ? { data: [adPost] } : base(p, path, q));
+    const ids = (await findPendingComments(ctx, PAGE_ID, now)).comments.map((c) => c.comment_id);
+    expect(ids).toEqual(['21', '11', '12']);
+  });
+
+  it('without the ads permission, Page post comments still work', async () => {
+    const { GraphError } = await import('../src/graph.js');
+    const { ctx, dir } = setup();
+    await primeState(dir);
+    const base = ctx.graph.get;
+    ctx.graph.get = async (p: string, path: string, q?: any) => {
+      if (path.endsWith('/ads_posts')) throw new GraphError('Missing permission', 200);
+      return base(p, path, q);
+    };
+    expect((await findPendingComments(ctx, PAGE_ID, now)).comments.map((c) => c.comment_id)).toEqual(['11', '12']);
+  });
+
   it('replies once, refuses too-soon, repeats, bot-sounding text, and when the switch is off', async () => {
     const { ctx, graph, dir } = setup();
     await primeState(dir);

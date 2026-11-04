@@ -6,6 +6,7 @@ import { contentProblem } from './contentguard.js';
 import { replaceFile } from './files.js';
 import { currentQuestion, FINISHED_STAGES, quickReply } from './flow.js';
 import { FlowStore, loadFlow } from './flowstore.js';
+import { GraphError } from './graph.js';
 import type { Ctx, ToolDef } from './tools.js';
 import { botMayAnswer, loadTestMode } from './testmode.js';
 
@@ -95,17 +96,35 @@ ${q.reply}`;
   return true;
 }
 
-/** People's new top-level comments on our posts from the last FB_COMMENT_POST_DAYS days. */
+/** Ad posts are not in /posts, so their comments went unanswered (Nov 4 2026: "Legit?" on the PNB ad).
+ * Needs pages_manage_ads on the token; without it this returns [] and the Page posts still work. */
+async function adPosts(ctx: Ctx, pageId: string, fields: string): Promise<any[]> {
+  try {
+    const r = await ctx.graph.get(pageId, `${pageId}/ads_posts`, { fields, limit: '25', include_inline_create: 'true' });
+    return r.data ?? [];
+  } catch (e) {
+    if (e instanceof GraphError && (e.code === 200 || e.code === 10 || e.code === 100)) {
+      if (!warnedNoAds) console.error('[comments] cannot read ad posts (token needs pages_manage_ads): ad comments are skipped');
+      warnedNoAds = true;
+      return [];
+    }
+    throw e;
+  }
+}
+let warnedNoAds = false;
+
+/** People's new top-level comments on our posts (and ad posts) from the last FB_COMMENT_POST_DAYS days. */
 export async function findPendingComments(ctx: Ctx, pageId: string, now = new Date()) {
   const s = await loadCommentState(ctx.cfg.flowDir, now);
   const since = Math.max(new Date(s.started_at).getTime(), now.getTime() - ctx.cfg.FB_COMMENT_POST_DAYS * 86_400_000);
-  const posts = await ctx.graph.get(pageId, `${pageId}/posts`, {
-    fields: `id,message,created_time,comments.limit(50).filter(toplevel).order(reverse_chronological){id,from,message,created_time,is_hidden}`,
-    limit: '25',
-  });
+  const fields = `id,message,created_time,comments.limit(50).filter(toplevel).order(reverse_chronological){id,from,message,created_time,is_hidden}`;
+  const posts = await ctx.graph.get(pageId, `${pageId}/posts`, { fields, limit: '25' });
+  const ads = await adPosts(ctx, pageId, fields);
+  const seen = new Set<string>();
+  const all = [...(posts.data ?? []), ...ads].filter((p: any) => p?.id && !seen.has(p.id) && seen.add(p.id));
   const tm = await loadTestMode(ctx.cfg.flowDir);
   const out: PendingComment[] = [];
-  for (const p of posts.data ?? []) {
+  for (const p of all) {
     if (new Date(p.created_time).getTime() < now.getTime() - ctx.cfg.FB_COMMENT_POST_DAYS * 86_400_000) continue;
     for (const c of p.comments?.data ?? []) {
       if (s.handled[c.id] || c.is_hidden || c.from?.id === pageId || !botMayAnswer(tm, c.from?.id, c.id)) continue;
