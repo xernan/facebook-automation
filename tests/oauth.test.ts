@@ -13,11 +13,17 @@ describe('login url', () => {
     expect(u.toString()).not.toContain(APP_SECRET);
   });
 
+  it('asks for ads_management, which reading ad post comments needs', () => {
+    const u = new URL(buildLoginUrl(testConfig(), '42', 'http://localhost/cb', 's'));
+    expect(u.searchParams.get('scope')!.split(',')).toContain('ads_management');
+  });
+
   it('can skip the Lead Ads permissions', () => {
     const u = new URL(buildLoginUrl(testConfig(), '42', 'http://localhost/cb', 's', { leads: false }));
     const scope = u.searchParams.get('scope')!.split(',');
     expect(scope).not.toContain('leads_retrieval');
     expect(scope).not.toContain('pages_manage_ads');
+    expect(scope).not.toContain('ads_management');
     expect(scope).toContain('pages_manage_engagement');
   });
 });

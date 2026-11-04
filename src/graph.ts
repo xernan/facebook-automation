@@ -67,10 +67,12 @@ export const REQUIRED_PERMISSIONS = [
   'read_insights',
   'leads_retrieval',
   'pages_manage_ads',
+  // Reading ad posts (/ads_posts) for their comments needs this too (Meta docs).
+  'ads_management',
 ] as const;
 
-/** Only the Lead Ads tools need these. An app needs a Lead Ads use case before Login accepts them. */
-export const LEAD_PERMISSIONS: readonly string[] = ['leads_retrieval', 'pages_manage_ads'];
+/** Only the ad tools need these (Lead Ads, ad post comments). The app needs the ad use cases before Login accepts them. */
+export const LEAD_PERMISSIONS: readonly string[] = ['leads_retrieval', 'pages_manage_ads', 'ads_management'];
 
 /** Missing Lead Ads permissions only turn off the Lead Ads tools; anything else is a real problem. */
 export function permissionVerdict(missing: string[]): { ok: boolean; core: string[]; leads: string[] } {

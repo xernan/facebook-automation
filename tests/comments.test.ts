@@ -67,25 +67,49 @@ describe('comment replies', () => {
   });
 
   it('also lists comments on ad posts, which /posts never returns (Nov 4 "Legit?" on the ad)', async () => {
-    const { ctx, dir } = setup();
+    const { GraphError } = await import('../src/graph.js');
+    const { ctx, dir } = setup({ FB_AD_ACCOUNT_ID: '777' });
     await primeState(dir);
     const base = ctx.graph.get;
-    const adPost = { id: `${PAGE_ID}_ad`, message: 'PNB ad', created_time: ago(3600), comments: { data: [{ id: '21', from: { id: '903', name: 'Uni' }, message: 'Legit?', created_time: ago(400) }] } };
-    ctx.graph.get = async (p: string, path: string, q?: any) => (path.endsWith('/ads_posts') ? { data: [adPost] } : base(p, path, q));
+    const adPost = { id: `${PAGE_ID}_ad`, message: 'PNB ad', created_time: ago(3600), comments: { data: [{ id: '21', message: 'Legit?', created_time: ago(400) }] } };
+    ctx.graph.get = async (p: string, path: string, q?: any) =>
+      path === 'act_777/ads'
+        ? { data: [{ creative: { effective_object_story_id: `${PAGE_ID}_old` } }, { creative: { effective_object_story_id: `${PAGE_ID}_ad` } }, { creative: { effective_object_story_id: `${PAGE_ID}_1` } }, { creative: {} }] }
+        : path === `${PAGE_ID}_ad`
+          ? adPost
+          : path === `${PAGE_ID}_old`
+            ? Promise.reject(new GraphError('Object does not exist', 10)) // a deleted old ad post
+            : base(p, path, q);
     const ids = (await findPendingComments(ctx, PAGE_ID, now)).comments.map((c) => c.comment_id);
     expect(ids).toEqual(['21', '11', '12']);
   });
 
-  it('without the ads permission, Page post comments still work', async () => {
+  it('without the ad account or its permission, Page post comments still work', async () => {
     const { GraphError } = await import('../src/graph.js');
+    const { ctx, dir } = setup({ FB_AD_ACCOUNT_ID: '777' });
+    await primeState(dir);
+    const base = ctx.graph.get;
+    ctx.graph.get = async (p: string, path: string, q?: any) => {
+      if (path.startsWith('act_')) throw new GraphError('Missing permission', 200);
+      return base(p, path, q);
+    };
+    expect((await findPendingComments(ctx, PAGE_ID, now)).comments.map((c) => c.comment_id)).toEqual(['11', '12']);
+    const plain = setup();
+    await primeState(plain.dir);
+    await findPendingComments(plain.ctx, PAGE_ID, now);
+    expect(plain.graph.gets.some((g) => g.startsWith('act_'))).toBe(false);
+  });
+
+  it('skips a comment the Page already answered by hand (no double reply)', async () => {
     const { ctx, dir } = setup();
     await primeState(dir);
     const base = ctx.graph.get;
     ctx.graph.get = async (p: string, path: string, q?: any) => {
-      if (path.endsWith('/ads_posts')) throw new GraphError('Missing permission', 200);
-      return base(p, path, q);
+      const r: any = await base(p, path, q);
+      r.data[0].comments.data[0].comments = { data: [{ from: { id: PAGE_ID } }] };
+      return r;
     };
-    expect((await findPendingComments(ctx, PAGE_ID, now)).comments.map((c) => c.comment_id)).toEqual(['11', '12']);
+    expect((await findPendingComments(ctx, PAGE_ID, now)).comments.map((c) => c.comment_id)).toEqual(['12']);
   });
 
   it('replies once, refuses too-soon, repeats, bot-sounding text, and when the switch is off', async () => {

@@ -74,6 +74,8 @@ export const configSchema = z.object({
   FB_COMMENT_MAX_PER_DAY: intIn(60, 1, 300),
   FB_COMMENT_POST_DAYS: intIn(7, 1, 30),
   FB_COMMENT_PRIVATE_REPLY: boolFlag(false),
+  /** Ad account (digits, no act_) whose ads' posts the comment bot also reads. Blank = Page posts only. */
+  FB_AD_ACCOUNT_ID: z.string().regex(/^\d+$/).optional(),
 });
 
 export type RawConfig = z.infer<typeof configSchema>;
