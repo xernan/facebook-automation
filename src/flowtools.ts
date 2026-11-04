@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
-import { advance, cleanSuggestions, setCards, currentPrompt, currentQuestion, ID_TYPES, idVerdict, newPerson, nextStepIf, quickReply, scriptCanAnswer, type IdSeen, type Person } from './flow.js';
+import { advance, cleanSuggestions, setCards, currentPrompt, currentQuestion, ID_TYPES, idVerdict, isClosingNote, newPerson, nextStepIf, quickReply, scriptCanAnswer, type IdSeen, type Person } from './flow.js';
 import { detailsSchema } from './application.js';
 import { FlowStore, loadFlow, type FlowState } from './flowstore.js';
 import { finalizeLead } from './leadout.js';
@@ -359,6 +359,14 @@ export const flowTools: ToolDef[] = [
         msgs.sort((a, b) => a.created_time.localeCompare(b.created_time));
         await ctx.graph.messages.noteIncoming(who, new Date(msgs.at(-1)!.created_time).getTime());
         const ids = msgs.map((m) => m.id);
+
+        // "Sige, salamat" after the application is over: nothing to send, and the chat must not stay waiting.
+        if (msgs.every((m) => !m.image_url && isClosingNote(person, m.text ?? ''))) {
+          markHandled(state, ids);
+          state.people[who] = person;
+          await s.save(state);
+          return { reply: null, stage: person.stage, note: 'A closing thanks/ok after the application ended: no reply needed. Marked handled.' };
+        }
 
         // Claude already asked them a follow-up itself (e.g. "credit card ba yan o ATM?"): nothing more to send now.
         // Only after Claude really sent them something; otherwise they would be left with no reply at all.

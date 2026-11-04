@@ -254,6 +254,21 @@ const isSkip = (text: string) => {
 };
 
 const MARRIED = /\b(married|kasal|may\s+asawa)\b/i;
+/** Stages where the application is over: nothing more is asked. */
+export const FINISHED_STAGES: readonly string[] = ['done', 'declined', 'rejected', 'excluded'];
+
+const CLOSING_WORDS = new Set(['salamat', 'thanks', 'thank', 'you', 'thankyou', 'ty', 'tnx', 'thx', 'sige', 'ok', 'okay', 'okey', 'oki', 'k', 'noted', 'po', 'opo', 'sir', 'maam', 'ma', 'am', 'god', 'bless', 'ingat', 'too', 'din', 'rin', 'nyo', 'niyo', 'mo', 'so', 'much', 'very', 'alright', 'welcome', 'gege', 'cge', 'sge', 'nlng', 'nalang', 'na', 'lang', 'lng', 'pala', 'ah', 'ahh', 'ay', 'ganun', 'ganon', 'ba', 'yun', 'yon']);
+
+/**
+ * A short "thanks"/"ok" after the application is over needs no reply, so the code closes it.
+ * (Nov 4 2026: a "Sige, salamat." from a rejected person woke Claude every 30 minutes for hours.)
+ */
+export function isClosingNote(p: Person, text: string): boolean {
+  if (!FINISHED_STAGES.includes(p.stage) || text.includes('?')) return false;
+  const w = words(text);
+  return w.length > 0 && w.length <= 8 && w.every((x) => CLOSING_WORDS.has(x));
+}
+
 const isGreeting = (text: string) =>
   /^(hi+|hello+|helo|hey|good\s*(morning|afternoon|evening|eve|day)|gud\s*(morning|am|pm|eve)|kumusta|musta)(\s+(po|sir|ma'?am))?[\s.!]*$/i.test(text);
 
@@ -614,6 +629,7 @@ export function scriptCanAnswer(flow: Flow, p: Person, input: Incoming): boolean
   if (!text || text.includes('?')) return false;
   const w = words(text);
   if (w.some((x) => QUESTION_WORDS.has(x))) return false;
+  if (isClosingNote(p, text)) return true;
   // A "hi" in the middle gets the current question again.
   if (isGreeting(text) && ['consent', 'carded', 'banks', 'steps', 'id_photo'].includes(p.stage)) return true;
   switch (p.stage) {

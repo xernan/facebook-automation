@@ -56,6 +56,8 @@ export function operatorPrompt(pageId: string, ourBanks: string[] = [], cardNote
     '     with fb_send_message in their language, without repeating current_question. Money, GCash or loans: say we do not give or',
     '     ask for money. Greetings and jokes with no question get no reply of your own.',
     '   - reply null (finished, excluded or cooldown): reply yourself only if they asked something.',
+    '   - Every message must end handled. When you send nothing to someone with no current_question, still call',
+    '     fb_flow_answer kind="question" with their message ids: it sends nothing and closes the chat.',
     '   - stage "rejected" (no credit card yet): if they now say they have a bank credit card, call fb_flow_answer kind="answer"',
     '     (the code goes on with the application when it counts). Otherwise, if they asked something, say once, kindly, that for now we only help people who',
     '     already have a credit card. Never say the team will follow up. If they talk about money, GCash or a transfer, add that we',

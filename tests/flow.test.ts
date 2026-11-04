@@ -231,6 +231,26 @@ describe('flow tools', () => {
     expect(await callTool(tool('fb_flow_pending'), { page_id: '111' }, ctx)).toEqual([]);
   });
 
+  it('a "Sige, salamat." after the application ended is closed by code: nothing sent, not waiting (Nov 4 stuck chat)', async () => {
+    const declined = setup({ m_1: { text: 'hi' }, m_2: { text: 'no' }, m_3: { text: 'Sige, salamat.' } });
+    await answer(declined.ctx, ['m_1']);
+    expect((await answer(declined.ctx, ['m_2'])).stage).toBe('declined');
+    const before = declined.sent.length;
+    const p: any = await callTool(tool('fb_flow_pending'), { page_id: '111' }, declined.ctx);
+    expect(p[0].script_can_answer).toBe(true); // the watcher's fast lane closes it, no Claude run
+    const r = await answer(declined.ctx, ['m_3']);
+    expect(r.reply).toBeNull();
+    expect(declined.sent.length).toBe(before); // no greeting sent again
+    expect(await callTool(tool('fb_flow_pending'), { page_id: '111' }, declined.ctx)).toEqual([]);
+
+    // A real question after the end still goes to Claude.
+    const q = setup({ m_1: { text: 'hi' }, m_2: { text: 'no' }, m_3: { text: 'salamat, pero paano ulit mag apply?' } });
+    await answer(q.ctx, ['m_1']);
+    await answer(q.ctx, ['m_2']);
+    const pq: any = await callTool(tool('fb_flow_pending'), { page_id: '111' }, q.ctx);
+    expect(pq[0].script_can_answer).toBe(false);
+  });
+
   it('refuses a message that is not from this person', async () => {
     const { ctx, sent } = setup({ m_x: { text: 'hi', from: '555' } });
     await expect(answer(ctx, ['m_x'])).rejects.toThrow(/not from this person/);
@@ -733,7 +753,9 @@ describe('fast lane (script answers without Claude)', () => {
     expect(can(at('banks'), 'yung sa mall')).toBe(false);
     expect(can(at('consent'), '', 'https://scontent.xx.fbcdn.net/x.jpg')).toBe(false);
     expect(can(at('id_photo'), 'ok')).toBe(false);
-    expect(can(at('done'), 'thanks')).toBe(false);
+    expect(can(at('done'), 'thanks, kailan ang result?')).toBe(false);
+    // A plain thanks after the end is closed by code (it stayed waiting for hours on Nov 4 2026).
+    expect(can(at('done'), 'thanks')).toBe(true);
   });
 
   it('an ID photo at the ID step is downloaded at once (Claude reads it after)', () => {
@@ -947,6 +969,7 @@ describe('answers Claude must check', () => {
   it('the operator never promises a follow-up to someone with no card', async () => {
     const { operatorPrompt } = await import('../src/watch.js');
     expect(operatorPrompt('1')).toMatch(/stage "rejected" \(no credit card yet\)/);
+    expect(operatorPrompt('1')).toMatch(/Every message must end handled/);
     expect(operatorPrompt('1')).toMatch(/Never say the team will follow up/);
     expect(operatorPrompt('1')).toMatch(/do not give or ask for money/);
     expect(operatorPrompt('1')).toMatch(/not stage "rejected", say the team will follow up/);
@@ -1267,6 +1290,10 @@ describe('owner rules: Atome is not a credit card, Maya is checked first, a card
     expect(scriptCanAnswer(f, rejected, { text: 'ay meron pala akong BDO' })).toBe(true);
     expect(advance(f, rejected, { text: 'ay meron pala akong BDO' }, NOW, 180).person.banks).toEqual(['BDO']);
     expect(advance(f, rejected, { text: 'BDO debit card lang' }, NOW, 180).person.stage).toBe('rejected');
+    expect(scriptCanAnswer(f, rejected, { text: 'Sige, salamat.' })).toBe(true);
+    expect(scriptCanAnswer(f, rejected, { text: 'ok po thank you' })).toBe(true);
+    expect(scriptCanAnswer(f, rejected, { text: 'salamat, kailan pwede ulit?' })).toBe(false);
+    expect(scriptCanAnswer(f, asked, { text: 'salamat' })).toBe(false); // mid-application: not a closing note
   });
 });
 

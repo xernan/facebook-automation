@@ -4,7 +4,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { contentProblem } from './contentguard.js';
 import { replaceFile } from './files.js';
-import { currentQuestion, quickReply } from './flow.js';
+import { currentQuestion, FINISHED_STAGES, quickReply } from './flow.js';
 import { FlowStore, loadFlow } from './flowstore.js';
 import type { Ctx, ToolDef } from './tools.js';
 import { botMayAnswer, loadTestMode } from './testmode.js';
@@ -69,12 +69,11 @@ export interface PendingComment {
   ready: boolean;
 }
 
-const FINISHED = ['done', 'declined', 'rejected', 'excluded'];
 
 /** The comment DM went to someone mid-application: send the question they were on, so the chat carries on. */
 export async function resumeApplication(ctx: Ctx, pageId: string, psid: string, now = new Date()): Promise<boolean> {
   const p = (await new FlowStore(ctx.cfg.flowDir).load(now)).people[psid];
-  if (!p || FINISHED.includes(p.stage) || !botMayAnswer(await loadTestMode(ctx.cfg.flowDir), psid)) return false;
+  if (!p || FINISHED_STAGES.includes(p.stage) || !botMayAnswer(await loadTestMode(ctx.cfg.flowDir), psid)) return false;
   const q = currentQuestion(loadFlow(ctx.cfg.flowFile), p);
   if (!q) return false;
   // Same buttons as before: Messenger only shows quick replies on the newest message, so the DM hid them.
